@@ -18,6 +18,8 @@ from ray.tune.integration.wandb import wandb_mixin
 from ray.tune import Stopper
 from typing import *
 from collections import defaultdict
+import random
+import fire
 
 def load_data(data_dir="./data"):
     transform = transforms.Compose([
@@ -79,8 +81,13 @@ class Net(nn.Module):
         x = self.fc1(x)
         return x
 
+class SoTL:
+    def __init__(self, e=1):
+        self.e = e
+        self.measurements = defaultdict(dict)
+
 @wandb_mixin
-def train_cifar(config, checkpoint_dir=None, data_dir=None, lr_reductions=True, weight_decay=True):
+def train_cifar(config: Dict, checkpoint_dir:str=None, data_dir:str=None, lr_reductions:bool=True, weight_decay:bool=True):
     net = Net(rnorm_scale=config["rnorm_scale"], rnorm_power=config["rnorm_power"])
     if data_dir is None:
         data_dir = config["data_dir"]
@@ -121,6 +128,7 @@ def train_cifar(config, checkpoint_dir=None, data_dir=None, lr_reductions=True, 
         num_workers=1)
     
     lr_reduction_epochs = [int((config["max_num_epochs"]*config["steps_per_epoch"])/(config["lr_reductions"]+1)*(i+1)) for i in range(config["lr_reductions"])]
+    sotl = SoTL()
 
     for epoch in range(config["max_num_epochs"]):  # loop over the dataset multiple times
         running_loss = 0.0
@@ -157,10 +165,12 @@ def train_cifar(config, checkpoint_dir=None, data_dir=None, lr_reductions=True, 
             # print statistics
             running_loss += loss.item()
             epoch_steps += 1
-            if i % 200 == 199:  # print every 2000 mini-batches
+            if i % 200 == 199:  
                 print("[%d, %5d] loss: %.3f" % (epoch + 1, i + 1,
                                                 running_loss / epoch_steps))
                 running_loss = 0.0
+        
+        sotl.measurements[epoch]["train"] = running_loss
 
         # Validation loss
         val_loss = 0.0
@@ -181,15 +191,16 @@ def train_cifar(config, checkpoint_dir=None, data_dir=None, lr_reductions=True, 
                 val_loss += loss.cpu().numpy()
                 val_steps += 1
 
-        # Here we save a checkpoint. It is automatically registered with
-        # Ray Tune and will potentially be passed as the `checkpoint_dir`
-        # parameter in future iterations.
+        sotl.measurements[epoch]["val"] = val_loss
+
         with tune.checkpoint_dir(step=epoch) as checkpoint_dir:
             path = os.path.join(checkpoint_dir, "checkpoint")
             torch.save(
                 (net.state_dict(), optimizer.state_dict()), path)
 
-        tune.report(loss=(val_loss / val_steps), accuracy=correct / total, lr = optimizer.param_groups[0]['lr'])
+        tune.report(loss=(val_loss / val_steps), accuracy=correct / total, 
+            lr = optimizer.param_groups[0]['lr'], sotl = sotl.measurements[epoch]['train']/epoch_steps, 
+            sovl = sotl.measurements[epoch]["val"]/val_steps)
     print("Finished Training")
 
 def test_accuracy(net, device="cpu"):
@@ -235,9 +246,12 @@ class TotalBudgetStopper(Stopper):
             total_count += self._iter[trial]
         return total_count >= self._total_budget
 
-def main(num_samples=16, gpus_per_trial=1):
+def main(name=None,num_samples=64, gpus_per_trial=1, metric="sotl", time_budget=None, 
+    batch_size=100, steps_per_epoch=100, max_num_epochs=100, total_budget_multiplier=10, seed=None):
     data_dir = os.path.abspath("../playground/data")
     load_data(data_dir)  # Download data for all trials before starting the run
+    if seed is None:
+        seed = random.randint(0,1000)
 
     config = {
         "lr": tune.loguniform(5e-5, 5),
@@ -248,10 +262,14 @@ def main(num_samples=16, gpus_per_trial=1):
         "lr_reductions":tune.choice([0,1,2,3]),
         "rnorm_scale": tune.loguniform(5e-6, 5),
         "rnorm_power": tune.uniform(0.01, 3),
-        "max_num_epochs":15,
-        "batch_size": 100,
-        "steps_per_epoch": 100,
-        "data_dir" :data_dir
+        "max_num_epochs":max_num_epochs,
+        "batch_size": batch_size,
+        "steps_per_epoch": steps_per_epoch,
+        "data_dir" : data_dir,
+        "seed": seed,
+        "metric": metric,
+        "time_budget": time_budget,
+        "total_budget_multiplier": total_budget_multiplier
     }
     scheduler = ASHAScheduler(
         max_t=config["max_num_epochs"],
@@ -260,18 +278,19 @@ def main(num_samples=16, gpus_per_trial=1):
 
     result = tune.run(
         train_cifar,
+        name=name,
         resources_per_trial={"cpu": 2, "gpu": gpus_per_trial},
         config={**config, "wandb": {
             "project": "SoTL_Cifar",
-            "api_key_file": r"C:\Users\kawga\.wandb\nas_key.txt"
+            "api_key_file": "~"+os.sep+".wandb"+os.sep+"nas_key.txt"
         }},
-        # local_dir = r"C:\Users\kawga\ray_results\inner_2021-01-16_17-25-31",
-        metric="loss",
+        metric=config["metric"],
         mode="min",
         num_samples=num_samples,
         scheduler=scheduler,
-        stop=TotalBudgetStopper(config["max_num_epochs"]),
-        loggers=DEFAULT_LOGGERS + (WandbLogger, )
+        stop=TotalBudgetStopper(config["max_num_epochs"]*config["total_budget_multiplier"]),
+        loggers=DEFAULT_LOGGERS + (WandbLogger, ),
+        time_budget_s=config["time_budget"]
     )
 
     best_trial = result.get_best_trial("loss", "min", "last")
@@ -297,9 +316,11 @@ def main(num_samples=16, gpus_per_trial=1):
     test_acc = test_accuracy(best_trained_model, device)
     print("Best trial test set accuracy: {}".format(test_acc))
 
-
-# from ray.tune import Analysis
-# analysis = Analysis(r"C:\Users\kawga\ray_results\train_cifar_2021-01-17_00-22-47")
+    if os.path.exists("~"+os.sep+".wandb"+os.sep+"nas_key.txt"):
+        f = open("~"+os.sep+".wandb"+os.sep+"nas_key.txt", "r")
+        key=f.read()
+        os.environ["WANDB_API_KEY"] = key
+    
 
 def test_main(gpus_per_trial=1):
     data_dir = os.path.abspath("../playground/data")
@@ -328,7 +349,7 @@ def test_main(gpus_per_trial=1):
         resources_per_trial={"cpu": 2, "gpu": gpus_per_trial},
         config={**config, "wandb": {
             "project": "SoTL_Cifar",
-            "api_key_file": r"C:\Users\kawga\.wandb\nas_key.txt"
+            "api_key_file": "~"+os.sep+".wandb"+os.sep+"nas_key.txt"
         }} ,
         metric="loss",
         mode="min",
@@ -339,3 +360,7 @@ def test_main(gpus_per_trial=1):
 
     )
     train_cifar(config)
+
+
+if __name__ == "__main__":
+    fire.Fire(main)
