@@ -116,16 +116,6 @@ def train_cifar(config: Dict, checkpoint_dir:str=None, data_dir:str=None, lr_red
     train_subset, val_subset = random_split(
         trainset, [test_abs, len(trainset) - test_abs])
 
-    trainloader = torch.utils.data.DataLoader(
-        train_subset,
-        batch_size=int(config["batch_size"]),
-        shuffle=True,
-        num_workers=1)
-    valloader = torch.utils.data.DataLoader(
-        val_subset,
-        batch_size=int(config["batch_size"]),
-        shuffle=True,
-        num_workers=1)
     
     lr_reduction_epochs = [int((config["max_num_epochs"]*config["steps_per_epoch"])/(config["lr_reductions"]+1)*(i+1)) for i in range(config["lr_reductions"])]
     sotl = SoTL()
@@ -133,7 +123,16 @@ def train_cifar(config: Dict, checkpoint_dir:str=None, data_dir:str=None, lr_red
     for epoch in range(config["max_num_epochs"]):  # loop over the dataset multiple times
         running_loss = 0.0
         epoch_steps = 0
-
+        trainloader = torch.utils.data.DataLoader(
+            train_subset,
+            batch_size=int(config["batch_size"]),
+            shuffle=True,
+            num_workers=0)
+        valloader = torch.utils.data.DataLoader(
+            val_subset,
+            batch_size=int(config["batch_size"]),
+            shuffle=True,
+            num_workers=0)
         for i, data in enumerate(trainloader, 0):
             if lr_reductions and len(lr_reduction_epochs) > 0 and epoch*config["steps_per_epoch"]+i > lr_reduction_epochs[0]:
                 for g in optimizer.param_groups:
@@ -157,18 +156,19 @@ def train_cifar(config: Dict, checkpoint_dir:str=None, data_dir:str=None, lr_red
                 for layer, coef in zip([net.conv1, net.conv2, net.conv3, net.fc1], [config["conv1_l2"], config["conv2_l2"], config["conv3_l2"], config["fc1_l2"]]):
                     for name, w in layer.named_parameters():
                         if 'bias' not in name:
-                            reg += (w.norm(2)**2 * coef)
+                            reg += (w.norm(2)**2 * coef) 
             loss = loss + reg
+            # print("REG LOSS", reg)
             loss.backward()
             optimizer.step()
 
             # print statistics
             running_loss += loss.item()
             epoch_steps += 1
-            if i % 200 == 199:  
-                print("[%d, %5d] loss: %.3f" % (epoch + 1, i + 1,
-                                                running_loss / epoch_steps))
-                running_loss = 0.0
+            # if i % 200 == 199:  
+            #     print("[%d, %5d] loss: %.3f" % (epoch + 1, i + 1,
+            #                                     running_loss / epoch_steps))
+            #     running_loss = 0.0
         
         sotl.measurements[epoch]["train"] = running_loss
 
@@ -207,7 +207,7 @@ def test_accuracy(net, device="cpu"):
     trainset, testset = load_data(os.path.abspath("../playground/data"))
 
     testloader = torch.utils.data.DataLoader(
-        testset, batch_size=100, shuffle=False, num_workers=1)
+        testset, batch_size=100, shuffle=False, num_workers=0)
 
     correct = 0
     total = 0
@@ -326,17 +326,17 @@ def test_main(gpus_per_trial=1):
     data_dir = os.path.abspath("../playground/data")
     load_data(data_dir)  # Download data for all trials before starting the run
     config = {
-        "lr": 1e-2,
-        "conv1_l2": 0,
-        "conv2_l2": 0,
-        "conv3_l2":0,
-        "fc1_l2": 0,
-        "lr_reductions":2,
+        "lr": 1e-3,
+        "conv1_l2": 0.004,
+        "conv2_l2": 0.004,
+        "conv3_l2":0.004,
+        "fc1_l2": 0.004,
+        "lr_reductions":1,
         "rnorm_scale": 0.00005,
         "rnorm_power": 0.75,
         "max_num_epochs":300,
-        "batch_size": 100,
-        "steps_per_epoch": 100,
+        "batch_size": 128,
+        "steps_per_epoch": 1000,
         "data_dir":data_dir
     }
     scheduler = ASHAScheduler(
@@ -362,5 +362,5 @@ def test_main(gpus_per_trial=1):
     train_cifar(config)
 
 
-if __name__ == "__main__":
-    fire.Fire(main)
+# if __name__ == "__main__":
+#     fire.Fire(main)
