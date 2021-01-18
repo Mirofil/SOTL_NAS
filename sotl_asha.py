@@ -35,6 +35,34 @@ def load_data(data_dir="./data"):
 
     return trainset, testset
 
+class LRN(nn.Module):
+    def __init__(self, size=1, alpha=1.0, beta=0.75, ACROSS_CHANNELS=False, k=None):
+        super(LRN, self).__init__()
+        self.ACROSS_CHANNELS = ACROSS_CHANNELS
+        if self.ACROSS_CHANNELS:
+            self.average=nn.AvgPool3d(kernel_size=(size, 1, 1), 
+                    stride=1,
+                    padding=(int((size-1.0)/2), 0, 0)) 
+        else:
+            self.average=nn.AvgPool2d(kernel_size=size,
+                    stride=1,
+                    padding=int((size-1.0)/2))
+        self.alpha = alpha
+        self.beta = beta
+    
+    
+    def forward(self, x):
+        if self.ACROSS_CHANNELS:
+            div = x.pow(2).unsqueeze(1)
+            div = self.average(div).squeeze(1)
+            div = div.mul(self.alpha).add(1.0).pow(self.beta)
+        else:
+            div = x.pow(2)
+            div = self.average(div)
+            div = div.mul(self.alpha).add(1.0).pow(self.beta)
+        x = x.div(div)
+        return x
+
 class CNN(nn.Module):
     def __init__(self, rnorm_scale, rnorm_power):
         super(CNN, self).__init__()
@@ -64,10 +92,13 @@ class Net(nn.Module):
         super(Net, self).__init__()
         self.conv1 = nn.Conv2d(in_channels=3, out_channels=32, kernel_size=5, stride=1, padding=2)
         self.pool1 = nn.MaxPool2d(kernel_size=3, stride=2) #RELU
-        self.rnorm1 = nn.LocalResponseNorm(size=3, alpha=rnorm_scale, beta=rnorm_power, k=2)
+        # self.rnorm1 = nn.LocalResponseNorm(size=3, alpha=rnorm_scale, beta=rnorm_power, k=2)
+        self.rnorm1 = LRN(size=3, alpha=rnorm_scale, beta=rnorm_power, k=2)
         self.conv2 = nn.Conv2d(in_channels=32, out_channels=32, kernel_size=5, stride=1, padding=2) # RELU
         self.pool2 = nn.AvgPool2d(stride=2,kernel_size=3)
-        self.rnorm2 = nn.LocalResponseNorm(size=3, alpha=rnorm_scale, beta=rnorm_power, k=2)
+        # self.rnorm2 = nn.LocalResponseNorm(size=3, alpha=rnorm_scale, beta=rnorm_power, k=2)
+        self.rnorm2 = LRN(size=3, alpha=rnorm_scale, beta=rnorm_power, k=2)
+
         self.conv3 = nn.Conv2d(in_channels=32, out_channels=64, kernel_size=5, stride=1, padding=2) # RELU
         self.pool3 = nn.AvgPool2d(stride=2,kernel_size=3)
 
