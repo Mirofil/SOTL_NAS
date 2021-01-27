@@ -6,3 +6,4 @@ numpy
 fire
 ray[tune]
 wandb
+ConfigSpace

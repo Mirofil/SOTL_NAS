@@ -278,7 +278,7 @@ class TotalBudgetStopper(Stopper):
         return total_count >= self._total_budget
 
 def main(name=None,num_samples=64, gpus_per_trial=1, metric="sotl", time_budget=None, 
-    batch_size=100, steps_per_epoch=100, max_num_epochs=100, total_budget_multiplier=10, seed=None):
+    batch_size=100, steps_per_epoch=100, max_num_epochs=150, total_budget_multiplier=10, seed=None):
     data_dir = os.path.abspath("../playground/data")
     load_data(data_dir)  # Download data for all trials before starting the run
     if seed is None:
@@ -357,15 +357,15 @@ def test_main(gpus_per_trial=1):
     data_dir = os.path.abspath("../playground/data")
     load_data(data_dir)  # Download data for all trials before starting the run
     config = {
-        "lr": 1e-3,
-        "conv1_l2": 0.004,
-        "conv2_l2": 0.004,
-        "conv3_l2":0.004,
-        "fc1_l2": 0.004,
-        "lr_reductions":1,
+        "lr": 1e-2,
+        "conv1_l2": 4e-3,
+        "conv2_l2": 4e-3,
+        "conv3_l2":4e-3,
+        "fc1_l2": 1,
+        "lr_reductions":2,
         "rnorm_scale": 0.00005,
-        "rnorm_power": 0.75,
-        "max_num_epochs":300,
+        "rnorm_power": 0.01,
+        "max_num_epochs":200,
         "batch_size": 128,
         "steps_per_epoch": 1000,
         "data_dir":data_dir
