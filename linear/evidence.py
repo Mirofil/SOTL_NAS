@@ -28,7 +28,7 @@ class EvidenceNet(nn.Module):
 ##### EVIDENCE MAXIMIZATION
 
 D=torch.tensor(3)
-N=torch.tensor(5000)
+N=torch.tensor(1000)
 alpha_1=torch.tensor(1.)
 beta_1=torch.tensor(1.)
 alpha_2=torch.tensor(1.)
@@ -36,28 +36,28 @@ beta_2=torch.tensor(1.)
 C=torch.tensor(3.0, requires_grad=True)
 design_matrix = torch.tensor(np.random.rand(N, 2*D-1), dtype=torch.float32)
 c = torch.tensor([1.0 for _ in range(D)], requires_grad=True)
-y = torch.tensor(np.random.rand(N,1))
 
 tau = sample_tau(alpha_1, beta_1)
 
 # define the number of epochs and the data set size
 nb_epochs = 5000
-model = EvidenceNet(D=2, N=N, alpha_1=alpha_1, alpha_2=alpha_2, beta_1=beta_1, beta_2=beta_2, C=C, c=c)
-optimizer = SGD(model.parameters(), lr=0.01)
+model = EvidenceNet(D=D, N=N, alpha_1=alpha_1, alpha_2=alpha_2, beta_1=beta_1, beta_2=beta_2, C=C, c=c)
+optimizer = SGD(model.parameters(), lr=0.001)
 
-x_train, y_train = data_generator(N, max_order=D, noise_var=1/float(tau), featurize_type='fourier')
+x_train, y_train = data_generator(N, max_order=D, noise_var=1/tau, featurize_type='fourier')
+x_train = torch.tensor(x_train, dtype=torch.float32)
+y_train = torch.tensor(y_train, dtype=torch.float32)
+dset = torch.utils.data.TensorDataset(x_train, y_train)
+train_loader = torch.utils.data.DataLoader(dset, batch_size = int(N))
+
 # create our training loop
 for epoch in range(nb_epochs):
 
-    x_train = torch.tensor(x_train, dtype=torch.float32)
-    y_train = torch.tensor(y_train, dtype=torch.float32)
-    dset = torch.utils.data.TensorDataset(x_train, y_train)
 
-    train_loader = torch.utils.data.DataLoader(dset, batch_size = int(N))
     epoch_loss = 0
     for batch_idx, batch in enumerate(train_loader):
         x, y = batch
-        epoch_loss = 0
+        y = y.reshape(N)
 
         evidence = model(x, y)
         loss = -evidence

@@ -7,6 +7,7 @@ import torch.nn as nn
 import numpy as np
 import math
 import itertools
+import matplotlib.pyplot as plt
 
 def sample_tau(alpha,beta):
     return torch.tensor([np.random.gamma(alpha, 1/beta)])
@@ -105,20 +106,52 @@ def eval_features(x, max_order=2, type='fourier', noise_var=1):
     elif type == 'polynomial':
         feature = np.array(x).sum()
     
-    return feature+noise
+    return [feature+noise]
 
 # define our data generation function
-def data_generator(data_size=1000, max_order=2, noise_var=1, featurize_type='fourier'):
+def data_generator(data_size=1000, max_order=5, noise_var=1, x_range=None, featurize_type='fourier', plot=False):
     inputs = []
     labels = []
+    if x_range is None:
+        x_range = 10*math.pi
+    xs = np.linspace(-x_range,x_range,data_size)
 
-    for i in range(data_size):
-        x = np.random.randint(2000) / 1000
-
-        y = (x * x) + (4 * x) - 3
-
+    for x in xs:
         features = featurize(x, max_order=max_order, type=featurize_type)
         inputs.append(features)
         labels.append(eval_features(features, noise_var=noise_var, type=featurize_type))
 
+    if plot:
+        labels = [label[0] for label in labels]
+        plt.plot(xs, labels)
     return inputs, labels
+
+# def data_generator(data_size=1000, max_order=2, noise_var=1, featurize_type='fourier'):
+#     inputs = []
+#     labels = []
+
+#     for i in range(data_size):
+#         x = np.random.randint(2000) / 1000
+
+#         y = (x * x) + (4 * x) - 3
+
+#         features = featurize(x, max_order=max_order, type=featurize_type)
+#         inputs.append(features)
+#         labels.append(eval_features(features, noise_var=noise_var, type=featurize_type))
+
+#     return inputs, labels
+
+def jacobian(y, x, create_graph=False):                                                               
+    jac = []                                                                                          
+    flat_y = y.reshape(-1)                                                                            
+    grad_y = torch.zeros_like(flat_y)                                                                 
+    for i in range(len(flat_y)):                                                                      
+        grad_y[i] = 1.                                                                                
+        grad_x, = torch.autograd.grad(flat_y, x, grad_y, retain_graph=True, create_graph=create_graph)
+        jac.append(grad_x.reshape(x.shape))                                                           
+        grad_y[i] = 0.                                                                                
+    return torch.stack(jac).reshape(y.shape + x.shape)                                                
+                                                                                                      
+def hessian(y, x1, x2):                                                                                    
+    return jacobian(jacobian(y, x1, create_graph=True), x2)                                             
+                                                                                                      
