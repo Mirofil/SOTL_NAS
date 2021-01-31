@@ -1,16 +1,22 @@
-import torch
-from torch import Tensor
-from torch.nn import Linear, MSELoss, functional as F
-from torch.optim import SGD, Adam, RMSprop
-from torch.autograd import Variable
-import torch.nn as nn
-import numpy as np
-import math
 import itertools
-from utils import evidence_log, evidence, c_tilde, sample_tau, sample_C, c_cov, sample_w, featurize, eval_features, data_generator, jacobian, hessian
-from log_utils import AverageMeter, wandb_auth
-from datasets import get_datasets
+import math
+
+import numpy
+import numpy as np
+import torch
+import torch.nn as nn
+from torch import Tensor
+from torch.autograd import Variable
+from torch.nn import Linear, MSELoss
+from torch.nn import functional as F
+from torch.optim import SGD, Adam, RMSprop
+
 import wandb
+from datasets import get_datasets
+from log_utils import AverageMeter, wandb_auth
+from utils import (c_cov, c_tilde, data_generator, eval_features, evidence,
+                   evidence_log, featurize, hessian, jacobian, sample_C,
+                   sample_tau, sample_w)
 
 
 class Linear2(nn.Linear):
@@ -53,6 +59,32 @@ class SoTLNet(Net):
     def forward(self, x, weight=None, alphas=None):
         return self.fc1(x, weight, alphas)
 
+
+class WeightBuffer:
+    def __init__(self, checkpoint_freq, T):
+        super().__init__()
+        self.weight_buffer = []
+        self.checkpoint_freq = checkpoint_freq
+        self.T = T
+
+    def add(self, model, intra_batch_idx):
+        if intra_batch_idx % self.checkpoint_freq == 0:
+            self.weight_buffer.append([w.clone() for w in model.weight_params()])
+        else:
+            start = math.floor(intra_batch_idx/self.checkpoint_freq)
+            end = min(start+self.checkpoint_freq, self.T-1)
+            self.weight_buffer.append((start, end))
+    
+    def __getitem__(self, key):
+        return self.get(key)
+
+    def get(self, i:int):
+        if not isinstance(self.weight_buffer[i][0], (int)):
+            return self.weight_buffer[i]
+        else:
+            start_w = self.weight_buffer[i][0]
+            end_w = self.weight_buffer[i][1]
+            return [start+(end-start)/2 for (start, end) in zip(start_w, end_w)]
 
 def sotl_gradient(model, criterion, xs, ys, weight_buffer, order="first_order", hvp = "exact"):
     total_arch_gradient = 0
@@ -108,7 +140,7 @@ def sotl_gradient(model, criterion, xs, ys, weight_buffer, order="first_order", 
 
     return total_arch_gradient
 
-def train_bptt(num_epochs, model, dset_train, batch_size, T, grad_clip, logging_freq):
+def train_bptt(num_epochs:int, model, dset_train, batch_size:int, T:int, w_checkpoint_freq:int, grad_clip:float, logging_freq:int):
     model.train()
     train_loader = torch.utils.data.DataLoader(dset_train, batch_size = batch_size*T, shuffle=True)
 
@@ -118,10 +150,11 @@ def train_bptt(num_epochs, model, dset_train, batch_size, T, grad_clip, logging_
         for batch_idx, batch in enumerate(train_loader):
             xs, ys = torch.split(batch[0], batch_size), torch.split(batch[1], batch_size)
 
-            weight_buffer = []
-            for x, y in zip(xs,ys):
-            
-                weight_buffer.append([w.clone() for w in model.weight_params()])
+            weight_buffer = WeightBuffer(T=T, checkpoint_freq=w_checkpoint_freq)
+            for intra_batch_idx, (x, y) in enumerate(zip(xs,ys)):
+                # This is for DrMAD-like interpolation between stored weights
+                weight_buffer.add(model, intra_batch_idx)
+
                 y_pred = model(x)
                 loss = criterion(y_pred, y)
                 epoch_loss.update(loss.item())
@@ -214,7 +247,7 @@ if __name__ == "__main__":
     w_lr = 0.0001
     a_lr = 0.0001
     T = 10
-    grad_clip = 1
+    grad_clip = 100
     logging_freq=200
 
     ### MODEL INIT
@@ -242,5 +275,17 @@ if __name__ == "__main__":
     #     logging_freq=logging_freq, batch_size=batch_size, T=T, grad_clip=grad_clip)
     train_normal(num_epochs=num_epochs, model=model, dset_train=dset_train, 
         logging_freq=logging_freq, batch_size=batch_size, grad_clip=grad_clip, optim="standard")
+    
+    lapack_solution, res, eff_rank, sing_values = numpy.linalg.lstsq(x,y)
+    print(f"Cond number:{abs(sing_values.max()/sing_values.min())}")
+    
     val_meter = valid_func(model=model, val_loader=val_loader, criterion=criterion)
+
+    model.fc1.weight = torch.nn.Parameter(torch.tensor(lapack_solution))
+
+    val_meter2 = valid_func(model=model, val_loader=val_loader, criterion=criterion)
+
+    print(f"Trained val loss: {val_meter.avg}, iterative solver val loss: {val_meter2.avg}, difference: {val_meter.avg - val_meter2.avg} (ie. {(val_meter.avg/val_meter2.avg-1)*100}% more)")
+
+
 

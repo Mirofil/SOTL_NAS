@@ -85,7 +85,7 @@ def featurize(x: float, max_order:int =4,  type:str ="fourier"):
         for order in range(0,max_order):
             featurized_input.append(np.cos(order*x))
             featurized_input.append(np.sin(order*x))
-        featurized_input = [0:max_order+1]
+        featurized_input = featurized_input[0:max_order+1]
     elif type == "polynomial":
         features = [lambda x: np.power(x, 0),
             lambda x: np.power(x, 1),
@@ -93,6 +93,11 @@ def featurize(x: float, max_order:int =4,  type:str ="fourier"):
             lambda x: np.power(x, 3),
             lambda x: np.power(x, 4),
             lambda x: np.power(x, 5),
+            lambda x: np.power(x, 6),
+            lambda x: np.power(x, 7),
+            lambda x: np.power(x, 8),
+            lambda x: np.power(x, 9),
+            lambda x: np.power(x, 10),
             lambda x: np.sin(2 * np.pi * x),
             lambda x: np.cos(2 * np.pi * x),
             lambda x: np.exp(x)]
