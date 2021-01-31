@@ -77,12 +77,15 @@ def evidence_log(design_matrix, y, C, c, alpha_1, alpha_2, beta_1, beta_2, N):
     tail_constants = (len(c) + alpha_2 - 1/2)*torch.log(C) + (-beta_2*C) + 1/2*torch.log(c[0]) + torch.sum(c[1:])
     return numerator - denominator + matrix_term + tail_constants
 
-def featurize(x: float, max_order:int =2, type:str ="fourier"):
+def featurize(x: float, max_order:int =4,  type:str ="fourier"):
     if type == 'fourier':
+        # max_order should be 2*D when doing sum_{i=1}^D (Fourier terms), ie. each sin/cos term counts separately!
         featurized_input = [1]
-        for order in range(1,max_order):
+        assert max_order % 2 == 0
+        for order in range(0,max_order):
             featurized_input.append(np.cos(order*x))
             featurized_input.append(np.sin(order*x))
+        featurized_input = [0:max_order+1]
     elif type == "polynomial":
         features = [lambda x: np.power(x, 0),
             lambda x: np.power(x, 1),
@@ -102,16 +105,18 @@ def featurize(x: float, max_order:int =2, type:str ="fourier"):
 def eval_features(x, max_order=2, type='fourier', noise_var=1):
     noise = np.random.normal(0, noise_var**(1/2))
     if type == "fourier":
-        feature = np.array(x).sum()
+        feature = np.array(x[:max_order]).sum()
     elif type == 'polynomial':
-        feature = np.array(x).sum()
+        feature = np.array(x[:max_order]).sum()
     
     return [feature+noise]
 
 # define our data generation function
-def data_generator(data_size=1000, max_order=5, noise_var=1, x_range=None, featurize_type='fourier', plot=False):
+def data_generator(data_size=1000, max_order=5, max_order_y=None, noise_var=1, x_range=None, featurize_type='fourier', plot=False):
     inputs = []
     labels = []
+    if max_order_y is None:
+        max_order_y = max_order
     if x_range is None:
         x_range = 10*math.pi
     xs = np.linspace(-x_range,x_range,data_size)

@@ -9,6 +9,7 @@ import math
 import itertools
 from utils import evidence_log, evidence, c_tilde, sample_tau, sample_C, c_cov, sample_w, featurize, eval_features, data_generator, jacobian, hessian
 from log_utils import AverageMeter, wandb_auth
+from datasets import get_datasets
 import wandb
 
 
@@ -16,6 +17,8 @@ class Linear2(nn.Linear):
     def __init__(self, *args, **kwargs) -> None:
         super().__init__(*args, **kwargs)
         self.alphas = torch.nn.Parameter(torch.ones(1, self.in_features))
+        # self.alphas = torch.nn.Parameter(torch.tensor([-0.0499, -0.0443,  0.1992]))
+        # weights from a training run with D=3 - tensor([[-0.0499, -0.0443,  0.1992]]
 
     def forward(self, input: Tensor, weight: Tensor = None, alphas: Tensor = None) -> Tensor:
         if weight is None:
@@ -100,7 +103,7 @@ def sotl_gradient(model, criterion, xs, ys, weight_buffer, order="first_order", 
                 for p, d in zip(weight_buffer[i-1][0], dw):
                     p += eps * d
 
-            total_arch_gradient = [(p - n) / 2.0 * eps for p, n in zip(dalpha_pos, dalpha_neg)]
+            total_arch_gradient = [-w_lr*(p - n) / 2.0 * eps for p, n in zip(dalpha_pos, dalpha_neg)]
     
 
     return total_arch_gradient
@@ -121,10 +124,12 @@ def train_bptt(num_epochs, model, dset_train, batch_size, T, grad_clip, logging_
                 weight_buffer.append([w.clone() for w in model.weight_params()])
                 y_pred = model(x)
                 loss = criterion(y_pred, y)
-                w_optimizer.zero_grad()
                 epoch_loss.update(loss.item())
 
                 grads = torch.autograd.grad(loss, model.weight_params(), retain_graph=True, allow_unused=True, create_graph=True)
+                
+                w_optimizer.zero_grad()
+
                 with torch.no_grad():
                     for g, w in zip(grads, model.weight_params()):
                         w.grad = g
@@ -158,7 +163,7 @@ def valid_func(model, val_loader, criterion):
     print("Val loss: {}".format(val_meter.avg))
     return val_meter
 
-def train_normal(num_epochs, model, dset_train, batch_size, grad_clip, logging_freq):
+def train_normal(num_epochs, model, dset_train, batch_size, grad_clip, logging_freq, optim="newton"):
     train_loader = torch.utils.data.DataLoader(dset_train, batch_size = batch_size, shuffle=True)
 
     model.train()
@@ -167,18 +172,23 @@ def train_normal(num_epochs, model, dset_train, batch_size, grad_clip, logging_f
         epoch_loss = AverageMeter()
         for batch_idx, batch in enumerate(train_loader):
             x, y = batch
+            w_optimizer.zero_grad()
 
 
             y_pred = model(x)
             loss = criterion(y_pred, y)
+            loss.backward(retain_graph=True)
 
             epoch_loss.update(loss.item())
-            w_optimizer.zero_grad()
-
-            loss.backward()
-
-            torch.nn.utils.clip_grad_norm_(model.parameters(), 1)
-            w_optimizer.step()
+            if optim == "newton":
+                linear_weight = list(model.weight_params())[0]
+                hessian_newton = torch.inverse(hessian(loss*1, linear_weight, linear_weight).reshape(linear_weight.size()[1], linear_weight.size()[1]))
+                with torch.no_grad():
+                    for w in model.weight_params():
+                        w = w.subtract_(torch.matmul(w.grad, hessian_newton))
+            else:
+                torch.nn.utils.clip_grad_norm_(model.weight_params(), 1)
+                w_optimizer.step()
             if batch_idx % logging_freq == 0:
                 print("Epoch: {}, Batch: {}, Loss: {}".format(epoch, batch_idx, epoch_loss.avg))
                 wandb.log({"Train loss": epoch_loss.avg})
@@ -197,9 +207,9 @@ if __name__ == "__main__":
     wandb.init(project="NAS", group=f"Linear_SOTL")
 
     ### PARAMS
-    num_epochs = 50
+    num_epochs = 500
     batch_size = 64
-    D=torch.tensor(5)
+    D=torch.tensor(3)
     N=torch.tensor(50000)
     w_lr = 0.0001
     a_lr = 0.0001
@@ -208,15 +218,9 @@ if __name__ == "__main__":
     logging_freq=200
 
     ### MODEL INIT
-    model = SoTLNet(num_features=2*D-1)
 
-
-    criterion = MSELoss()
-    w_optimizer = SGD(model.weight_params(), lr=w_lr, momentum=0.9, weight_decay=0.1)
-    a_optimizer = SGD(model.arch_params(), lr=a_lr, momentum=0.9, weight_decay=0.1)
-
-    x, y = data_generator(N, max_order=D, noise_var=1, featurize_type='fourier')
-
+    # x, y = data_generator(N, max_order=D, noise_var=1, featurize_type='polynomial')
+    x, y = get_datasets("songs")
     x = torch.tensor(x, dtype=torch.float32)
     y = torch.tensor(y, dtype=torch.float32)
     dset = torch.utils.data.TensorDataset(x, y)
@@ -224,9 +228,19 @@ if __name__ == "__main__":
     dset_train, dset_val = torch.utils.data.random_split(dset, [int(len(dset)*0.85), len(dset) - int(len(dset)*0.85)])
     val_loader = torch.utils.data.DataLoader(dset_val, batch_size = batch_size)
 
-    train_bptt(num_epochs=num_epochs, model=model, dset_train=dset_train, 
-        logging_freq=logging_freq, batch_size=batch_size, T=T, grad_clip=grad_clip)
-    # train_normal(num_epochs=num_epochs, model=model, dset_train=dset_train, 
-    #     logging_freq=logging_freq, batch_size=batch_size, grad_clip=grad_clip)
+    model = SoTLNet(num_features=int(x.size()[1]))
+
+
+    criterion = MSELoss()
+    w_optimizer = SGD(model.weight_params(), lr=w_lr, momentum=0.9, weight_decay=0.1)
+    # w_optimizer = torch.optim.LBFGS(model.weight_params(), lr = w_lr)
+    a_optimizer = SGD(model.arch_params(), lr=a_lr, momentum=0.9, weight_decay=0.1)
+
+
+
+    # train_bptt(num_epochs=num_epochs, model=model, dset_train=dset_train, 
+    #     logging_freq=logging_freq, batch_size=batch_size, T=T, grad_clip=grad_clip)
+    train_normal(num_epochs=num_epochs, model=model, dset_train=dset_train, 
+        logging_freq=logging_freq, batch_size=batch_size, grad_clip=grad_clip, optim="standard")
     val_meter = valid_func(model=model, val_loader=val_loader, criterion=criterion)
 
