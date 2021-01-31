@@ -17,48 +17,8 @@ from log_utils import AverageMeter, wandb_auth
 from utils import (c_cov, c_tilde, data_generator, eval_features, evidence,
                    evidence_log, featurize, hessian, jacobian, sample_C,
                    sample_tau, sample_w)
-
-
-class Linear2(nn.Linear):
-    def __init__(self, *args, **kwargs) -> None:
-        super().__init__(*args, **kwargs)
-        self.alphas = torch.nn.Parameter(torch.ones(1, self.in_features))
-        # self.alphas = torch.nn.Parameter(torch.tensor([-0.0499, -0.0443,  0.1992]))
-        # weights from a training run with D=3 - tensor([[-0.0499, -0.0443,  0.1992]]
-
-    def forward(self, input: Tensor, weight: Tensor = None, alphas: Tensor = None) -> Tensor:
-        if weight is None:
-            weight = self.weight
-        if alphas is None:
-            alphas = self.alphas
-        return F.linear(input, weight*F.softmax(alphas), self.bias)
-
-
-# define the model
-class Net(torch.nn.Module):
-    def __init__(self, num_features = 2):
-        super(Net, self).__init__()
-        self.fc1 = Linear(num_features, 1, bias=False)
-
-    def forward(self, x):
-        return self.fc1(x)
-    
-    def weight_params(self):
-        for p in [self.fc1.weight]:
-            yield p
-    
-    def arch_params(self):
-        for p in [self.fc1.alphas]:
-            yield p
-
-class SoTLNet(Net):
-    def __init__(self, num_features = 2):
-        super().__init__()
-        self.fc1 = Linear2(num_features, 1, bias=False)
-
-    def forward(self, x, weight=None, alphas=None):
-        return self.fc1(x, weight, alphas)
-
+from models import SoTLNet
+from sotl_utils import sotl_gradient
 
 class WeightBuffer:
     def __init__(self, checkpoint_freq, T):
@@ -75,6 +35,9 @@ class WeightBuffer:
             end = min(start+self.checkpoint_freq, self.T-1)
             self.weight_buffer.append((start, end))
     
+    def __len__(self):
+        return len(self.weight_buffer)
+    
     def __getitem__(self, key):
         return self.get(key)
 
@@ -85,62 +48,12 @@ class WeightBuffer:
             start_w = self.weight_buffer[i][0]
             end_w = self.weight_buffer[i][1]
             return [start+(end-start)/2 for (start, end) in zip(start_w, end_w)]
-
-def sotl_gradient(model, criterion, xs, ys, weight_buffer, order="first_order", hvp = "exact"):
-    total_arch_gradient = 0
-    if hvp == "exact":
-        for i in range(1, min(T, len(weight_buffer))):
-            loss = criterion(model(xs[i], weight_buffer[i][0], model.fc1.alphas[0]), ys[i])
-            da = torch.autograd.grad(loss, model.arch_params(), retain_graph=True)[0]
-            dw = torch.autograd.grad(loss, weight_buffer[i][0], retain_graph=True)[0]
-
-            loss2 = criterion(model(xs[i], weight_buffer[i-1][0], model.fc1.alphas[0]), ys[i])
-            hessian_matrix = hessian(loss2*1, weight_buffer[i-1][0], model.fc1.alphas).reshape(model.fc1.weight.size()[1],model.fc1.alphas.size()[1]) # TODO this whole line is WEIRD
-
-            second_order_term = torch.matmul(dw, hessian_matrix)
-
-            total_arch_gradient += da + (-w_lr*second_order_term)
-            total_arch_gradient = [total_arch_gradient]
-    elif hvp == "finite_diff":
-        for i in range(1, min(T, len(weight_buffer))):
-            loss = criterion(model(xs[i], weight_buffer[i][0], model.fc1.alphas[0]), ys[i])
-            da = torch.autograd.grad(loss, model.arch_params(), retain_graph=True)[0]
-            dw = torch.autograd.grad(loss, weight_buffer[i][0], retain_graph=True)[0]
-
-            # Footnotes suggest to divide by L2 norm of the gradient
-            norm = torch.cat([w.view(-1) for w in dw]).norm()
-            eps = 0.01 / norm
-
-            # w+ = w + eps*dw`
-            with torch.no_grad():
-                for p, d in zip(weight_buffer[i-1][0], dw):
-                    p += eps * d
-
-            loss2 = criterion(model(xs[i], weight_buffer[i-1][0], model.fc1.alphas[0]), ys[i])
-            dalpha_pos = torch.autograd.grad(
-                loss2, model.arch_params()
-            )  # dalpha { L_trn(w+) }
-
-            # w- = w - eps*dw`
-            with torch.no_grad():
-                for p, d in zip(weight_buffer[i-1][0], dw):
-                    p -= 2.0 * eps * d
-            loss3 = criterion(model(xs[i], weight_buffer[i-1][0], model.fc1.alphas[0]), ys[i])
-            dalpha_neg = torch.autograd.grad(
-                loss3, model.arch_params()
-            )  # dalpha { L_trn(w-) }
-
-            # recover w
-            with torch.no_grad():
-                for p, d in zip(weight_buffer[i-1][0], dw):
-                    p += eps * d
-
-            total_arch_gradient = [-w_lr*(p - n) / 2.0 * eps for p, n in zip(dalpha_pos, dalpha_neg)]
     
+    def clear(self):
+        self.weight_buffer = []
 
-    return total_arch_gradient
-
-def train_bptt(num_epochs:int, model, dset_train, batch_size:int, T:int, w_checkpoint_freq:int, grad_clip:float, logging_freq:int):
+def train_bptt(num_epochs:int, model, dset_train, batch_size:int, T:int, 
+    w_checkpoint_freq:int, grad_clip:float, w_lr:float, logging_freq:int, sotl_order:int, hvp:str):
     model.train()
     train_loader = torch.utils.data.DataLoader(dset_train, batch_size = batch_size*T, shuffle=True)
 
@@ -152,7 +65,6 @@ def train_bptt(num_epochs:int, model, dset_train, batch_size:int, T:int, w_check
 
             weight_buffer = WeightBuffer(T=T, checkpoint_freq=w_checkpoint_freq)
             for intra_batch_idx, (x, y) in enumerate(zip(xs,ys)):
-                # This is for DrMAD-like interpolation between stored weights
                 weight_buffer.add(model, intra_batch_idx)
 
                 y_pred = model(x)
@@ -174,7 +86,7 @@ def train_bptt(num_epochs:int, model, dset_train, batch_size:int, T:int, w_check
                     print("Epoch: {}, Batch: {}, Loss: {}".format(epoch, true_batch_index, epoch_loss.avg))
                     wandb.log({"Train loss": epoch_loss.avg})
 
-            total_arch_gradient = sotl_gradient(model, criterion, xs, ys, weight_buffer, hvp="finite_diff")
+            total_arch_gradient = sotl_gradient(model, criterion, xs, ys, weight_buffer, w_lr=w_lr, hvp=hvp, order=sotl_order)
 
             a_optimizer.zero_grad()
 
@@ -247,13 +159,14 @@ if __name__ == "__main__":
     w_lr = 0.0001
     a_lr = 0.0001
     T = 10
-    grad_clip = 100
+    grad_clip = 1
     logging_freq=200
+    w_checkpoint_freq=1
 
     ### MODEL INIT
 
-    # x, y = data_generator(N, max_order=D, noise_var=1, featurize_type='polynomial')
-    x, y = get_datasets("songs")
+    x, y = data_generator(N, max_order=D, noise_var=1, featurize_type='polynomial')
+    # x, y = get_datasets("songs")
     x = torch.tensor(x, dtype=torch.float32)
     y = torch.tensor(y, dtype=torch.float32)
     dset = torch.utils.data.TensorDataset(x, y)
@@ -266,15 +179,16 @@ if __name__ == "__main__":
 
     criterion = MSELoss()
     w_optimizer = SGD(model.weight_params(), lr=w_lr, momentum=0.9, weight_decay=0.1)
-    # w_optimizer = torch.optim.LBFGS(model.weight_params(), lr = w_lr)
     a_optimizer = SGD(model.arch_params(), lr=a_lr, momentum=0.9, weight_decay=0.1)
 
 
 
-    # train_bptt(num_epochs=num_epochs, model=model, dset_train=dset_train, 
-    #     logging_freq=logging_freq, batch_size=batch_size, T=T, grad_clip=grad_clip)
-    train_normal(num_epochs=num_epochs, model=model, dset_train=dset_train, 
-        logging_freq=logging_freq, batch_size=batch_size, grad_clip=grad_clip, optim="standard")
+    train_bptt(num_epochs=num_epochs, model=model, dset_train=dset_train, 
+        logging_freq=logging_freq, batch_size=batch_size, T=T, 
+        grad_clip=grad_clip, w_lr=w_lr, w_checkpoint_freq=w_checkpoint_freq, 
+        sotl_order=1, hvp="finite_diff")
+    # train_normal(num_epochs=num_epochs, model=model, dset_train=dset_train, 
+    #     logging_freq=logging_freq, batch_size=batch_size, grad_clip=grad_clip, optim="standard")
     
     lapack_solution, res, eff_rank, sing_values = numpy.linalg.lstsq(x,y)
     print(f"Cond number:{abs(sing_values.max()/sing_values.min())}")
@@ -285,7 +199,7 @@ if __name__ == "__main__":
 
     val_meter2 = valid_func(model=model, val_loader=val_loader, criterion=criterion)
 
-    print(f"Trained val loss: {val_meter.avg}, iterative solver val loss: {val_meter2.avg}, difference: {val_meter.avg - val_meter2.avg} (ie. {(val_meter.avg/val_meter2.avg-1)*100}% more)")
+    print(f"Trained val loss: {val_meter.avg}, LAPACK solver val loss: {val_meter2.avg}, difference: {val_meter.avg - val_meter2.avg} (ie. {(val_meter.avg/val_meter2.avg-1)*100}% more)")
 
 
 
