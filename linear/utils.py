@@ -1,18 +1,17 @@
 import torch
 from torch import Tensor
 from torch.nn import Linear, MSELoss, functional as F
-from torch.optim import SGD, Adam, RMSprop
-from torch.autograd import Variable
 import torch.nn as nn
 import numpy as np
 import math
 import itertools
+from typing import *
 import matplotlib.pyplot as plt
 
-def sample_tau(alpha,beta):
+def sample_tau(alpha,beta) -> Tensor:
     return torch.tensor([np.random.gamma(alpha, 1/beta)])
 
-def sample_C(alpha,beta):
+def sample_C(alpha,beta) -> Tensor:
     return torch.tensor([np.random.gamma(alpha, 1/beta)])
 
 def c_cov(c, as_tensor=True):
@@ -45,7 +44,7 @@ def sample_w(C, tau, c, as_tensor=True):
     else:
         return np.random.multivariate_normal(mean=[0 for _ in range(len(c))], cov=cov)
 
-def evidence_np(C, c, y, alpha_1, alpha_2, beta_1, beta_2, N, design_matrix):
+def evidence_np(C, c, y, alpha_1, alpha_2, beta_1, beta_2, N, design_matrix) -> float:
     numerator = beta_1**alpha_1 + beta_2**alpha_2 * math.gamma(alpha_1 + N/2) / (2*math.pi)**(N/2)
     denominator = (2*math.pi)**(N/2) * math.gamma(alpha_1) * math.gamma(alpha_2)
     A = design_matrix.T @ design_matrix + C*c_tilde(c)
@@ -54,7 +53,7 @@ def evidence_np(C, c, y, alpha_1, alpha_2, beta_1, beta_2, N, design_matrix):
     
     return numerator / denominator * matrix_term * tail_constants
 
-def evidence(design_matrix, y, C, c, alpha_1, alpha_2, beta_1, beta_2, N):
+def evidence(design_matrix, y, C, c, alpha_1, alpha_2, beta_1, beta_2, N) -> float:
     numerator = beta_1**alpha_1 * beta_2**alpha_2 * math.gamma(alpha_1 + N/2) / (2*math.pi)**(N/2)
     denominator = (2*math.pi)**(N/2) * math.gamma(alpha_1) * math.gamma(alpha_2)
     A = torch.add(design_matrix.T @ design_matrix, C*c_tilde(c))
@@ -63,7 +62,7 @@ def evidence(design_matrix, y, C, c, alpha_1, alpha_2, beta_1, beta_2, N):
     
     return numerator / denominator * matrix_term * tail_constants
 
-def evidence_log(design_matrix, y, C, c, alpha_1, alpha_2, beta_1, beta_2, N):
+def evidence_log(design_matrix, y, C, c, alpha_1, alpha_2, beta_1, beta_2, N) -> float:
     # numerator = beta_1**alpha_1 * beta_2**alpha_2 * math.gamma(alpha_1 + N/2) / (2*math.pi)**(N/2)
     numerator = alpha_1*torch.log(beta_1) + alpha_2*torch.log(beta_2) + torch.lgamma(alpha_1+N/2) - N/2*torch.log(2*torch.tensor([math.pi]))
     # denominator = (2*math.pi)**(N/2) * math.gamma(alpha_1) * math.gamma(alpha_2)
@@ -77,7 +76,7 @@ def evidence_log(design_matrix, y, C, c, alpha_1, alpha_2, beta_1, beta_2, N):
     tail_constants = (len(c) + alpha_2 - 1/2)*torch.log(C) + (-beta_2*C) + 1/2*torch.log(c[0]) + torch.sum(c[1:])
     return numerator - denominator + matrix_term + tail_constants
 
-def featurize(x: float, max_order:int =4,  type:str ="fourier"):
+def featurize(x: float, max_order:int =4,  type:str ="fourier") -> Sequence:
     if type == 'fourier':
         # max_order should be 2*D when doing sum_{i=1}^D (Fourier terms), ie. each sin/cos term counts separately!
         featurized_input = [1]
@@ -109,49 +108,53 @@ def featurize(x: float, max_order:int =4,  type:str ="fourier"):
 
 def eval_features(x, max_order=2, type='fourier', noise_var=1):
     noise = np.random.normal(0, noise_var**(1/2))
-    if type == "fourier":
-        feature = np.array(x[:max_order]).sum()
-    elif type == 'polynomial':
-        feature = np.array(x[:max_order]).sum()
-    
+    final_features = None
+    if isinstance(max_order, int):
+        final_features = x[:max_order]
+        if type == "fourier":
+            assert (max_order % 2 == 1) or max_order == 1 #The constant term is there once only, then each degree of Fourier basis comes in pairs
+
+    elif isinstance(max_order, (tuple, list)):
+        final_features = []
+        for seq in max_order:
+            final_features = final_features + x[seq[0]:seq[1]]
+
+    feature = np.array(final_features).sum()
+
     return [feature+noise]
 
-# define our data generation function
-def data_generator(data_size=1000, max_order=5, max_order_y=None, noise_var=1, x_range=None, featurize_type='fourier', plot=False):
+def data_generator(data_size=1000, max_order_generated=5, max_order_y=None, max_order_x=None, noise_var=1, x_range=None, featurize_type='fourier', plot=False):
     inputs = []
     labels = []
     if max_order_y is None:
-        max_order_y = max_order
+        max_order_y = max_order_generated
+    if max_order_x is None:
+        max_order_x = max_order_generated
     if x_range is None:
         x_range = 10*math.pi
     xs = np.linspace(-x_range,x_range,data_size)
 
     for x in xs:
-        features = featurize(x, max_order=max_order, type=featurize_type)
-        inputs.append(features)
-        labels.append(eval_features(features, noise_var=noise_var, type=featurize_type))
+        final_features = None
+        features = featurize(x, max_order=max_order_generated, type=featurize_type)
+        labels.append(eval_features(features, noise_var=noise_var, max_order=max_order_y, type=featurize_type))
+        if isinstance(max_order_x, int):
+            final_features = features[:max_order_x]
+        elif isinstance(max_order_x, (tuple, list)):
+            final_features = []
+            for seq in max_order_x:
+                final_features = final_features + features[seq[0]:seq[1]]
+        else:
+            raise NotImplementedError
+        inputs.append(final_features)
 
     if plot:
         labels = [label[0] for label in labels]
         plt.plot(xs, labels)
     return inputs, labels
 
-# def data_generator(data_size=1000, max_order=2, noise_var=1, featurize_type='fourier'):
-#     inputs = []
-#     labels = []
 
-#     for i in range(data_size):
-#         x = np.random.randint(2000) / 1000
-
-#         y = (x * x) + (4 * x) - 3
-
-#         features = featurize(x, max_order=max_order, type=featurize_type)
-#         inputs.append(features)
-#         labels.append(eval_features(features, noise_var=noise_var, type=featurize_type))
-
-#     return inputs, labels
-
-def jacobian(y, x, create_graph=False):                                                               
+def jacobian(y: Tensor, x: Tensor, create_graph:bool=False) -> Tensor:                                                               
     jac = []                                                                                          
     flat_y = y.reshape(-1)                                                                            
     grad_y = torch.zeros_like(flat_y)                                                                 
@@ -162,6 +165,6 @@ def jacobian(y, x, create_graph=False):
         grad_y[i] = 0.                                                                                
     return torch.stack(jac).reshape(y.shape + x.shape)                                                
                                                                                                       
-def hessian(y, x1, x2):                                                                                    
+def hessian(y:Tensor, x1:Tensor, x2:Tensor) -> Tensor:                                                                                    
     return jacobian(jacobian(y, x1, create_graph=True), x2)                                             
                                                                                                       

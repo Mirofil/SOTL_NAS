@@ -19,6 +19,7 @@ from utils import (c_cov, c_tilde, data_generator, eval_features, evidence,
                    sample_tau, sample_w)
 from models import SoTLNet
 from sotl_utils import sotl_gradient
+import scipy.linalg
 
 class WeightBuffer:
     def __init__(self, checkpoint_freq, T):
@@ -165,7 +166,7 @@ if __name__ == "__main__":
 
     ### MODEL INIT
 
-    x, y = data_generator(N, max_order=D, noise_var=1, featurize_type='polynomial')
+    x, y = data_generator(N, max_order_generated=D, noise_var=1, featurize_type='polynomial')
     # x, y = get_datasets("songs")
     x = torch.tensor(x, dtype=torch.float32)
     y = torch.tensor(y, dtype=torch.float32)
@@ -174,7 +175,7 @@ if __name__ == "__main__":
     dset_train, dset_val = torch.utils.data.random_split(dset, [int(len(dset)*0.85), len(dset) - int(len(dset)*0.85)])
     val_loader = torch.utils.data.DataLoader(dset_val, batch_size = batch_size)
 
-    model = SoTLNet(num_features=int(x.size()[1]))
+    model = SoTLNet(num_features=int(x.size()[1]), layer_type="sotmax_mult")
 
 
     criterion = MSELoss()
@@ -190,7 +191,7 @@ if __name__ == "__main__":
     # train_normal(num_epochs=num_epochs, model=model, dset_train=dset_train, 
     #     logging_freq=logging_freq, batch_size=batch_size, grad_clip=grad_clip, optim="standard")
     
-    lapack_solution, res, eff_rank, sing_values = numpy.linalg.lstsq(x,y)
+    lapack_solution, res, eff_rank, sing_values = scipy.linalg.lstsq(x,y)
     print(f"Cond number:{abs(sing_values.max()/sing_values.min())}")
     
     val_meter = valid_func(model=model, val_loader=val_loader, criterion=criterion)
@@ -199,7 +200,7 @@ if __name__ == "__main__":
 
     val_meter2 = valid_func(model=model, val_loader=val_loader, criterion=criterion)
 
-    print(f"Trained val loss: {val_meter.avg}, LAPACK solver val loss: {val_meter2.avg}, difference: {val_meter.avg - val_meter2.avg} (ie. {(val_meter.avg/val_meter2.avg-1)*100}% more)")
+    print(f"Trained val loss: {val_meter.avg}, SciPy solver val loss: {val_meter2.avg}, difference: {val_meter.avg - val_meter2.avg} (ie. {(val_meter.avg/val_meter2.avg-1)*100}% more)")
 
 
 

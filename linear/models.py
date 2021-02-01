@@ -1,5 +1,5 @@
 import torch
-from layers import Linear2
+from layers import Linear2, LinearMaxDeg
 
 class Net(torch.nn.Module):
     def __init__(self, num_features = 2):
@@ -18,9 +18,12 @@ class Net(torch.nn.Module):
             yield p
 
 class SoTLNet(Net):
-    def __init__(self, num_features = 2):
+    def __init__(self, num_features = 2, layer_type = "softmax_mult", **kwargs):
         super().__init__()
-        self.fc1 = Linear2(num_features, 1, bias=False)
+        if layer_type == "softmax_mult":
+            self.fc1 = Linear2(num_features, 1, bias=False, **kwargs)
+        elif layer_type == "max_deg":
+            self.fc1 = LinearMaxDeg(num_features, 1, bias=False, **kwargs)
 
     def forward(self, x, weight=None, alphas=None):
         return self.fc1(x, weight, alphas)
