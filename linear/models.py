@@ -1,8 +1,8 @@
 import torch
 from layers import Linear2, LinearMaxDeg
 
-class Net(torch.nn.Module):
-    def __init__(self, num_features = 2):
+class RegressionNet(torch.nn.Module):
+    def __init__(self, num_features = 2, **kwargs):
         super(Net, self).__init__()
         self.fc1 = torch.nn.Linear(num_features, 1, bias=False)
 
@@ -17,9 +17,9 @@ class Net(torch.nn.Module):
         for p in [self.fc1.alphas]:
             yield p
 
-class SoTLNet(Net):
+class SoTLNet(RegressionNet):
     def __init__(self, num_features = 2, layer_type = "softmax_mult", **kwargs):
-        super().__init__()
+        super().__init__(**kwargs)
         if layer_type == "softmax_mult":
             self.fc1 = Linear2(num_features, 1, bias=False, **kwargs)
         elif layer_type == "max_deg":
