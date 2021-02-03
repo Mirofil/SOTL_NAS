@@ -49,12 +49,12 @@ def sotl_gradient(
                 # INNER LOOP
                 for j in range(i, max(0, i - inner_loop_order), -1):
                     param_norm = 0
-                    if model.weight_decay > 0:
+                    if model.alpha_weight_decay > 0:
                         for weight in weight_buffer[j - 1]:
                             param_norm = param_norm + torch.pow(weight.norm(2), 2)
                     loss2 = criterion(
                         model(xs[i], weight_buffer[j - 1][0], model.fc1.alphas), ys[i]
-                    ) + param_norm*model.weight_decay
+                    ) + param_norm*model.alpha_weight_decay
                     hessian_matrices = [hessian(
                         loss2 * 1, weight_buffer[j - 1][0], arch_param
                     ).reshape(
@@ -74,7 +74,7 @@ def sotl_gradient(
 
                         total_arch_gradient[k] += a_grad + (
                             -w_lr * second_order_terms[k]
-                        )  # TODO this does not work if there are multiple arch parameter tensors! See the handling in finite diff code below
+                        ) 
 
             elif hvp == "finite_diff":
                 # INNER LOOP
@@ -88,12 +88,12 @@ def sotl_gradient(
                         for p, d in zip(weight_buffer[j - 1], dw):
                             p.add_(eps * d)
                     param_norm = 0
-                    if model.weight_decay > 0:
+                    if model.alpha_weight_decay > 0:
                         for weight in weight_buffer[j - 1]:
                             param_norm = param_norm + torch.pow(weight.norm(2), 2)
                     loss2 = criterion(
                         model(xs[j], weight_buffer[j - 1][0], model.fc1.alphas), ys[j]
-                    ) + param_norm*model.weight_decay
+                    ) + param_norm*model.alpha_weight_decay
                     dalpha_pos = [x for x in torch.autograd.grad(
                         loss2, model.arch_params(), allow_unused=True
                     ) if x is not None]  # dalpha { L_trn(w+) }
@@ -104,12 +104,12 @@ def sotl_gradient(
                             p.subtract_(2.0 * eps * d)
 
                     param_norm = 0
-                    if model.weight_decay > 0:
+                    if model.alpha_weight_decay > 0:
                         for weight in weight_buffer[j - 1]:
                             param_norm = param_norm + torch.pow(weight.norm(2), 2)
                     loss3 = criterion(
                         model(xs[j], weight_buffer[j - 1][0], model.fc1.alphas), ys[j]
-                    ) + param_norm*model.weight_decay
+                    ) + param_norm*model.alpha_weight_decay
                     dalpha_neg = [x for x in torch.autograd.grad(
                         loss3, model.arch_params(), allow_unused=True
                     ) if x is not None]  # dalpha { L_trn(w-) }

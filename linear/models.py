@@ -11,12 +11,18 @@ class RegressionNet(torch.nn.Module):
         return self.fc1(x)
     
     def weight_params(self):
-        for p in [self.fc1.weight]:
-            yield p
+        for n,p in self.named_parameters():
+            if 'alpha' not in n:
+                yield p
+            else:
+                continue
     
     def arch_params(self):
-        for p in [self.fc1.alphas] + self.alphas:
-            yield p
+        for n,p in self.named_parameters():
+            if 'alpha' in n:
+                yield p
+            else:
+                continue
 
 class SoTLNet(RegressionNet):
     def __init__(self, num_features = 2, layer_type = "softmax_mult", weight_decay=0, **kwargs):
@@ -27,10 +33,10 @@ class SoTLNet(RegressionNet):
             self.fc1 = LinearMaxDeg(num_features, 1, bias=False, **kwargs)
         self.alphas = []
         if weight_decay > 0:
-            self.weight_decay = torch.nn.Parameter(torch.tensor([weight_decay], dtype=torch.float32, requires_grad=True).unsqueeze(dim=0))
-            self.alphas.append(self.weight_decay)
+            self.alpha_weight_decay = torch.nn.Parameter(torch.tensor([weight_decay], dtype=torch.float32, requires_grad=True).unsqueeze(dim=0))
+            self.alphas.append(self.alpha_weight_decay)
         else:
-            self.weight_decay = 0
+            self.alpha_weight_decay = 0
     def forward(self, x, weight=None, alphas=None):
         return self.fc1(x, weight, alphas)
 
