@@ -6,13 +6,15 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 class Linear2(torch.nn.Linear):
-    def __init__(self, *args, **kwargs) -> None:
+    def __init__(self, *args, degree=None, **kwargs) -> None:
         super().__init__(*args, **kwargs)
         self.alphas = torch.nn.Parameter(torch.ones(1, self.in_features))
 
     def forward(self, input: Tensor, weight: Tensor = None, alphas: Tensor = None) -> Tensor:
         if weight is None:
             weight = self.weight
+        else:
+            weight = weight[0]
         if alphas is None:
             alphas = self.alphas
         return F.linear(input, weight*F.softmax(alphas), self.bias)
@@ -26,11 +28,14 @@ class LinearMaxDeg(torch.nn.Linear):
             constants.append(-i*1) # the multiplicative constant here depends on the width of the soft step function used
             constants.append(-i*1)
         constants = constants[:self.in_features]
+        self.degree = self.alphas
         self.cs = torch.tensor(constants,dtype=torch.float32).unsqueeze(dim=0)
 
     def forward(self, input: Tensor, weight: Tensor = None, alphas: Tensor = None) -> Tensor:
         if weight is None:
             weight = self.weight
+        else:
+            weight = weight[0]
         if alphas is None:
             alphas = self.alphas
         return F.linear(input, weight*self.squished_tanh(alphas+self.cs), self.bias)
