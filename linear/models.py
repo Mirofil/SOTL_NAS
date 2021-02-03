@@ -28,6 +28,8 @@ class SoTLNet(RegressionNet):
         self.alphas = []
         if weight_decay > 0:
             self.weight_decay = torch.nn.Parameter(torch.tensor([weight_decay], dtype=torch.float32, requires_grad=True).unsqueeze(dim=0))
-            self.alphas = self.alphas.append(self.weight_decay)
+            self.alphas.append(self.weight_decay)
+        else:
+            self.weight_decay = 0
     def forward(self, x, weight=None, alphas=None):
         return self.fc1(x, weight, alphas)

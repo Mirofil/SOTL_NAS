@@ -33,7 +33,7 @@ class LinearMaxDeg(torch.nn.Linear):
             weight = self.weight
         if alphas is None:
             alphas = self.alphas
-        return F.linear(input, weight*self.squished_tanh(self.alphas+self.cs), self.bias)
+        return F.linear(input, weight*self.squished_tanh(alphas+self.cs), self.bias)
 
     @staticmethod
     def squished_tanh(x, plot=False):

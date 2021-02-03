@@ -23,7 +23,7 @@ def sotl_gradient(
         len(weight_buffer) == 1
     ):  # the other branches won't work because we calculate gradients with weights at t-1 in them
         loss = criterion(model(xs[0], weight_buffer[0][0], model.fc1.alphas), ys[0])
-        da = torch.autograd.grad(loss, model.arch_params(), retain_graph=True)
+        da = [y if y is not None else torch.zeros(x.size()) for x,y in zip(model.arch_params(), torch.autograd.grad(loss, model.arch_params(), retain_graph=True, allow_unused=True))]
         total_arch_gradient = da
     else:
         # The outer loop equation is dSoTL/da = sum_{t=T-outer_loop_order)^T dL(w_t, alpha)/da
@@ -43,28 +43,37 @@ def sotl_gradient(
 
 
             loss = criterion(model(top_level_x, weight_buffer[i][0], model.fc1.alphas), top_level_y)
-            da = [x for x in torch.autograd.grad(loss, model.arch_params(), retain_graph=True, allow_unused=True) if x is not None]
+            da = [y if y is not None else torch.zeros(x.size()) for x,y in zip(model.arch_params(), torch.autograd.grad(loss, model.arch_params(), retain_graph=True, allow_unused=True))]
             dw = torch.autograd.grad(loss, weight_buffer[i][0], retain_graph=True)
             if hvp == "exact":
                 # INNER LOOP
                 for j in range(i, max(0, i - inner_loop_order), -1):
+                    param_norm = 0
+                    if model.weight_decay > 0:
+                        for weight in weight_buffer[j - 1]:
+                            param_norm = param_norm + torch.pow(weight.norm(2), 2)
                     loss2 = criterion(
                         model(xs[i], weight_buffer[j - 1][0], model.fc1.alphas), ys[i]
-                    )
-                    hessian_matrix = hessian(
-                        loss2 * 1, weight_buffer[j - 1][0], model.fc1.alphas
+                    ) + param_norm*model.weight_decay
+                    hessian_matrices = [hessian(
+                        loss2 * 1, weight_buffer[j - 1][0], arch_param
                     ).reshape(
-                        model.fc1.weight.size()[1], model.fc1.alphas.size()[1]
-                    )  # TODO this whole line is WEIRD. It should be made more general to allow multiple alphas ass well
+                        model.fc1.weight.size()[1], arch_param.size()[1]
+                    ) for arch_param in model.arch_params()]
+                    # hessian_matrix = hessian(
+                    #     loss2 * 1, weight_buffer[j - 1][0], model.fc1.alphas
+                    # ).reshape(
+                    #     model.fc1.weight.size()[1], model.fc1.alphas.size()[1]
+                    # )  # TODO this whole line is WEIRD. It should be made more general to allow multiple alphas ass well
 
-                    second_order_term = torch.matmul(dw[0], hessian_matrix)
+                    second_order_terms = [torch.matmul(dw[0], hessian_matrix) for hessian_matrix in hessian_matrices]
 
                     if total_arch_gradient is None:
                         total_arch_gradient = [0 for _ in range(len(da))]
                     for k, a_grad in enumerate(da):
 
                         total_arch_gradient[k] += a_grad + (
-                            -w_lr * second_order_term
+                            -w_lr * second_order_terms[k]
                         )  # TODO this does not work if there are multiple arch parameter tensors! See the handling in finite diff code below
 
             elif hvp == "finite_diff":
@@ -82,9 +91,9 @@ def sotl_gradient(
                     loss2 = criterion(
                         model(xs[j], weight_buffer[j - 1][0], model.fc1.alphas), ys[j]
                     )
-                    dalpha_pos = torch.autograd.grad(
-                        loss2, model.arch_params()
-                    )  # dalpha { L_trn(w+) }
+                    dalpha_pos = [x for x in torch.autograd.grad(
+                        loss2, model.arch_params(), allow_unused=True
+                    ) if x is not None]  # dalpha { L_trn(w+) }
 
                     # w- = w_{t-1} - eps*dL(w_t,alpha)dw
                     with torch.no_grad():
@@ -93,9 +102,9 @@ def sotl_gradient(
                     loss3 = criterion(
                         model(xs[j], weight_buffer[j - 1][0], model.fc1.alphas), ys[j]
                     )
-                    dalpha_neg = torch.autograd.grad(
-                        loss3, model.arch_params()
-                    )  # dalpha { L_trn(w-) }
+                    dalpha_neg = [x for x in torch.autograd.grad(
+                        loss3, model.arch_params(), allow_unused=True
+                    ) if x is not None]  # dalpha { L_trn(w-) }
 
                     # recover w
                     with torch.no_grad():
