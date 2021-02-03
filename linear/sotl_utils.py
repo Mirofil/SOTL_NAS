@@ -7,16 +7,17 @@ def sotl_gradient(
     model, criterion, xs, ys, weight_buffer: Sequence, w_lr:float, T:int, outer_loop_order=1,inner_loop_order=1, hvp="exact", normalize_a_lr=True, weight_decay_term=0, val_xs = None, val_ys=None
 ) -> Sequence:
     total_arch_gradient = None
-    recompute_top_level = None
     loss = None
     da=None
     dw=None
     
 
-    if inner_loop_order is None or inner_loop_order <= 0:
+    if (inner_loop_order is None) or (inner_loop_order <= 0):
         inner_loop_order = min([len(weight_buffer), len(xs), len(ys)])
-    if outer_loop_order is None or inner_loop_order <= 0:
+    if (outer_loop_order is None) or (outer_loop_order <= 0):
         outer_loop_order = min([len(weight_buffer), len(xs), len(ys)])
+        if (val_xs is not None) and (val_ys is not None):
+            outer_loop_order = min([outer_loop_order, len(val_xs), len(val_ys)])
 
     if (
         len(weight_buffer) == 1
@@ -27,6 +28,8 @@ def sotl_gradient(
     else:
         # The outer loop equation is dSoTL/da = sum_{t=T-outer_loop_order)^T dL(w_t, alpha)/da
         # The inner loop equation is dL(w_t, alpha)da = dL(w_t,alpha)/da + dL(w_t,alpha)/dw * -eta sum_{i=t-inner_loop_order}^t d^2L(w_i, alpha)dadw
+        
+        # OUTER LOOP
         for i in range(
             len(weight_buffer) - 1, max(0, len(weight_buffer)-1-outer_loop_order), -1
         ):
@@ -43,7 +46,7 @@ def sotl_gradient(
             da = [x for x in torch.autograd.grad(loss, model.arch_params(), retain_graph=True, allow_unused=True) if x is not None]
             dw = torch.autograd.grad(loss, weight_buffer[i][0], retain_graph=True)
             if hvp == "exact":
-                
+                # INNER LOOP
                 for j in range(i, max(0, i - inner_loop_order), -1):
                     loss2 = criterion(
                         model(xs[i], weight_buffer[j - 1][0], model.fc1.alphas), ys[i]
@@ -65,13 +68,13 @@ def sotl_gradient(
                         )  # TODO this does not work if there are multiple arch parameter tensors! See the handling in finite diff code below
 
             elif hvp == "finite_diff":
-                
+                # INNER LOOP
                 for j in range(i, 0, -1):
                     # DARTS footnotes suggest to divide by L2 norm of the gradient
                     norm = torch.cat([w.view(-1) for w in dw]).norm()
                     eps = 0.0001 / norm
 
-                    # w+ = w + eps*dw`
+                    # w+ = w_{t-1} + eps*dL(w_t,alpha)dw
                     with torch.no_grad():
                         for p, d in zip(weight_buffer[j - 1], dw):
                             p.add_(eps * d)
@@ -83,7 +86,7 @@ def sotl_gradient(
                         loss2, model.arch_params()
                     )  # dalpha { L_trn(w+) }
 
-                    # w- = w - eps*dw`
+                    # w- = w_{t-1} - eps*dL(w_t,alpha)dw
                     with torch.no_grad():
                         for p, d in zip(weight_buffer[j - 1], dw):
                             p.subtract_(2.0 * eps * d)

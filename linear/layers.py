@@ -42,7 +42,7 @@ class LinearMaxDeg(torch.nn.Linear):
             ys = [(F.tanh(4*torch.tensor(elem))+1)/2 for elem in xs]
             plt.plot(xs,ys)
 
-        return (F.tanh(3*x)+1)/2
+        return (F.tanh(4*x)+1)/2
 
 class LinearRidge(torch.nn.Linear):
     def __init__(self, *args, **kwargs) -> None:

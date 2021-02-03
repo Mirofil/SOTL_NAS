@@ -76,7 +76,8 @@ def evidence_log(design_matrix, y, C, c, alpha_1, alpha_2, beta_1, beta_2, N) ->
     tail_constants = (len(c) + alpha_2 - 1/2)*torch.log(C) + (-beta_2*C) + 1/2*torch.log(c[0]) + torch.sum(c[1:])
     return numerator - denominator + matrix_term + tail_constants
 
-def featurize(x: float, max_order:int =4,  type:str ="fourier") -> Sequence:
+def featurize(x: float, max_order:int =4, type:str ="fourier") -> Sequence:
+    featurized_input = None
     if type == 'fourier':
         # max_order should be 2*D when doing sum_{i=1}^D (Fourier terms), ie. each sin/cos term counts separately!
         featurized_input = [1]
@@ -100,13 +101,16 @@ def featurize(x: float, max_order:int =4,  type:str ="fourier") -> Sequence:
             lambda x: np.sin(2 * np.pi * x),
             lambda x: np.cos(2 * np.pi * x),
             lambda x: np.exp(x)]
+    
         featurized_input = []
         for feature in features[:max_order]:
             featurized_input.append(feature(x))
+    else:
+        raise NotImplementedError
         
     return list(featurized_input)
 
-def eval_features(x, max_order=2, type='fourier', noise_var=1):
+def eval_features(x:Sequence, max_order:int=2, type:str='fourier', noise_var:float=1) -> Sequence:
     noise = np.random.normal(0, noise_var**(1/2))
     final_features = None
     if isinstance(max_order, int):
@@ -123,7 +127,7 @@ def eval_features(x, max_order=2, type='fourier', noise_var=1):
 
     return [feature+noise]
 
-def data_generator(data_size=1000, max_order_generated=5, max_order_y=None, max_order_x=None, noise_var=1, x_range=None, featurize_type='fourier', plot=False):
+def data_generator(data_size:int=1000, max_order_generated:int=5, max_order_y:int=None, max_order_x:int=None, noise_var:float=1, x_range:float=None, featurize_type:str='fourier', plot:bool=False):
     inputs = []
     labels = []
     if max_order_y is None:
