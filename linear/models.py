@@ -1,6 +1,6 @@
 import torch
 from layers import Linear2, LinearMaxDeg
-
+import torch.nn as nn
 class RegressionNet(torch.nn.Module):
     def __init__(self, num_features = 2, **kwargs):
         super(RegressionNet, self).__init__()
@@ -33,3 +33,31 @@ class SoTLNet(RegressionNet):
             self.weight_decay = 0
     def forward(self, x, weight=None, alphas=None):
         return self.fc1(x, weight, alphas)
+
+
+class LogReg(nn.Module):
+    def __init__(self, input_dim=28*28, output_dim=10):
+        super(LogReg, self).__init__()
+        self._input_dim = input_dim
+        self.lin1 = nn.Linear(input_dim, output_dim)
+
+    def forward(self, x):
+        x = x.view(-1, self._input_dim)
+        x = self.lin1(x)
+        return x
+
+
+class MLP(nn.Module):
+    def __init__(self, input_dim=28*28, hidden_dim=1000, output_dim=10):
+        super(MLP, self).__init__()
+        self._input_dim = input_dim
+        self.lin1 = nn.Linear(input_dim, hidden_dim)
+        self.lin2 = nn.Linear(hidden_dim, hidden_dim)
+        self.lin3 = nn.Linear(hidden_dim, output_dim)
+
+    def forward(self, x):
+        x = x.view(-1, self._input_dim)
+        x = F.relu(self.lin1(x))
+        x = F.relu(self.lin2(x))
+        x = self.lin3(x)
+        return x

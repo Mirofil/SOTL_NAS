@@ -78,7 +78,7 @@ def sotl_gradient(
 
             elif hvp == "finite_diff":
                 # INNER LOOP
-                for j in range(i, 0, -1):
+                for j in range(i, max(0, i - inner_loop_order), -1):
                     # DARTS footnotes suggest to divide by L2 norm of the gradient
                     norm = torch.cat([w.view(-1) for w in dw]).norm()
                     eps = 0.0001 / norm
@@ -87,10 +87,13 @@ def sotl_gradient(
                     with torch.no_grad():
                         for p, d in zip(weight_buffer[j - 1], dw):
                             p.add_(eps * d)
-
+                    param_norm = 0
+                    if model.weight_decay > 0:
+                        for weight in weight_buffer[j - 1]:
+                            param_norm = param_norm + torch.pow(weight.norm(2), 2)
                     loss2 = criterion(
                         model(xs[j], weight_buffer[j - 1][0], model.fc1.alphas), ys[j]
-                    )
+                    ) + param_norm*model.weight_decay
                     dalpha_pos = [x for x in torch.autograd.grad(
                         loss2, model.arch_params(), allow_unused=True
                     ) if x is not None]  # dalpha { L_trn(w+) }
@@ -99,9 +102,14 @@ def sotl_gradient(
                     with torch.no_grad():
                         for p, d in zip(weight_buffer[j - 1], dw):
                             p.subtract_(2.0 * eps * d)
+
+                    param_norm = 0
+                    if model.weight_decay > 0:
+                        for weight in weight_buffer[j - 1]:
+                            param_norm = param_norm + torch.pow(weight.norm(2), 2)
                     loss3 = criterion(
                         model(xs[j], weight_buffer[j - 1][0], model.fc1.alphas), ys[j]
-                    )
+                    ) + param_norm*model.weight_decay
                     dalpha_neg = [x for x in torch.autograd.grad(
                         loss3, model.arch_params(), allow_unused=True
                     ) if x is not None]  # dalpha { L_trn(w-) }
