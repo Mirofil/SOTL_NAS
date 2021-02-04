@@ -74,7 +74,7 @@ def sotl_gradient(
         
         # OUTER LOOP
         for i in range(
-            len(weight_buffer) - 1, max(0, len(weight_buffer)-1-grad_outer_loop_order), -1
+            len(weight_buffer) - 2, max(0, len(weight_buffer)-2-grad_outer_loop_order), -1
         ):
             if (val_xs is not None) and (val_ys is not None):
                 top_level_x = val_xs[0]
@@ -146,12 +146,17 @@ def sotl_gradient(
                     if model.alpha_weight_decay > 0:
                         for weight in weight_buffer[j - 1]:
                             param_norm = param_norm + torch.pow(weight.norm(2), 2)
+
+                    old_weights = switch_weights(model, weight_buffer[j-1])
+
                     loss2 = criterion(
                         model(x, weight_buffer[j - 1], model.arch_params()), y
                     ) + param_norm*model.alpha_weight_decay
                     dalpha_pos = [x for x in torch.autograd.grad(
                         loss2, model.arch_params(), allow_unused=True
                     ) if x is not None]  # dalpha { L_trn(w+) }
+
+                    no_longer_needed_weights = switch_weights(model, old_weights)
 
                     # w- = w_{t-1} - eps*dL(w_t,alpha)dw
                     with torch.no_grad():
@@ -162,12 +167,15 @@ def sotl_gradient(
                     if model.alpha_weight_decay > 0:
                         for weight in weight_buffer[j - 1]:
                             param_norm = param_norm + torch.pow(weight.norm(2), 2)
+                    old_weights = switch_weights(model, weight_buffer[j-1])
+
                     loss3 = criterion(
                         model(x, weight_buffer[j - 1], model.arch_params()), y
                     ) + param_norm*model.alpha_weight_decay
                     dalpha_neg = [x for x in torch.autograd.grad(
                         loss3, model.arch_params(), allow_unused=True
                     ) if x is not None]  # dalpha { L_trn(w-) }
+                    no_longer_needed_weights = switch_weights(model, old_weights)
 
                     # recover w
                     with torch.no_grad():

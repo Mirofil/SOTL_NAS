@@ -77,11 +77,13 @@ def train_bptt(
             )
 
             weight_buffer = WeightBuffer(T=T, checkpoint_freq=w_checkpoint_freq)
-            for intra_batch_idx, (x, y) in enumerate(zip(xs, ys)):
+            weight_buffer.add(model, 0)
+
+            for intra_batch_idx, (x, y) in enumerate(zip(xs, ys),1):
                 x = x.to(device)
                 y = y.to(device)
 
-                weight_buffer.add(model, intra_batch_idx)
+                # weight_buffer.add(model, intra_batch_idx) # TODO Should it be added here?
 
                 y_pred = model(x)
 
@@ -89,6 +91,8 @@ def train_bptt(
                 if extra_weight_decay is not None and extra_weight_decay != 0:
                     for weight in model.weight_params():
                         param_norm = param_norm + torch.pow(weight.norm(2), 2)
+                    param_norm = torch.multiply(model.alpha_weight_decay, param_norm)
+                # print(param_norm)
                 
                 
                 loss = criterion(y_pred, y) + param_norm
@@ -106,6 +110,7 @@ def train_bptt(
 
                 w_optimizer.step()
                 w_optimizer.zero_grad()
+                weight_buffer.add(model, intra_batch_idx)
 
                 true_batch_index += 1
                 wandb.log(
@@ -174,6 +179,8 @@ def train_bptt(
                     if log_alphas:
                         if hasattr(model, "fc1") and hasattr(model.fc1, "degree"):
                             wandb.log({"Alpha":model.fc1.degree.item()})
+                        if hasattr(model,"alpha_weight_decay"):
+                            wandb.log({"Alpha": model.alpha_weight_decay.item()})
 
                     a_optimizer.zero_grad()
 
@@ -198,8 +205,6 @@ def valid_func(model, dset_val, criterion, device = 'cuda' if torch.cuda.is_avai
     val_meter = AverageMeter()
     val_acc_meter = AverageMeter()
 
-    correct = 0
-    total = 0.0000000000001 # to avoid potential division by zero alter
     with torch.no_grad():
         for batch in val_loader:
             x, y = batch
@@ -272,11 +277,11 @@ def main(num_epochs = 50,
     D = 18,
     N = 50000,
     w_lr = 1e-4,
-    w_momentum=0.9,
-    w_weight_decay=0.1,
+    w_momentum=0.0,
+    w_weight_decay=0.0,
     a_lr = 3e-4,
-    a_momentum = 0.9,
-    a_weight_decay = 0.1,
+    a_momentum = 0.0,
+    a_weight_decay = 0.0,
     T = 10,
     grad_clip = 1,
     logging_freq = 200,
@@ -286,16 +291,16 @@ def main(num_epochs = 50,
     featurize_type="fourier",
     initial_degree=1,
     hvp="finite_diff",
-    arch_train_data="sotl",
+    arch_train_data="val",
     normalize_a_lr=True,
     w_warm_start=0,
-    extra_weight_decay=0.0,
-    grad_inner_loop_order=-1,
+    extra_weight_decay=0.1e-6,
+    grad_inner_loop_order=1,
     grad_outer_loop_order=-1,
     model_type="MNIST",
     dataset="MNIST",
     device= 'cuda' if torch.cuda.is_available() else 'cpu',
-    train_arch=False
+    train_arch=True
     ):
     config = locals()
 
@@ -391,9 +396,9 @@ N = 50000
 w_lr = 1e-3
 w_momentum=0.9
 w_weight_decay=0.0
-a_lr = 3e-3
+a_lr = 3e-4
 a_momentum = 0.9
-a_weight_decay = 0.2
+a_weight_decay = 0.0
 T = 10
 grad_clip = 1
 logging_freq = 200
@@ -407,7 +412,7 @@ normalize_a_lr=True
 w_warm_start=0
 log_grad_norm=True
 log_alphas=False
-extra_weight_decay=0.15
+extra_weight_decay=0.0001
 grad_inner_loop_order=-1
 grad_outer_loop_order=-1
 arch_train_data="val"

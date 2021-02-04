@@ -69,11 +69,12 @@ class MLP(RegressionNet):
         self._input_dim = input_dim
         self.lin1 = nn.Linear(input_dim, hidden_dim)
         self.lin2 = nn.Linear(hidden_dim, hidden_dim)
+        self.lin22 = nn.Linear(hidden_dim, hidden_dim)
+        self.lin23 = nn.Linear(hidden_dim, hidden_dim)
+
         self.lin3 = nn.Linear(hidden_dim, output_dim)
-        self.alphas = []
         if weight_decay > 0:
             self.alpha_weight_decay = torch.nn.Parameter(torch.tensor([weight_decay], dtype=torch.float32, requires_grad=True).unsqueeze(dim=0))
-            self.alphas.append(self.alpha_weight_decay)
         else:
             self.alpha_weight_decay = 0
 
@@ -91,6 +92,10 @@ class MLP(RegressionNet):
         x = x.view(-1, self._input_dim)
         x = F.relu(self.lin1(x))
         x = F.relu(self.lin2(x))
+        # x = F.relu(self.lin22(x))
+        # x = F.relu(self.lin23(x))
+
+
         x = self.lin3(x)
 
         # with torch.no_grad():
