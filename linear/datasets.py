@@ -3,7 +3,7 @@ import torch
 from torchvision import datasets, transforms
 from utils import data_generator
 
-def get_datasets(name, path=None, **kwargs):
+def get_datasets(name, path=None, test_split=0.85, **kwargs):
     if name == "songs":
         if path is None:
             path = r"C:\Users\kawga\Documents\Oxford\thesis\data\YearPredictionMSD.txt"
@@ -17,7 +17,7 @@ def get_datasets(name, path=None, **kwargs):
         dset = torch.utils.data.TensorDataset(x, y)
 
         dset_train, dset_test = torch.utils.data.random_split(
-            dset, [int(len(dset) * 0.85), len(dset) - int(len(dset) * 0.85)]
+            dset, [int(len(dset) * test_split), len(dset) - int(len(dset) * test_split)]
         )
     elif name == "fourier":
         x, y = data_generator(
@@ -28,7 +28,7 @@ def get_datasets(name, path=None, **kwargs):
         dset = torch.utils.data.TensorDataset(x, y)
 
         dset_train, dset_test = torch.utils.data.random_split(
-            dset, [int(len(dset) * 0.85), len(dset) - int(len(dset) * 0.85)]
+            dset, [int(len(dset) * test_split), len(dset) - int(len(dset) * test_split)]
         )
     elif name == "MNIST":
         dset_train = datasets.MNIST('./data', train=True, download=True,

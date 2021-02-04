@@ -35,8 +35,19 @@ class WeightBuffer:
     def clear(self):
         self.weight_buffer = []
 
+def switch_weights(model, weight_buffer_elem):
+    with torch.no_grad():
+        old_weights = [w.clone() for w in model.weight_params()]
+
+        for w_old, w_new in zip(model.weight_params(), weight_buffer_elem):
+            w_old.copy_(w_new)
+    
+    return old_weights
+
 def sotl_gradient(
-    model, criterion, xs, ys, weight_buffer: Sequence, w_lr:float, T:int, outer_loop_order=1,inner_loop_order=1, hvp="exact", normalize_a_lr=True, weight_decay_term=0, val_xs = None, val_ys=None
+    model, criterion, xs, ys, weight_buffer: Sequence, w_lr:float, T:int, 
+    grad_outer_loop_order=1,grad_inner_loop_order=1, hvp="exact",
+    normalize_a_lr=True, weight_decay_term=0, val_xs = None, val_ys=None, device = 'cuda' if torch.cuda.is_available() else 'cpu'
 ) -> Sequence:
     total_arch_gradient = None
     loss = None
@@ -44,12 +55,12 @@ def sotl_gradient(
     dw=None
     
 
-    if (inner_loop_order is None) or (inner_loop_order <= 0):
-        inner_loop_order = min([len(weight_buffer), len(xs), len(ys)])
-    if (outer_loop_order is None) or (outer_loop_order <= 0):
-        outer_loop_order = min([len(weight_buffer), len(xs), len(ys)])
+    if (grad_inner_loop_order is None) or (grad_inner_loop_order <= 0):
+        grad_inner_loop_order = min([len(weight_buffer), len(xs), len(ys)])
+    if (grad_outer_loop_order is None) or (grad_outer_loop_order <= 0):
+        grad_outer_loop_order = min([len(weight_buffer), len(xs), len(ys)])
         if (val_xs is not None) and (val_ys is not None):
-            outer_loop_order = min([outer_loop_order, len(val_xs), len(val_ys)])
+            grad_outer_loop_order = min([grad_outer_loop_order, len(val_xs), len(val_ys)])
 
     if (
         len(weight_buffer) == 1
@@ -63,7 +74,7 @@ def sotl_gradient(
         
         # OUTER LOOP
         for i in range(
-            len(weight_buffer) - 1, max(0, len(weight_buffer)-1-outer_loop_order), -1
+            len(weight_buffer) - 1, max(0, len(weight_buffer)-1-grad_outer_loop_order), -1
         ):
             if (val_xs is not None) and (val_ys is not None):
                 top_level_x = val_xs[0]
@@ -73,17 +84,26 @@ def sotl_gradient(
                 top_level_x = xs[i]
                 top_level_y = ys[i]
 
+            top_level_x = top_level_x.to(device)
+            top_level_y = top_level_y.to(device)
 
-            loss = criterion(model(top_level_x, weight_buffer[i], model.fc1.alphas), top_level_y)
-            da = [y if y is not None else torch.zeros(x.size()) for x,y in zip(model.arch_params(), torch.autograd.grad(loss, model.arch_params(), retain_graph=True, allow_unused=True))]
-            dw = torch.autograd.grad(loss, weight_buffer[i], retain_graph=True)
+            old_weights = switch_weights(model, weight_buffer[i])
+
+            loss = criterion(model(top_level_x, weight_buffer[i], list(model.arch_params())), top_level_y)
+            da = [y if y is not None else torch.zeros(x.size()).to(device) for x,y in zip(model.arch_params(), torch.autograd.grad(loss, model.arch_params(), retain_graph=True, allow_unused=True))]
+            dw = torch.autograd.grad(loss, model.weight_params(), retain_graph=True)
+
+            no_longer_needed_weights = switch_weights(model, old_weights)
+
             if hvp == "exact":
                 # INNER LOOP
-                for j in range(i, max(0, i - inner_loop_order), -1):
+                for j in range(i, max(0, i - grad_inner_loop_order), -1):
                     param_norm = 0
                     if model.alpha_weight_decay > 0:
                         for weight in weight_buffer[j - 1]:
                             param_norm = param_norm + torch.pow(weight.norm(2), 2)
+
+
                     loss2 = criterion(
                         model(xs[i], weight_buffer[j - 1], model.fc1.alphas), ys[i]
                     ) + param_norm*model.alpha_weight_decay
@@ -110,10 +130,13 @@ def sotl_gradient(
 
             elif hvp == "finite_diff":
                 # INNER LOOP
-                for j in range(i, max(0, i - inner_loop_order), -1):
+                for j in range(i, max(0, i - grad_inner_loop_order), -1):
                     # DARTS footnotes suggest to divide by L2 norm of the gradient
                     norm = torch.cat([w.view(-1) for w in dw]).norm()
                     eps = 0.0001 / norm
+
+                    x = xs[j].to(device)
+                    y = ys[j].to(device)
 
                     # w+ = w_{t-1} + eps*dL(w_t,alpha)dw
                     with torch.no_grad():
@@ -124,7 +147,7 @@ def sotl_gradient(
                         for weight in weight_buffer[j - 1]:
                             param_norm = param_norm + torch.pow(weight.norm(2), 2)
                     loss2 = criterion(
-                        model(xs[j], weight_buffer[j - 1], model.fc1.alphas), ys[j]
+                        model(x, weight_buffer[j - 1], model.arch_params()), y
                     ) + param_norm*model.alpha_weight_decay
                     dalpha_pos = [x for x in torch.autograd.grad(
                         loss2, model.arch_params(), allow_unused=True
@@ -140,7 +163,7 @@ def sotl_gradient(
                         for weight in weight_buffer[j - 1]:
                             param_norm = param_norm + torch.pow(weight.norm(2), 2)
                     loss3 = criterion(
-                        model(xs[j], weight_buffer[j - 1], model.fc1.alphas), ys[j]
+                        model(x, weight_buffer[j - 1], model.arch_params()), y
                     ) + param_norm*model.alpha_weight_decay
                     dalpha_neg = [x for x in torch.autograd.grad(
                         loss3, model.arch_params(), allow_unused=True
@@ -168,6 +191,6 @@ def sotl_gradient(
 
     if normalize_a_lr:
         for g in total_arch_gradient:
-            g.multiply_(T/inner_loop_order)
+            g.multiply_(T/grad_inner_loop_order)
     return total_arch_gradient
 

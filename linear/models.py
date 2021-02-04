@@ -37,8 +37,8 @@ class SoTLNet(RegressionNet):
         elif model_type == "linear":
             self.fc1 = FlexibleLinear(num_features, 1, bias=False)
             self.model = self.fc1
-        elif model_type == "MNIST":
-            self.model = MLP(input_dim=28*28,hidden_dim=1000,output_dim=10)
+        elif model_type == "MNIST" or model_type == "MLP":
+            self.model = MLP(input_dim=28*28,hidden_dim=1000,output_dim=10, weight_decay=weight_decay)
         elif model_type == "log_regression":
             self.model = LogReg(input_dim=28*28, output_dim=10)
         else:
@@ -63,17 +63,38 @@ class LogReg(nn.Module):
         x = self.lin1(x)
         return x
 
-class MLP(nn.Module):
-    def __init__(self, input_dim=28*28, hidden_dim=1000, output_dim=10):
+class MLP(RegressionNet):
+    def __init__(self, input_dim=28*28, hidden_dim=1000, output_dim=10, weight_decay=0, **kwargs):
         super(MLP, self).__init__()
         self._input_dim = input_dim
         self.lin1 = nn.Linear(input_dim, hidden_dim)
         self.lin2 = nn.Linear(hidden_dim, hidden_dim)
         self.lin3 = nn.Linear(hidden_dim, output_dim)
+        self.alphas = []
+        if weight_decay > 0:
+            self.alpha_weight_decay = torch.nn.Parameter(torch.tensor([weight_decay], dtype=torch.float32, requires_grad=True).unsqueeze(dim=0))
+            self.alphas.append(self.alpha_weight_decay)
+        else:
+            self.alpha_weight_decay = 0
 
     def forward(self, x, weights=None, alphas=None):
+
+        # with torch.no_grad():
+        #     if weights is not None:
+        #         old_weights = [w.clone() for w in self.weight_params()]
+
+        #         for w_old, w_new in zip(self.weight_params(), weights):
+        #             w_old.copy_(w_new)
+
+
+
         x = x.view(-1, self._input_dim)
         x = F.relu(self.lin1(x))
         x = F.relu(self.lin2(x))
         x = self.lin3(x)
+
+        # with torch.no_grad():
+        #     if weights is not None:
+        #         for w_old, w_new in zip(self.weight_params(), old_weights):
+        #             w_old.copy_(w_new)
         return x
