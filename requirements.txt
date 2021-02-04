@@ -1,9 +1,10 @@
+scipy
 torchvision
-torch
+pandas
 ray
-nats_bench
+torch
+tqdm
 numpy
 fire
-ray[tune]
-wandb
-ConfigSpace
+matplotlib
+nats_bench

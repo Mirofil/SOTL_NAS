@@ -183,7 +183,7 @@ def train_bptt(
                     a_optimizer.step()
 
         val_results = valid_func(
-            model=model, dset_val=dset_val, criterion=criterion, print_results=False
+            model=model, dset_val=dset_val, criterion=criterion, device=device, print_results=False
         )
         print("Epoch: {}, Val Loss: {}".format(epoch, val_results.avg))
         wandb.log({"Val loss": val_results.avg, "Epoch": epoch})
@@ -267,7 +267,7 @@ def train_normal(
                 )
 
 
-def main(num_epochs = 5,
+def main(num_epochs = 50,
     batch_size = 64,
     D = 18,
     N = 50000,
@@ -284,9 +284,9 @@ def main(num_epochs = 5,
     max_order_y=7,
     noise_var=0.25,
     featurize_type="fourier",
-    initial_degree=100,
+    initial_degree=1,
     hvp="finite_diff",
-    arch_train_data="val",
+    arch_train_data="sotl",
     normalize_a_lr=True,
     w_warm_start=0,
     extra_weight_decay=0.0,
@@ -355,12 +355,12 @@ def main(num_epochs = 5,
         lapack_solution, res, eff_rank, sing_values = scipy.linalg.lstsq(dset_train[:][0], dset_train[:][1])
         print(f"Cond number:{abs(sing_values.max()/sing_values.min())}")
 
-        val_meter = valid_func(model=model, dset_val=dset_val, criterion=criterion)
+        val_meter = valid_func(model=model, dset_val=dset_val, criterion=criterion, device=device, print_results=False)
 
         model.fc1.weight = torch.nn.Parameter(torch.tensor(lapack_solution).to(device))
         model.fc1.to(device)
 
-        val_meter2 = valid_func(model=model, dset_val=dset_val, criterion=criterion)
+        val_meter2 = valid_func(model=model, dset_val=dset_val, criterion=criterion, device=device, print_results=False)
 
         print(
             f"Trained val loss: {val_meter.avg}, SciPy solver val loss: {val_meter2.avg}, difference: {val_meter.avg - val_meter2.avg} (ie. {(val_meter.avg/val_meter2.avg-1)*100}% more)"
@@ -371,7 +371,7 @@ def main(num_epochs = 5,
             print(f"True degree: {true_degree}, trained degree: {trained_degree}, difference: {abs(true_degree - trained_degree)}")
             wandb.run.summary["degree_mismatch"] = abs(true_degree-trained_degree)
         except:
-            print("No data degree info; probably a different model_type was chosen")
+            print("No model degree info; probably a different model_type was chosen")
 
 if __name__ == "__main__":
     try:

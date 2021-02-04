@@ -151,11 +151,11 @@ def sotl_gradient(
                         for p, d in zip(weight_buffer[j - 1], dw):
                             p.add_(eps * d)
 
-                    second_order_term = [
+                    second_order_terms = [
                         -w_lr * (p - n) / (2.0 * eps) for p, n in zip(dalpha_pos, dalpha_neg)
                     ]
                     total_arch_gradient_local = [
-                        da1 + da2 for (da1, da2) in zip(second_order_term, da)
+                        da1 + da2 for (da1, da2) in zip(second_order_terms, da)
                     ]
                     if total_arch_gradient is None:
                         total_arch_gradient = total_arch_gradient_local
