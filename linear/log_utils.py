@@ -2,6 +2,8 @@ import wandb
 import os
 
 def wandb_auth(fname: str = "nas_key.txt"):
+    gdrive_path = "/content/drive/MyDrive/Colab Notebooks/wandb/nas_key.txt"
+
     if "WANDB_API_KEY" in os.environ:
         wandb_key = os.environ["WANDB_API_KEY"]
     elif os.path.exists(os.path.abspath("~" + os.sep + ".wandb" + os.sep + fname)):
@@ -26,6 +28,12 @@ def wandb_auth(fname: str = "nas_key.txt"):
         )
         key = f.read().strip()
         os.environ["WANDB_API_KEY"] = key
+
+    elif os.path.exists(gdrive_path):
+      print("Retrieving WANDB key from file")
+      f = open(gdrive, "r")
+      key = f.read().strip()
+      os.environ["WANDB_API_KEY"] = key
     wandb.login()
 
 
