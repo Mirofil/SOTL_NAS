@@ -9,6 +9,13 @@ class RegressionNet(torch.nn.Module):
 
     def forward(self, x):
         return self.fc1(x)
+
+    def named_weight_params(self):
+        for n,p in self.named_parameters():
+            if 'alpha' not in n:
+                yield (n,p)
+            else:
+                continue
     
     def weight_params(self):
         for n,p in self.named_parameters():
@@ -69,8 +76,8 @@ class MLP(RegressionNet):
         self._input_dim = input_dim
         self.lin1 = nn.Linear(input_dim, hidden_dim)
         self.lin2 = nn.Linear(hidden_dim, hidden_dim)
-        self.lin22 = nn.Linear(hidden_dim, hidden_dim)
-        self.lin23 = nn.Linear(hidden_dim, hidden_dim)
+        # self.lin22 = nn.Linear(hidden_dim, hidden_dim)
+        # self.lin23 = nn.Linear(hidden_dim, hidden_dim)
 
         self.lin3 = nn.Linear(hidden_dim, output_dim)
         if weight_decay > 0:

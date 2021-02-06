@@ -89,8 +89,9 @@ def train_bptt(
 
                 param_norm = 0
                 if extra_weight_decay is not None and extra_weight_decay != 0:
-                    for weight in model.weight_params():
-                        param_norm = param_norm + torch.pow(weight.norm(2), 2)
+                    for n,weight in model.named_weight_params():
+                        if 'weight' in n:
+                            param_norm = param_norm + torch.pow(weight.norm(2), 2)
                     param_norm = torch.multiply(model.alpha_weight_decay, param_norm)
                 # print(param_norm)
                 
@@ -327,7 +328,6 @@ def main(num_epochs = 50,
     else:
         # Placeholder optimizer that won't do anything - but the parameter list cannot be empty
         a_optimizer = None
-    wandb.watch(model, log="all")
     train_bptt(
         num_epochs=num_epochs,
         model=model,
@@ -394,10 +394,10 @@ batch_size = 64
 D = 18
 N = 50000
 w_lr = 1e-3
-w_momentum=0.9
+w_momentum=0.0
 w_weight_decay=0.0
 a_lr = 3e-4
-a_momentum = 0.9
+a_momentum = 0.0
 a_weight_decay = 0.0
 T = 10
 grad_clip = 1
@@ -413,7 +413,7 @@ w_warm_start=0
 log_grad_norm=True
 log_alphas=False
 extra_weight_decay=0.0001
-grad_inner_loop_order=-1
+grad_inner_loop_order=1
 grad_outer_loop_order=-1
 arch_train_data="val"
 model_type="MNIST"

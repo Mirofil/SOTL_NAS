@@ -152,9 +152,18 @@ def sotl_gradient(
                     loss2 = criterion(
                         model(x, weight_buffer[j - 1], model.arch_params()), y
                     ) + param_norm*model.alpha_weight_decay
-                    dalpha_pos = [x for x in torch.autograd.grad(
+                    # dalpha_pos = []
+                    # for x in torch.autograd.grad(
+                    #     loss2, model.arch_params(), allow_unused=True
+                    # ):
+                    #     if x is not None:
+                    #         dalpha_pos.append(x)
+                    #     else:
+                    #         print(x)
+                    #         dalpha_pos.append(torch.zeros(x.size()).to(device))
+                    dalpha_pos = [a if (a is not None) else torch.zeros(x.size()).to(device) for a in torch.autograd.grad(
                         loss2, model.arch_params(), allow_unused=True
-                    ) if x is not None]  # dalpha { L_trn(w+) }
+                    )]  # dalpha { L_trn(w+) }
 
                     no_longer_needed_weights = switch_weights(model, old_weights)
 
@@ -172,9 +181,9 @@ def sotl_gradient(
                     loss3 = criterion(
                         model(x, weight_buffer[j - 1], model.arch_params()), y
                     ) + param_norm*model.alpha_weight_decay
-                    dalpha_neg = [x for x in torch.autograd.grad(
+                    dalpha_neg = [a if a is not None else torch.zeros(x.size()).to(device) for a in torch.autograd.grad(
                         loss3, model.arch_params(), allow_unused=True
-                    ) if x is not None]  # dalpha { L_trn(w-) }
+                    )]  # dalpha { L_trn(w-) }
                     no_longer_needed_weights = switch_weights(model, old_weights)
 
                     # recover w
