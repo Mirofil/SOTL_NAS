@@ -225,52 +225,6 @@ def valid_func(model, dset_val, criterion, device = 'cuda' if torch.cuda.is_avai
     return val_meter
 
 
-def train_normal(
-    num_epochs, model, dset_train, batch_size, grad_clip, logging_freq, optim="sgd", **kwargs
-):
-    train_loader = torch.utils.data.DataLoader(
-        dset_train, batch_size=batch_size, shuffle=True
-    )
-
-    model.train()
-    for epoch in range(num_epochs):
-
-        epoch_loss = AverageMeter()
-        for batch_idx, batch in enumerate(train_loader):
-            x, y = batch
-            w_optimizer.zero_grad()
-
-            y_pred = model(x)
-            loss = criterion(y_pred, y)
-            loss.backward(retain_graph=True)
-
-            epoch_loss.update(loss.item())
-            if optim == "newton":
-                linear_weight = list(model.weight_params())[0]
-                hessian_newton = torch.inverse(
-                    hessian(loss * 1, linear_weight, linear_weight).reshape(
-                        linear_weight.size()[1], linear_weight.size()[1]
-                    )
-                )
-                with torch.no_grad():
-                    for w in model.weight_params():
-                        w = w.subtract_(torch.matmul(w.grad, hessian_newton))
-            elif optim =="sgd":
-                torch.nn.utils.clip_grad_norm_(model.weight_params(), 1)
-                w_optimizer.step()
-            else:
-                raise NotImplementedError
-        
-            wandb.log(
-                {"Train loss": epoch_loss.avg, "Epoch": epoch, "Batch": batch_idx}
-            )
-
-            if batch_idx % logging_freq == 0:
-                print(
-                    "Epoch: {}, Batch: {}, Loss: {}, Alphas: {}".format(
-                        epoch, batch_idx, epoch_loss.avg, model.fc1.alphas.data
-                    )
-                )
 
 
 def main(num_epochs = 50,
@@ -280,7 +234,7 @@ def main(num_epochs = 50,
     w_lr = 1e-4,
     w_momentum=0.0,
     w_weight_decay=0.0,
-    a_lr = 3e-4,
+    a_lr = 3e-3,
     a_momentum = 0.0,
     a_weight_decay = 0.0,
     T = 10,
@@ -292,19 +246,21 @@ def main(num_epochs = 50,
     featurize_type="fourier",
     initial_degree=1,
     hvp="finite_diff",
-    arch_train_data="val",
+    arch_train_data="sotl",
     normalize_a_lr=True,
     w_warm_start=0,
-    extra_weight_decay=0.1e-6,
+    extra_weight_decay=0,
     grad_inner_loop_order=1,
-    grad_outer_loop_order=-1,
-    model_type="MNIST",
-    dataset="MNIST",
+    grad_outer_loop_order=1,
+    model_type="max_deg",
+    dataset="fourier",
     device= 'cuda' if torch.cuda.is_available() else 'cpu',
-    train_arch=True
+    train_arch=True,
+    dry_run=True
     ):
     config = locals()
-
+    if dry_run:
+        os.environ['WANDB_MODE'] = 'dryrun'
     wandb_auth()
     wandb.init(project="NAS", group=f"Linear_SOTL", config=config)
 
@@ -416,8 +372,9 @@ extra_weight_decay=0.0001
 grad_inner_loop_order=1
 grad_outer_loop_order=-1
 arch_train_data="val"
-model_type="MNIST"
-dataset="MNIST"
+model_type="max_deg"
+dataset="fourier"
 device = 'cuda' if torch.cuda.is_available() else 'cpu'
 train_arch=True
+dry_run=False
 config={}

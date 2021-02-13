@@ -26,7 +26,7 @@ class RegressionNet(torch.nn.Module):
     
     def arch_params(self):
         for n,p in self.named_parameters():
-            if 'alpha' in n:
+            if 'alpha' in n and p.requires_grad:
                 yield p
             else:
                 continue
@@ -55,7 +55,7 @@ class SoTLNet(RegressionNet):
             self.alpha_weight_decay = torch.nn.Parameter(torch.tensor([weight_decay], dtype=torch.float32, requires_grad=True).unsqueeze(dim=0))
             self.alphas.append(self.alpha_weight_decay)
         else:
-            self.alpha_weight_decay = 0
+            self.alpha_weight_decay = torch.tensor(0)
     def forward(self, x, weight=None, alphas=None):
         return self.model(x, weight, alphas)
         

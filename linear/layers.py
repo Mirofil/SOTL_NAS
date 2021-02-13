@@ -29,7 +29,7 @@ class LinearMaxDeg(torch.nn.Linear):
             constants.append(-i*1)
         constants = constants[:self.in_features]
         self.degree = self.alphas
-        self.alpha_constants = torch.tensor(constants,dtype=torch.float32).unsqueeze(dim=0)
+        self.alpha_constants = torch.nn.Parameter(torch.tensor(constants,dtype=torch.float32).unsqueeze(dim=0), requires_grad=False)
 
     def forward(self, input: Tensor, weight: Tensor = None, alphas: Tensor = None) -> Tensor:
         if weight is None:
@@ -38,16 +38,18 @@ class LinearMaxDeg(torch.nn.Linear):
             weight = weight[0]
         if alphas is None:
             alphas = self.alphas
+        else:
+            alphas = alphas[0]
         return F.linear(input, weight*self.squished_tanh(alphas+self.alpha_constants).to(self.alpha_constants.device), self.bias)
 
     @staticmethod
     def squished_tanh(x, plot=False):
         if plot:
             xs = np.linspace(-5,5,100)
-            ys = [(F.tanh(4*torch.tensor(elem))+1)/2 for elem in xs]
+            ys = [(F.tanh(3.5*torch.tensor(elem))+1)/2 for elem in xs]
             plt.plot(xs,ys)
 
-        return (F.tanh(4*x)+1)/2
+        return (F.tanh(3.5*x)+1)/2
 
 class FlexibleLinear(torch.nn.Linear):
     def __init__(self, in_features, out_features, bias=True, **kwargs):

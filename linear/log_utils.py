@@ -31,7 +31,7 @@ def wandb_auth(fname: str = "nas_key.txt"):
 
     elif os.path.exists(gdrive_path):
       print("Retrieving WANDB key from file")
-      f = open(gdrive, "r")
+      f = open(gdrive_path, "r")
       key = f.read().strip()
       os.environ["WANDB_API_KEY"] = key
     wandb.login()

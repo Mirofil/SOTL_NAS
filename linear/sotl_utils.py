@@ -69,8 +69,8 @@ def sotl_gradient(
         da = [y if y is not None else torch.zeros(x.size()) for x,y in zip(model.arch_params(), torch.autograd.grad(loss, model.arch_params(), retain_graph=True, allow_unused=True))]
         total_arch_gradient = da
     else:
-        # The outer loop equation is dSoTL/da = sum_{t=T-outer_loop_order)^T dL(w_t, alpha)/da
-        # The inner loop equation is dL(w_t, alpha)da = dL(w_t,alpha)/da + dL(w_t,alpha)/dw * -eta sum_{i=t-inner_loop_order}^t d^2L(w_i, alpha)dadw
+        # (1) The outer loop equation is dSoTL/da = sum_{t=T-outer_loop_order)^T dL(w_t, alpha)/da
+        # (2) The inner loop equation is dL(w_t, alpha)da = dL(w_t,alpha)/da + dL(w_t,alpha)/dw * -eta sum_{i=t-inner_loop_order}^t d^2L(w_i, alpha)dadw
         
         # OUTER LOOP
         for i in range(
@@ -87,16 +87,19 @@ def sotl_gradient(
             top_level_x = top_level_x.to(device)
             top_level_y = top_level_y.to(device)
 
+
+            # (computing the first two terms in (2)) Gradients using the latest-in-time weights, ie. to compute dL(w_t, alpha)/da, we need dL(w_t,alpha)/dalpha, dL(w_t,alpha)/dw
             old_weights = switch_weights(model, weight_buffer[i])
 
-            loss = criterion(model(top_level_x, weight_buffer[i], list(model.arch_params())), top_level_y)
+            loss = criterion(model(top_level_x, weight_buffer[i]), top_level_y)
             da = [y if y is not None else torch.zeros(x.size()).to(device) for x,y in zip(model.arch_params(), torch.autograd.grad(loss, model.arch_params(), retain_graph=True, allow_unused=True))]
             dw = torch.autograd.grad(loss, model.weight_params(), retain_graph=True)
 
             no_longer_needed_weights = switch_weights(model, old_weights)
 
+            # (computing the sum of gradients in (1))
             if hvp == "exact":
-                # INNER LOOP
+                # INNER LOOP - computation of gradients within sum
                 for j in range(i, max(0, i - grad_inner_loop_order), -1):
                     param_norm = 0
                     if model.alpha_weight_decay > 0:
@@ -150,7 +153,7 @@ def sotl_gradient(
                     old_weights = switch_weights(model, weight_buffer[j-1])
 
                     loss2 = criterion(
-                        model(x, weight_buffer[j - 1], model.arch_params()), y
+                        model(x, weight_buffer[j - 1]), y
                     ) + param_norm*model.alpha_weight_decay
                     # dalpha_pos = []
                     # for x in torch.autograd.grad(
@@ -161,9 +164,9 @@ def sotl_gradient(
                     #     else:
                     #         print(x)
                     #         dalpha_pos.append(torch.zeros(x.size()).to(device))
-                    dalpha_pos = [a if (a is not None) else torch.zeros(x.size()).to(device) for a in torch.autograd.grad(
+                    dalpha_pos = [a if (a is not None) else torch.zeros(list(model.arch_params())[i].size()).to(device) for i, a in enumerate(torch.autograd.grad(
                         loss2, model.arch_params(), allow_unused=True
-                    )]  # dalpha { L_trn(w+) }
+                    ))]  # dalpha { L_trn(w+) }
 
                     no_longer_needed_weights = switch_weights(model, old_weights)
 
@@ -179,11 +182,11 @@ def sotl_gradient(
                     old_weights = switch_weights(model, weight_buffer[j-1])
 
                     loss3 = criterion(
-                        model(x, weight_buffer[j - 1], model.arch_params()), y
+                        model(x, weight_buffer[j - 1]), y
                     ) + param_norm*model.alpha_weight_decay
-                    dalpha_neg = [a if a is not None else torch.zeros(x.size()).to(device) for a in torch.autograd.grad(
+                    dalpha_neg = [a if a is not None else torch.zeros(list(model.arch_params())[i].size()).to(device) for i, a in enumerate(torch.autograd.grad(
                         loss3, model.arch_params(), allow_unused=True
-                    )]  # dalpha { L_trn(w-) }
+                    ))]  # dalpha { L_trn(w-) }
                     no_longer_needed_weights = switch_weights(model, old_weights)
 
                     # recover w
