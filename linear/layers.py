@@ -40,6 +40,7 @@ class LinearMaxDeg(torch.nn.Linear):
             alphas = self.alphas
         else:
             alphas = alphas[0]
+
         return F.linear(input, weight*self.squished_tanh(alphas+self.alpha_constants).to(self.alpha_constants.device), self.bias)
 
     @staticmethod

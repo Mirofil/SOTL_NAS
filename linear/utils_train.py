@@ -1,5 +1,27 @@
 import torch
 import torch.nn as nn
+from torch.optim import SGD, Adam
+
+def hinge_loss(x,y, threshold):
+    if abs(x-y) <= threshold:
+        return 0
+    elif x > y:
+        return x -y - threshold
+    elif x < y:
+        return y - x + threshold
+
+
+def get_optimizers(model, config):
+    w_optimizer = SGD(model.weight_params(), lr=config["w_lr"], momentum=config["w_momentum"], weight_decay=config["w_weight_decay"])
+    
+    if config["train_arch"]:
+        a_optimizer = SGD(model.arch_params(), lr=config["a_lr"], momentum=config["a_momentum"], weight_decay=config["a_weight_decay"])
+    else:
+        # Placeholder optimizer that won't do anything - but the parameter list cannot be empty
+        a_optimizer = None
+
+    return w_optimizer, a_optimizer
+
 
 def get_criterion(model_type):
     criterion=None

@@ -47,7 +47,8 @@ def switch_weights(model, weight_buffer_elem):
 def sotl_gradient(
     model, criterion, xs, ys, weight_buffer: Sequence, w_lr:float, T:int, 
     grad_outer_loop_order=1,grad_inner_loop_order=1, hvp="exact",
-    normalize_a_lr=True, weight_decay_term=0, val_xs = None, val_ys=None, device = 'cuda' if torch.cuda.is_available() else 'cpu'
+    normalize_a_lr=True, weight_decay_term=0, val_xs = None, val_ys=None, device = 'cuda' if torch.cuda.is_available() else 'cpu',
+    mode="joint"
 ) -> Sequence:
     total_arch_gradient = None
     loss = None

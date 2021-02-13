@@ -1,3 +1,6 @@
+# python linear/train.py --model_type=max_deg --dataset=fourier --dry_run=False --grad_outer_loop_order=None
+
+
 import itertools
 import math
 
@@ -25,8 +28,9 @@ from sotl_utils import sotl_gradient, WeightBuffer
 import scipy.linalg
 import time
 import fire
-from utils_train import get_criterion
+from utils_train import get_criterion, hinge_loss
 from tqdm import tqdm
+from typing import *
 
 def train_bptt(
     num_epochs: int,
@@ -52,13 +56,18 @@ def train_bptt(
     w_warm_start:int,
     extra_weight_decay:float,
     train_arch:bool,
-    device:str
+    device:str,
+    config: Dict
 ):
     train_loader = torch.utils.data.DataLoader(
         dset_train, batch_size=batch_size * T, shuffle=True
     )
     val_loader = torch.utils.data.DataLoader(dset_val, batch_size=batch_size)
     grad_compute_speed = AverageMeter()
+
+    if log_alphas:
+        running_degree_mismatch = 0
+
     if device is None:
         device = 'cuda' if torch.cuda.is_available() else 'cpu'
 
@@ -71,7 +80,8 @@ def train_bptt(
         val_iter = iter(val_loader)
         for batch_idx, batch in enumerate(train_loader):
 
-            
+            to_log = {}
+
             xs, ys = torch.split(batch[0], batch_size), torch.split(
                 batch[1], batch_size
             )
@@ -93,9 +103,7 @@ def train_bptt(
                         if 'weight' in n:
                             param_norm = param_norm + torch.pow(weight.norm(2), 2)
                     param_norm = torch.multiply(model.alpha_weight_decay, param_norm)
-                # print(param_norm)
-                
-                
+
                 loss = criterion(y_pred, y) + param_norm
                 epoch_loss.update(loss.item())
 
@@ -107,20 +115,18 @@ def train_bptt(
                 with torch.no_grad():
                     for g, w in zip(grads, model.weight_params()):
                         w.grad = g
-                torch.nn.utils.clip_grad_norm_(model.weight_params(), 1)
+                torch.nn.utils.clip_grad_norm_(model.weight_params(), grad_clip)
 
                 w_optimizer.step()
                 w_optimizer.zero_grad()
                 weight_buffer.add(model, intra_batch_idx)
 
                 true_batch_index += 1
-                wandb.log(
-                    {
+                to_log.update({
                         "Train loss": epoch_loss.avg,
                         "Epoch": epoch,
                         "Batch": true_batch_index,
-                    }
-                )
+                    })
 
                 if true_batch_index % logging_freq == 0:
                     print(
@@ -166,7 +172,8 @@ def train_bptt(
                         normalize_a_lr=normalize_a_lr,
                         weight_decay_term=None,
                         val_xs=val_xs,
-                        val_ys=val_ys
+                        val_ys=val_ys,
+                        device=device
                     )
                     grad_compute_speed.update(time.time() - start_time)
 
@@ -175,20 +182,25 @@ def train_bptt(
                         norm = 0
                         for g in total_arch_gradient:
                             norm = norm + g.data.norm(2).item()
-                        wandb.log({"Arch grad norm": norm})
+                        to_log.update({"Arch grad norm": norm})
 
-                    if log_alphas:
+                    if log_alphas and batch_idx % 100 == 0:
                         if hasattr(model, "fc1") and hasattr(model.fc1, "degree"):
-                            wandb.log({"Alpha":model.fc1.degree.item()})
+                            running_degree_mismatch = running_degree_mismatch + hinge_loss(model.fc1.degree.item(), config["max_order_y"]/2, config["hinge_loss"])
+
+                            to_log.update({"Degree":model.fc1.degree.item(), "Sum of degree mismatch":running_degree_mismatch})
+
                         if hasattr(model,"alpha_weight_decay"):
-                            wandb.log({"Alpha": model.alpha_weight_decay.item()})
+                            to_log.update({"Alpha weight decay": model.alpha_weight_decay.item()})
 
                     a_optimizer.zero_grad()
 
                     for g, w in zip(total_arch_gradient, model.arch_params()):
                         w.grad = g
-                    torch.nn.utils.clip_grad_norm_(model.arch_params(), 1)
+                    torch.nn.utils.clip_grad_norm_(model.arch_params(), grad_clip)
                     a_optimizer.step()
+
+                    wandb.log(to_log)
 
         val_results = valid_func(
             model=model, dset_val=dset_val, criterion=criterion, device=device, print_results=False
@@ -233,10 +245,10 @@ def main(num_epochs = 50,
     N = 50000,
     w_lr = 1e-4,
     w_momentum=0.0,
-    w_weight_decay=0.0,
-    a_lr = 3e-3,
+    w_weight_decay=1e-4,
+    a_lr = 1e-2,
     a_momentum = 0.0,
-    a_weight_decay = 0.0,
+    a_weight_decay = 1e-3,
     T = 10,
     grad_clip = 1,
     logging_freq = 200,
@@ -256,7 +268,8 @@ def main(num_epochs = 50,
     dataset="fourier",
     device= 'cuda' if torch.cuda.is_available() else 'cpu',
     train_arch=True,
-    dry_run=True
+    dry_run=True,
+    hinge_loss=0.25
     ):
     config = locals()
     if dry_run:
@@ -308,7 +321,8 @@ def main(num_epochs = 50,
         w_warm_start=w_warm_start,
         extra_weight_decay=extra_weight_decay,
         device=device,
-        train_arch=train_arch
+        train_arch=train_arch,
+        config=config
     )
     # train_normal(num_epochs=num_epochs, model=model, dset_train=dset_train,
     #     logging_freq=logging_freq, batch_size=batch_size, grad_clip=grad_clip, optim="sgd")
