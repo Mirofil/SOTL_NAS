@@ -2,6 +2,15 @@ import torch
 import torch.nn as nn
 from torch.optim import SGD, Adam
 
+def switch_weights(model, weight_buffer_elem):
+    with torch.no_grad():
+        old_weights = [w.clone() for w in model.weight_params()]
+
+        for w_old, w_new in zip(model.weight_params(), weight_buffer_elem):
+            w_old.copy_(w_new)
+    
+    return old_weights
+
 def hinge_loss(x,y, threshold):
     if abs(x-y) <= threshold:
         return 0

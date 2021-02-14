@@ -2,6 +2,7 @@ import torch
 from utils import hessian
 from typing import *
 import math
+from utils_train import switch_weights
 
 class WeightBuffer:
     def __init__(self, checkpoint_freq, T):
@@ -35,14 +36,7 @@ class WeightBuffer:
     def clear(self):
         self.weight_buffer = []
 
-def switch_weights(model, weight_buffer_elem):
-    with torch.no_grad():
-        old_weights = [w.clone() for w in model.weight_params()]
 
-        for w_old, w_new in zip(model.weight_params(), weight_buffer_elem):
-            w_old.copy_(w_new)
-    
-    return old_weights
 
 def sotl_gradient(
     model, criterion, xs, ys, weight_buffer: Sequence, w_lr:float, T:int, 
@@ -75,15 +69,15 @@ def sotl_gradient(
         
         # OUTER LOOP
         for i in range(
-            len(weight_buffer) - 2, max(0, len(weight_buffer)-2-grad_outer_loop_order), -1
+            len(weight_buffer) - 1, max(0, len(weight_buffer)-1-grad_outer_loop_order), -1
         ):
             if (val_xs is not None) and (val_ys is not None):
                 top_level_x = val_xs[0]
                 top_level_y = val_ys[0]
                 
             else:
-                top_level_x = xs[i]
-                top_level_y = ys[i]
+                top_level_x = xs[i-1]
+                top_level_y = ys[i-1]
 
             top_level_x = top_level_x.to(device)
             top_level_y = top_level_y.to(device)
@@ -139,8 +133,8 @@ def sotl_gradient(
                     norm = torch.cat([w.view(-1) for w in dw]).norm()
                     eps = 0.0001 / norm
 
-                    x = xs[j].to(device)
-                    y = ys[j].to(device)
+                    x = xs[j-1].to(device)
+                    y = ys[j-1].to(device)
 
                     # w+ = w_{t-1} + eps*dL(w_t,alpha)dw
                     with torch.no_grad():

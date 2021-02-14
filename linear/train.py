@@ -1,4 +1,5 @@
-# python linear/train.py --model_type=max_deg --dataset=fourier --dry_run=False --grad_outer_loop_order=None
+# python linear/train.py --model_type=max_deg --dataset=fourier --dry_run=False --grad_outer_loop_order=None --mode=bilevel --device=cpu
+# python linear/train.py --model_type=max_deg --dataset=fourier --dry_run=False --T=2 --grad_outer_loop_order=1 --grad_inner_loop_order=1 --mode=bilevel --device=cpu
 
 
 import itertools
@@ -28,9 +29,11 @@ from sotl_utils import sotl_gradient, WeightBuffer
 import scipy.linalg
 import time
 import fire
-from utils_train import get_criterion, hinge_loss
+from utils_train import get_criterion, hinge_loss, get_optimizers, switch_weights
 from tqdm import tqdm
 from typing import *
+
+
 
 def train_bptt(
     num_epochs: int,
@@ -57,8 +60,12 @@ def train_bptt(
     extra_weight_decay:float,
     train_arch:bool,
     device:str,
-    config: Dict
+    config: Dict,
+    mode="joint",
+    w_scheduler=None,
+    a_scheduler=None
 ):
+    
     train_loader = torch.utils.data.DataLoader(
         dset_train, batch_size=batch_size * T, shuffle=True
     )
@@ -85,6 +92,12 @@ def train_bptt(
             xs, ys = torch.split(batch[0], batch_size), torch.split(
                 batch[1], batch_size
             )
+
+            if mode == "bilevel":
+                
+                prerollout_w_optim_state_dict = w_optimizer.state_dict()
+
+                w_scheduler2 = None
 
             weight_buffer = WeightBuffer(T=T, checkpoint_freq=w_checkpoint_freq)
             weight_buffer.add(model, 0)
@@ -128,15 +141,15 @@ def train_bptt(
                         "Batch": true_batch_index,
                     })
 
-                if true_batch_index % logging_freq == 0:
-                    print(
-                        "Epoch: {}, Batch: {}, Loss: {}, Alphas: {}".format(
-                            epoch,
-                            true_batch_index,
-                            epoch_loss.avg,
-                            [x.data for x in model.arch_params()],
-                        )
-                    )
+                # if true_batch_index % logging_freq == 0:
+                #     print(
+                #         "Epoch: {}, Batch: {}, Loss: {}, Alphas: {}".format(
+                #             epoch,
+                #             true_batch_index,
+                #             epoch_loss.avg,
+                #             [x.data for x in model.arch_params()],
+                #         )
+                #     )
 
             if train_arch:
                 val_xs = None
@@ -194,13 +207,71 @@ def train_bptt(
                             to_log.update({"Alpha weight decay": model.alpha_weight_decay.item()})
 
                     a_optimizer.zero_grad()
-
+                    # print("OLD", model.fc1.alphas)
+                    # print(total_arch_gradient)
                     for g, w in zip(total_arch_gradient, model.arch_params()):
                         w.grad = g
                     torch.nn.utils.clip_grad_norm_(model.arch_params(), grad_clip)
                     a_optimizer.step()
+                    # print("NEW", model.fc1.alphas)
+
 
                     wandb.log(to_log)
+
+            if mode == "bilevel" and epoch >= w_warm_start:
+
+                weights_after_rollout = switch_weights(model, weight_buffer[0])
+                w_optimizer, _ = get_optimizers(model, config)
+                w_optimizer.load_state_dict(prerollout_w_optim_state_dict)
+
+                #NOTE this train step should be identical to the loop above apart from WeightBuffer management! But it is difficult to abstract this in pure PyTorch, although it could be hacked with kwargs forwarding?
+                num_steps = T if epoch >= w_warm_start else T
+                for i in range(min(num_steps, len(xs))):
+                    x,y = xs[i], ys[i]
+                    x = x.to(device)
+                    y = y.to(device)
+
+                    y_pred = model(x)
+
+                    param_norm = 0
+                    if extra_weight_decay is not None and extra_weight_decay != 0:
+                        for n,weight in model.named_weight_params():
+                            if 'weight' in n:
+                                param_norm = param_norm + torch.pow(weight.norm(2), 2)
+                        param_norm = torch.multiply(model.alpha_weight_decay, param_norm)
+
+                    loss = criterion(y_pred, y) + param_norm
+                    epoch_loss.update(loss.item())
+
+                    grads = torch.autograd.grad(
+                        loss,
+                        model.weight_params()
+                    )
+
+                    with torch.no_grad():
+                        for g, w in zip(grads, model.weight_params()):
+                            w.grad = g
+                    torch.nn.utils.clip_grad_norm_(model.weight_params(), grad_clip)
+
+                    w_optimizer.step()
+                    w_optimizer.zero_grad()
+
+                    to_log.update({
+                            "Train loss": epoch_loss.avg,
+                            "Epoch": epoch,
+                            "Batch": true_batch_index,
+                        })
+
+            if true_batch_index % logging_freq == 0:
+                print(
+                    "Epoch: {}, Batch: {}, Loss: {}, Alphas: {}".format(
+                        epoch,
+                        true_batch_index,
+                        epoch_loss.avg,
+                        [x.data for x in model.arch_params()],
+                    )
+                )
+
 
         val_results = valid_func(
             model=model, dset_val=dset_val, criterion=criterion, device=device, print_results=False
@@ -243,10 +314,10 @@ def main(num_epochs = 50,
     batch_size = 64,
     D = 18,
     N = 50000,
-    w_lr = 1e-4,
+    w_lr = 1e-3,
     w_momentum=0.0,
-    w_weight_decay=1e-4,
-    a_lr = 1e-2,
+    w_weight_decay=1e-3,
+    a_lr = 1e-3,
     a_momentum = 0.0,
     a_weight_decay = 1e-3,
     T = 10,
@@ -260,22 +331,29 @@ def main(num_epochs = 50,
     hvp="finite_diff",
     arch_train_data="sotl",
     normalize_a_lr=True,
-    w_warm_start=0,
+    w_warm_start=3,
     extra_weight_decay=0,
-    grad_inner_loop_order=1,
-    grad_outer_loop_order=1,
+    grad_inner_loop_order=-1,
+    grad_outer_loop_order=-1,
     model_type="max_deg",
     dataset="fourier",
     device= 'cuda' if torch.cuda.is_available() else 'cpu',
     train_arch=True,
     dry_run=True,
-    hinge_loss=0.25
+    hinge_loss=0.25,
+    mode = "joint"
     ):
     config = locals()
     if dry_run:
         os.environ['WANDB_MODE'] = 'dryrun'
     wandb_auth()
-    wandb.init(project="NAS", group=f"Linear_SOTL", config=config)
+
+    try:
+        __IPYTHON__
+        wandb.init(project="NAS", group=f"Linear_SOTL")
+    except:
+        wandb.init(project="NAS", group=f"Linear_SOTL", config=config)
+
 
     ### MODEL INIT
     # x, y = data_generator(N, max_order_generated=D, max_order_y=[(5,7), (9,13)], noise_var=0.25, featurize_type='fourier')
@@ -290,13 +368,9 @@ def main(num_epochs = 50,
     model = model.to(device)
 
     criterion = get_criterion(model_type).to(device)
-    w_optimizer = SGD(model.weight_params(), lr=w_lr, momentum=w_momentum, weight_decay=w_weight_decay)
-    
-    if train_arch:
-        a_optimizer = SGD(model.arch_params(), lr=a_lr, momentum=a_momentum, weight_decay=a_weight_decay)
-    else:
-        # Placeholder optimizer that won't do anything - but the parameter list cannot be empty
-        a_optimizer = None
+
+    w_optimizer, a_optimizer = get_optimizers(model, config)
+
     train_bptt(
         num_epochs=num_epochs,
         model=model,
@@ -322,7 +396,8 @@ def main(num_epochs = 50,
         extra_weight_decay=extra_weight_decay,
         device=device,
         train_arch=train_arch,
-        config=config
+        config=config,
+        mode=mode
     )
     # train_normal(num_epochs=num_epochs, model=model, dset_train=dset_train,
     #     logging_freq=logging_freq, batch_size=batch_size, grad_clip=grad_clip, optim="sgd")
@@ -366,9 +441,9 @@ N = 50000
 w_lr = 1e-3
 w_momentum=0.0
 w_weight_decay=0.0
-a_lr = 3e-4
+a_lr = 3e-2
 a_momentum = 0.0
-a_weight_decay = 0.0
+a_weight_decay = 0.1
 T = 10
 grad_clip = 1
 logging_freq = 200
@@ -376,19 +451,20 @@ w_checkpoint_freq = 1
 max_order_y=7
 noise_var=0.25
 featurize_type="fourier"
-initial_degree=1
+initial_degree=20
 hvp="finite_diff"
 normalize_a_lr=True
-w_warm_start=0
+w_warm_start=3
 log_grad_norm=True
 log_alphas=False
-extra_weight_decay=0.0001
-grad_inner_loop_order=1
+extra_weight_decay=0
+grad_inner_loop_order=-1
 grad_outer_loop_order=-1
-arch_train_data="val"
+arch_train_data="sotl"
 model_type="max_deg"
 dataset="fourier"
-device = 'cuda' if torch.cuda.is_available() else 'cpu'
+device = 'cpu'
 train_arch=True
 dry_run=False
-config={}
+mode="bilevel"
+config=locals()

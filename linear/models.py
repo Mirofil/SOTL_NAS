@@ -40,6 +40,8 @@ class SoTLNet(RegressionNet):
             self.model = self.fc1
         elif model_type == "max_deg":
             self.fc1 = LinearMaxDeg(num_features, 1, bias=False, **kwargs)
+            # with torch.no_grad(): # Positive bias to get good direction of gradients for arch optimizaiton
+            #     self.fc1.weight += 1
             self.model = self.fc1
         elif model_type == "linear":
             self.fc1 = FlexibleLinear(num_features, 1, bias=False)
