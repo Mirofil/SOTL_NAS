@@ -351,7 +351,7 @@ def main(num_epochs = 50,
     ):
     config = locals()
     if dry_run:
-        os.environ['WANDB_MODE'] = dry_run
+        os.environ['WANDB_MODE'] = 'dryrun'
     wandb_auth()
 
     try:
