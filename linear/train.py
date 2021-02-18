@@ -43,6 +43,7 @@ def calculate_weight_decay(model, w_order=None, adaptive_decay=None, a_order=1, 
         param_norm = torch.multiply(model.alpha_weight_decay, param_norm)
 
     if adaptive_decay is not None and hasattr(model, "adaptive_weight_decay"):
+        print(model.adaptive_weight_decay())
         param_norm = param_norm + model.adaptive_weight_decay()
     
     if a_order is not None:
