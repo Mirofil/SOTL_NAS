@@ -41,7 +41,12 @@ class LinearMaxDeg(torch.nn.Linear):
         else:
             alphas = alphas[0]
 
-        return F.linear(input, weight*self.squished_tanh(alphas+self.alpha_constants).to(self.alpha_constants.device), self.bias)
+        return F.linear(input, weight*self.compute_deg_constants(alphas=alphas).to(self.alpha_constants.device), self.bias)
+
+    def compute_deg_constants(self, alphas = None):
+        if alphas is None:
+            alphas = self.degree
+        return self.squished_tanh(alphas+self.alpha_constants)
 
     @staticmethod
     def squished_tanh(x, plot=False):

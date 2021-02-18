@@ -1,5 +1,6 @@
 # python linear/train.py --model_type=max_deg --dataset=fourier --dry_run=False --grad_outer_loop_order=None --mode=bilevel --device=cpu
 # python linear/train.py --model_type=max_deg --dataset=fourier --dry_run=False --T=2 --grad_outer_loop_order=1 --grad_inner_loop_order=1 --mode=bilevel --device=cpu
+# python linear/train.py --model_type=MNIST --dataset=MNIST --dry_run=False --T=1 --w_warm_start=0 --grad_outer_loop_order=-1 --grad_inner_loop_order=-1 --mode=bilevel --device=cuda --extra_weight_decay=0.0001 --w_weight_decay=0 --arch_train_data=val
 
 
 import itertools
@@ -33,7 +34,22 @@ from utils_train import get_criterion, hinge_loss, get_optimizers, switch_weight
 from tqdm import tqdm
 from typing import *
 
+def calculate_weight_decay(model, w_order=None, adaptive_decay=None, a_order=1, a_coef=1):
+    param_norm=0
+    if model.alpha_weight_decay != 0 and w_order is not None:
+        for n,weight in model.named_weight_params():
+            if 'weight' in n:
+                param_norm = param_norm + torch.pow(weight.norm(w_order), w_order)
+        param_norm = torch.multiply(model.alpha_weight_decay, param_norm)
 
+    if adaptive_decay is not None and hasattr(model, "adaptive_weight_decay"):
+        param_norm = param_norm + model.adaptive_weight_decay()
+    
+    if a_order is not None:
+        for arch_param in model.arch_params():
+            param_norm = param_norm + a_coef*arch_param.norm(1)
+    
+    return param_norm
 
 def train_bptt(
     num_epochs: int,
@@ -111,11 +127,9 @@ def train_bptt(
                 y_pred = model(x)
 
                 param_norm = 0
-                if extra_weight_decay is not None and extra_weight_decay != 0:
-                    for n,weight in model.named_weight_params():
-                        if 'weight' in n:
-                            param_norm = param_norm + torch.pow(weight.norm(2), 2)
-                    param_norm = torch.multiply(model.alpha_weight_decay, param_norm)
+
+                
+                param_norm = calculate_weight_decay(model, a_order=1, a_coef=0.01)
 
                 loss = criterion(y_pred, y) + param_norm
                 epoch_loss.update(loss.item())
@@ -207,13 +221,11 @@ def train_bptt(
                             to_log.update({"Alpha weight decay": model.alpha_weight_decay.item()})
 
                     a_optimizer.zero_grad()
-                    # print("OLD", model.fc1.alphas)
-                    # print(total_arch_gradient)
+  
                     for g, w in zip(total_arch_gradient, model.arch_params()):
                         w.grad = g
                     torch.nn.utils.clip_grad_norm_(model.arch_params(), grad_clip)
                     a_optimizer.step()
-                    # print("NEW", model.fc1.alphas)
 
 
                     wandb.log(to_log)
@@ -233,12 +245,7 @@ def train_bptt(
 
                     y_pred = model(x)
 
-                    param_norm = 0
-                    if extra_weight_decay is not None and extra_weight_decay != 0:
-                        for n,weight in model.named_weight_params():
-                            if 'weight' in n:
-                                param_norm = param_norm + torch.pow(weight.norm(2), 2)
-                        param_norm = torch.multiply(model.alpha_weight_decay, param_norm)
+                    param_norm = calculate_weight_decay(model, a_order=1, a_coef=0.01)
 
                     loss = criterion(y_pred, y) + param_norm
                     epoch_loss.update(loss.item())
@@ -317,9 +324,9 @@ def main(num_epochs = 50,
     w_lr = 1e-3,
     w_momentum=0.0,
     w_weight_decay=1e-3,
-    a_lr = 1e-3,
+    a_lr = 1e-2,
     a_momentum = 0.0,
-    a_weight_decay = 1e-3,
+    a_weight_decay = 0,
     T = 10,
     grad_clip = 1,
     logging_freq = 200,
@@ -454,15 +461,15 @@ featurize_type="fourier"
 initial_degree=20
 hvp="finite_diff"
 normalize_a_lr=True
-w_warm_start=3
+w_warm_start=0
 log_grad_norm=True
 log_alphas=False
-extra_weight_decay=0
+extra_weight_decay=0.0001
 grad_inner_loop_order=-1
 grad_outer_loop_order=-1
 arch_train_data="sotl"
-model_type="max_deg"
-dataset="fourier"
+model_type="MNIST"
+dataset="MNIST"
 device = 'cpu'
 train_arch=True
 dry_run=False

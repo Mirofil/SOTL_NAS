@@ -55,11 +55,14 @@ class SoTLNet(RegressionNet):
         self.alphas = []
         if weight_decay > 0:
             self.alpha_weight_decay = torch.nn.Parameter(torch.tensor([weight_decay], dtype=torch.float32, requires_grad=True).unsqueeze(dim=0))
-            self.alphas.append(self.alpha_weight_decay)
+            # self.alphas.append(self.alpha_weight_decay)
         else:
             self.alpha_weight_decay = torch.tensor(0)
     def forward(self, x, weight=None, alphas=None):
         return self.model(x, weight, alphas)
+
+    def adaptive_weight_decay(self):
+        return torch.sum(torch.pow(torch.norm((0.1+self.fc1.weight)/self.fc1.compute_deg_constants(), 2), 2))
         
 class LogReg(nn.Module):
     def __init__(self, input_dim=28*28, output_dim=10):
@@ -82,10 +85,10 @@ class MLP(RegressionNet):
         # self.lin23 = nn.Linear(hidden_dim, hidden_dim)
 
         self.lin3 = nn.Linear(hidden_dim, output_dim)
-        if weight_decay > 0:
-            self.alpha_weight_decay = torch.nn.Parameter(torch.tensor([weight_decay], dtype=torch.float32, requires_grad=True).unsqueeze(dim=0))
-        else:
-            self.alpha_weight_decay = 0
+        # if weight_decay > 0:
+        #     self.alpha_weight_decay = torch.nn.Parameter(torch.tensor([weight_decay], dtype=torch.float32, requires_grad=True).unsqueeze(dim=0))
+        # else:
+        #     self.alpha_weight_decay = 0
 
     def forward(self, x, weights=None, alphas=None):
 
