@@ -62,7 +62,7 @@ class SoTLNet(RegressionNet):
         return self.model(x, weight, alphas)
 
     def adaptive_weight_decay(self):
-        return torch.sum(torch.pow(torch.norm((0.1+self.fc1.weight)/self.fc1.compute_deg_constants(), 2), 2))
+        return torch.sum((0.1+self.fc1.weight)*self.fc1.compute_deg_constants())
         
 class LogReg(nn.Module):
     def __init__(self, input_dim=28*28, output_dim=10):

@@ -1,4 +1,4 @@
-# python linear/train.py --model_type=max_deg --dataset=fourier --dry_run=False --grad_outer_loop_order=None --mode=joint --device=cpu --initial_degree 1
+# python linear/train.py --model_type=max_deg --dataset=fourier --dry_run=False --grad_outer_loop_order=None --mode=joint --device=cpu --initial_degree 20
 # python linear/train.py --model_type=max_deg --dataset=fourier --dry_run=False --T=2 --grad_outer_loop_order=1 --grad_inner_loop_order=1 --mode=bilevel --device=cpu
 # python linear/train.py --model_type=MNIST --dataset=MNIST --dry_run=False --T=1 --w_warm_start=0 --grad_outer_loop_order=-1 --grad_inner_loop_order=-1 --mode=bilevel --device=cuda --extra_weight_decay=0.0001 --w_weight_decay=0 --arch_train_data=val
 
@@ -127,9 +127,7 @@ def train_bptt(
                 y_pred = model(x)
 
                 param_norm = 0
-
-                
-                param_norm = calculate_weight_decay(model, a_order=1, a_coef=0.01)
+                param_norm = calculate_weight_decay(model, a_order=1, a_coef=0.0, adaptive_decay=True)
 
                 loss = criterion(y_pred, y) + param_norm
                 epoch_loss.update(loss.item())
