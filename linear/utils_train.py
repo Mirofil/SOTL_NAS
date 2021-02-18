@@ -2,6 +2,36 @@ import torch
 import torch.nn as nn
 from torch.optim import SGD, Adam
 
+def calculate_weight_decay(model, w_order=None, adaptive_decay=None, a_order=1, a_coef=0.1):
+    param_norm=0
+    if model.alpha_weight_decay != 0 and w_order is not None:
+        for n,weight in model.named_weight_params():
+            if 'weight' in n:
+                param_norm = param_norm + torch.pow(weight.norm(w_order), w_order)
+        param_norm = torch.multiply(model.alpha_weight_decay, param_norm)
+
+    if adaptive_decay != None and adaptive_decay != False and hasattr(model, "adaptive_weight_decay"):
+        # print(model.adaptive_weight_decay())
+        param_norm = param_norm + model.adaptive_weight_decay()
+    
+    if a_order is not None:
+        for arch_param in model.arch_params():
+            param_norm = param_norm + a_coef * arch_param
+    
+    return param_norm
+
+
+def compute_train_loss(x, y, criterion, model, y_pred=None, a_order=1, a_coef=0.1, adaptive_decay=False):
+    assert model is not None or y_pred is not None
+
+    if y_pred is None:
+        y_pred = model(x)
+
+    param_norm = calculate_weight_decay(model, a_order=a_order, a_coef=a_coef, adaptive_decay=adaptive_decay)
+
+    loss = criterion(y_pred, y) + param_norm
+
+    return loss
 def switch_weights(model, weight_buffer_elem):
     with torch.no_grad():
         old_weights = [w.clone() for w in model.weight_params()]

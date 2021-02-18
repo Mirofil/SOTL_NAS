@@ -2,7 +2,7 @@ import torch
 from utils import hessian
 from typing import *
 import math
-from utils_train import switch_weights
+from utils_train import switch_weights, compute_train_loss, calculate_weight_decay
 
 class WeightBuffer:
     def __init__(self, checkpoint_freq, T):
@@ -84,9 +84,9 @@ def sotl_gradient(
 
 
             # (computing the first two terms in (2)) Gradients using the latest-in-time weights, ie. to compute dL(w_t, alpha)/da, we need dL(w_t,alpha)/dalpha, dL(w_t,alpha)/dw
-            old_weights = switch_weights(model, weight_buffer[i])
-
-            loss = criterion(model(top_level_x, weight_buffer[i]), top_level_y)
+            old_weights = switch_weights(model, weight_buffer[i]) # TODO is this needed? Shouldnt the model have those weights right now?
+            loss = compute_train_loss(top_level_x, top_level_y, criterion, y_pred=model(top_level_x, weight_buffer[i]), model=model)
+            # loss = criterion(model(top_level_x, weight_buffer[i]), top_level_y)
             da = [y if y is not None else torch.zeros(x.size()).to(device) for x,y in zip(model.arch_params(), torch.autograd.grad(loss, model.arch_params(), retain_graph=True, allow_unused=True))]
             dw = torch.autograd.grad(loss, model.weight_params(), retain_graph=True)
 
@@ -140,25 +140,16 @@ def sotl_gradient(
                     with torch.no_grad():
                         for p, d in zip(weight_buffer[j - 1], dw):
                             p.add_(eps * d)
-                    param_norm = 0
-                    if model.alpha_weight_decay > 0:
-                        for weight in weight_buffer[j - 1]:
-                            param_norm = param_norm + torch.pow(weight.norm(2), 2)
+                    # param_norm = 0
+                    # if model.alpha_weight_decay > 0:
+                    #     for weight in weight_buffer[j - 1]:
+                    #         param_norm = param_norm + torch.pow(weight.norm(2), 2)
 
                     old_weights = switch_weights(model, weight_buffer[j-1])
+                    
+                    loss2 = compute_train_loss(x, y, criterion, y_pred=model(x, weight_buffer[j - 1]), model=model)
+                    # param_norm = calculate_weight_decay(model, a_order=1, a_coef=0.0, adaptive_decay=True)
 
-                    loss2 = criterion(
-                        model(x, weight_buffer[j - 1]), y
-                    ) + param_norm*model.alpha_weight_decay
-                    # dalpha_pos = []
-                    # for x in torch.autograd.grad(
-                    #     loss2, model.arch_params(), allow_unused=True
-                    # ):
-                    #     if x is not None:
-                    #         dalpha_pos.append(x)
-                    #     else:
-                    #         print(x)
-                    #         dalpha_pos.append(torch.zeros(x.size()).to(device))
                     dalpha_pos = [a if (a is not None) else torch.zeros(list(model.arch_params())[i].size()).to(device) for i, a in enumerate(torch.autograd.grad(
                         loss2, model.arch_params(), allow_unused=True
                     ))]  # dalpha { L_trn(w+) }
@@ -170,15 +161,16 @@ def sotl_gradient(
                         for p, d in zip(weight_buffer[j - 1], dw):
                             p.subtract_(2.0 * eps * d)
 
-                    param_norm = 0
-                    if model.alpha_weight_decay > 0:
-                        for weight in weight_buffer[j - 1]:
-                            param_norm = param_norm + torch.pow(weight.norm(2), 2)
+                    # param_norm = 0
+                    # if model.alpha_weight_decay > 0:
+                    #     for weight in weight_buffer[j - 1]:
+                    #         param_norm = param_norm + torch.pow(weight.norm(2), 2)
                     old_weights = switch_weights(model, weight_buffer[j-1])
 
-                    loss3 = criterion(
-                        model(x, weight_buffer[j - 1]), y
-                    ) + param_norm*model.alpha_weight_decay
+                    # param_norm = calculate_weight_decay(model, a_order=1, a_coef=0.0, adaptive_decay=True)
+                    
+
+                    loss3 = compute_train_loss(x, y, criterion, y_pred=model(x, weight_buffer[j - 1]), model=model)
                     dalpha_neg = [a if a is not None else torch.zeros(list(model.arch_params())[i].size()).to(device) for i, a in enumerate(torch.autograd.grad(
                         loss3, model.arch_params(), allow_unused=True
                     ))]  # dalpha { L_trn(w-) }

@@ -55,7 +55,7 @@ class LinearMaxDeg(torch.nn.Linear):
             ys = [(F.tanh(1*torch.tensor(elem))+1)/2 for elem in xs]
             plt.plot(xs,ys)
 
-        return (F.tanh(1*x)+1)/2
+        return (F.tanh(x)+torch.tensor(1))/2
 
 class FlexibleLinear(torch.nn.Linear):
     def __init__(self, in_features, out_features, bias=True, **kwargs):

@@ -30,27 +30,9 @@ from sotl_utils import sotl_gradient, WeightBuffer
 import scipy.linalg
 import time
 import fire
-from utils_train import get_criterion, hinge_loss, get_optimizers, switch_weights
+from utils_train import get_criterion, hinge_loss, get_optimizers, switch_weights, compute_train_loss, calculate_weight_decay
 from tqdm import tqdm
 from typing import *
-
-def calculate_weight_decay(model, w_order=None, adaptive_decay=None, a_order=1, a_coef=1):
-    param_norm=0
-    if model.alpha_weight_decay != 0 and w_order is not None:
-        for n,weight in model.named_weight_params():
-            if 'weight' in n:
-                param_norm = param_norm + torch.pow(weight.norm(w_order), w_order)
-        param_norm = torch.multiply(model.alpha_weight_decay, param_norm)
-
-    if adaptive_decay is not None and hasattr(model, "adaptive_weight_decay"):
-        print(model.adaptive_weight_decay())
-        param_norm = param_norm + model.adaptive_weight_decay()
-    
-    if a_order is not None:
-        for arch_param in model.arch_params():
-            param_norm = param_norm + a_coef * arch_param
-    
-    return param_norm
 
 def train_bptt(
     num_epochs: int,
@@ -119,18 +101,20 @@ def train_bptt(
             weight_buffer = WeightBuffer(T=T, checkpoint_freq=w_checkpoint_freq)
             weight_buffer.add(model, 0)
 
+
+
+
             for intra_batch_idx, (x, y) in enumerate(zip(xs, ys),1):
                 x = x.to(device)
                 y = y.to(device)
 
-                # weight_buffer.add(model, intra_batch_idx) # TODO Should it be added here?
 
-                y_pred = model(x)
+                # y_pred = model(x)
 
-                param_norm = 0
-                param_norm = calculate_weight_decay(model, a_order=1, a_coef=0.0, adaptive_decay=True)
+                # param_norm = calculate_weight_decay(model, a_order=1, a_coef=0.0, adaptive_decay=True)
 
-                loss = criterion(y_pred, y) + param_norm
+                # loss = criterion(y_pred, y) + param_norm
+                loss = compute_train_loss(x=x,y=y,criterion=criterion, model=model)
                 epoch_loss.update(loss.item())
 
                 grads = torch.autograd.grad(
@@ -242,11 +226,12 @@ def train_bptt(
                     x = x.to(device)
                     y = y.to(device)
 
-                    y_pred = model(x)
+                    # y_pred = model(x)
 
-                    param_norm = calculate_weight_decay(model, a_order=1, a_coef=0.01)
+                    param_norm = calculate_weight_decay(model, a_order=1, a_coef=0.0, adaptive_decay=True)
 
-                    loss = criterion(y_pred, y) + param_norm
+                    # loss = criterion(y_pred, y) + param_norm
+                    loss = compute_train_loss(x=x,y=y,criterion=criterion, model=model) + param_norm
                     epoch_loss.update(loss.item())
 
                     grads = torch.autograd.grad(
@@ -457,7 +442,7 @@ w_checkpoint_freq = 1
 max_order_y=7
 noise_var=0.25
 featurize_type="fourier"
-initial_degree=20
+initial_degree=2
 hvp="finite_diff"
 normalize_a_lr=True
 w_warm_start=0
@@ -467,8 +452,8 @@ extra_weight_decay=0.0001
 grad_inner_loop_order=-1
 grad_outer_loop_order=-1
 arch_train_data="sotl"
-model_type="MNIST"
-dataset="MNIST"
+model_type="max_deg"
+dataset="fourier"
 device = 'cpu'
 train_arch=True
 dry_run=False
