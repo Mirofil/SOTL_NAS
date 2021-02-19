@@ -254,13 +254,13 @@ def train_bptt(
                             "Batch": true_batch_index,
                         })
 
-            if true_batch_index % logging_freq == 0:
+            if true_batch_index % logging_freq == 0 or batch_idx == len(train_loader)-1:
                 print(
                     "Epoch: {}, Batch: {}, Loss: {}, Alphas: {}, Weights: {}".format(
                         epoch,
                         true_batch_index,
                         epoch_loss.avg,
-                        [x.data for x in model.arch_params()],
+                        [x.data for x in model.arch_params()] if len(list(model.weight_params())) < 20 else 'Too long',
                         [x.data for x in model.weight_params()] if len(list(model.weight_params())) < 20 else 'Too long'
                     )
                 )
@@ -329,7 +329,7 @@ def main(num_epochs = 50,
     grad_inner_loop_order=-1,
     grad_outer_loop_order=-1,
     model_type="sigmoid",
-    dataset="fourier",
+    dataset="gisette",
     device= 'cuda' if torch.cuda.is_available() else 'cpu',
     train_arch=True,
     dry_run=False,
