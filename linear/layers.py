@@ -5,10 +5,15 @@ from torch import Tensor
 import numpy as np
 import matplotlib.pyplot as plt
 
-class Linear2(torch.nn.Linear):
-    def __init__(self, in_features, out_features, bias, **kwargs) -> None:
+class LinearSquash(torch.nn.Linear):
+    def __init__(self, in_features, out_features, bias, squash_type="softmax", **kwargs) -> None:
         super().__init__(in_features,out_features,bias)
         self.alphas = torch.nn.Parameter(torch.ones(1, in_features))
+        if squash_type == "softmax":
+            self.squash = F.softmax
+        elif squash_type == "sigmoid":
+            self.squash = F.sigmoid
+
 
     def forward(self, input: Tensor, weight: Tensor = None, alphas: Tensor = None) -> Tensor:
         if weight is None:
@@ -17,7 +22,7 @@ class Linear2(torch.nn.Linear):
             weight = weight[0]
         if alphas is None:
             alphas = self.alphas
-        return F.linear(input, weight*F.softmax(alphas), self.bias)
+        return F.linear(input, weight*self.squash(alphas), self.bias)
 
 class LinearMaxDeg(torch.nn.Linear):
     def __init__(self, *args, degree=30, **kwargs) -> None:

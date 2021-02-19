@@ -164,10 +164,19 @@ def jacobian(y: Tensor, x: Tensor, create_graph:bool=False) -> Tensor:
     grad_y = torch.zeros_like(flat_y)                                                                 
     for i in range(len(flat_y)):                                                                      
         grad_y[i] = 1.                                                                                
-        grad_x, = torch.autograd.grad(flat_y, x, grad_y, retain_graph=True, create_graph=create_graph)
-        jac.append(grad_x.reshape(x.shape))                                                           
-        grad_y[i] = 0.                                                                                
-    return torch.stack(jac).reshape(y.shape + x.shape)                                                
+        grad_x, = torch.autograd.grad(flat_y, x, grad_y, retain_graph=True, create_graph=create_graph, allow_unused=True)
+        # print(grad_x)
+        if grad_x is not None:
+            jac.append(grad_x.reshape(x.shape))
+        else:
+            jac.append(torch.zeros(x.shape))                                                           
+        grad_y[i] = 0.               
+    # print(jac)
+
+    final_shape = (1, x.shape[1]) if len(y.shape) == 0 else (y.shape[1], min(x.shape[1], y.shape[1]))
+    # print(final_shape)                 
+    # print(x)                               
+    return torch.stack(jac).reshape(final_shape)                                                
                                                                                                       
 def hessian(y:Tensor, x1:Tensor, x2:Tensor) -> Tensor:                                                                                    
     return jacobian(jacobian(y, x1, create_graph=True), x2)                                             

@@ -2,12 +2,12 @@ import torch
 import torch.nn as nn
 from torch.optim import SGD, Adam
 
-def calculate_weight_decay(model, w_order=None, adaptive_decay=None, a_order=1, a_coef=0.1):
+def calculate_weight_decay(model, alpha_w_order=None, w_order=None, adaptive_decay=None, a_order=1, a_coef=0.1, w_coef=0.001):
     param_norm=0
-    if model.alpha_weight_decay != 0 and w_order is not None:
+    if model.alpha_weight_decay != 0 and alpha_w_order is not None:
         for n,weight in model.named_weight_params():
             if 'weight' in n:
-                param_norm = param_norm + torch.pow(weight.norm(w_order), w_order)
+                param_norm = param_norm + torch.pow(weight.norm(alpha_w_order), alpha_w_order)
         param_norm = torch.multiply(model.alpha_weight_decay, param_norm)
 
     if adaptive_decay != None and adaptive_decay != False and hasattr(model, "adaptive_weight_decay"):
@@ -16,18 +16,21 @@ def calculate_weight_decay(model, w_order=None, adaptive_decay=None, a_order=1, 
     
     if a_order is not None:
         for arch_param in model.arch_params():
-            param_norm = param_norm + a_coef * arch_param
+            param_norm = param_norm + a_coef * torch.sum(torch.abs(arch_param))
+    if w_order is not None:
+        for w_param in model.weight_params():
+            param_norm = param_norm + w_coef * torch.pow(torch.norm(w_param, w_order), w_order)
     
     return param_norm
 
 
-def compute_train_loss(x, y, criterion, model, y_pred=None, a_order=1, a_coef=0.1, adaptive_decay=False):
+def compute_train_loss(x, y, criterion, model, y_pred=None, alpha_w_order=None, w_order=1, adaptive_decay=False, a_order=1, a_coef=0.1, w_coef=0.001):
     assert model is not None or y_pred is not None
 
     if y_pred is None:
         y_pred = model(x)
 
-    param_norm = calculate_weight_decay(model, a_order=a_order, a_coef=a_coef, adaptive_decay=adaptive_decay)
+    param_norm = calculate_weight_decay(model, alpha_w_order=alpha_w_order, w_order=w_order,adaptive_decay=adaptive_decay, a_order=a_order, a_coef=a_coef, w_coef=w_coef)
 
     loss = criterion(y_pred, y) + param_norm
 
@@ -66,7 +69,7 @@ def get_criterion(model_type):
     criterion=None
     if model_type in ["MNIST", "log_regression"]:
         criterion = torch.nn.CrossEntropyLoss()
-    elif model_type in ["max_deg", "softmax_mult", "linear", "fourier", "polynomial"]:
+    elif model_type in ["max_deg", "softmax_mult", "linear", "fourier", "polynomial", "sigmoid"]:
         criterion = torch.nn.MSELoss()
     
     return criterion

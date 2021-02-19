@@ -1,5 +1,5 @@
 import torch
-from layers import Linear2, LinearMaxDeg, FlexibleLinear
+from layers import LinearSquash, LinearMaxDeg, FlexibleLinear
 import torch.nn as nn
 import torch.nn.functional as F
 class RegressionNet(torch.nn.Module):
@@ -36,12 +36,14 @@ class SoTLNet(RegressionNet):
         super().__init__(**kwargs)
         self.model_type = model_type
         if model_type == "softmax_mult":
-            self.fc1 = Linear2(num_features, 1, bias=False, **kwargs)
+            self.fc1 = LinearSquash(num_features, 1, bias=False, squash_type="softmax", **kwargs)
+            self.model = self.fc1
+        elif model_type == "sigmoid":
+            self.fc1 = LinearSquash(num_features, 1, bias=False, squash_type="sigmoid", **kwargs)
             self.model = self.fc1
         elif model_type == "max_deg":
             self.fc1 = LinearMaxDeg(num_features, 1, bias=False, **kwargs)
-            # with torch.no_grad(): # Positive bias to get good direction of gradients for arch optimizaiton
-            #     self.fc1.weight += 1
+
             self.model = self.fc1
         elif model_type == "linear":
             self.fc1 = FlexibleLinear(num_features, 1, bias=False)

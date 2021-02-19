@@ -1,4 +1,4 @@
-# python linear/train.py --model_type=max_deg --dataset=fourier --dry_run=True --grad_outer_loop_order=None --mode=joint --device=cpu --initial_degree 20
+# python linear/train.py --model_type=max_deg --dataset=fourier --dry_run=True --grad_outer_loop_order=None --mode=joint --device=cpu --initial_degree 0.5
 # python linear/train.py --model_type=max_deg --dataset=fourier --dry_run=False --T=2 --grad_outer_loop_order=1 --grad_inner_loop_order=1 --mode=bilevel --device=cpu
 # python linear/train.py --model_type=MNIST --dataset=MNIST --dry_run=False --T=1 --w_warm_start=0 --grad_outer_loop_order=-1 --grad_inner_loop_order=-1 --mode=bilevel --device=cuda --extra_weight_decay=0.0001 --w_weight_decay=0 --arch_train_data=val
 
@@ -26,7 +26,7 @@ from utils import (
     jacobian,
 )
 from models import SoTLNet
-from sotl_utils import sotl_gradient, WeightBuffer
+from sotl_gradient import sotl_gradient, WeightBuffer
 import scipy.linalg
 import time
 import fire
@@ -168,7 +168,7 @@ def train_bptt(
 
                 if epoch >= w_warm_start:
                     start_time = time.time()
-                    total_arch_gradient = sotl_gradient(
+                    arch_gradients = sotl_gradient(
                         model=model,
                         criterion=criterion,
                         xs=xs,
@@ -185,8 +185,12 @@ def train_bptt(
                         val_ys=val_ys,
                         device=device
                     )
+                    total_arch_gradient = arch_gradients["total_arch_gradient"]
                     grad_compute_speed.update(time.time() - start_time)
 
+
+                    if arch_gradients['dominant_eigenvalues'] is not None:
+                        to_log.update({"Dominant eigenvalue":arch_gradients['dominant_eigenvalues'][0].item()})
 
                     if log_grad_norm:
                         norm = 0
@@ -226,12 +230,7 @@ def train_bptt(
                     x = x.to(device)
                     y = y.to(device)
 
-                    # y_pred = model(x)
-
-                    param_norm = calculate_weight_decay(model, a_order=1, a_coef=0.0, adaptive_decay=True)
-
-                    # loss = criterion(y_pred, y) + param_norm
-                    loss = compute_train_loss(x=x,y=y,criterion=criterion, model=model) + param_norm
+                    loss = compute_train_loss(x=x,y=y,criterion=criterion, model=model)
                     epoch_loss.update(loss.item())
 
                     grads = torch.autograd.grad(
@@ -255,11 +254,12 @@ def train_bptt(
 
             if true_batch_index % logging_freq == 0:
                 print(
-                    "Epoch: {}, Batch: {}, Loss: {}, Alphas: {}".format(
+                    "Epoch: {}, Batch: {}, Loss: {}, Alphas: {}, Weights: {}".format(
                         epoch,
                         true_batch_index,
                         epoch_loss.avg,
                         [x.data for x in model.arch_params()],
+                        [x.data for x in model.weight_params()] if len(list(model.weight_params())) < 20 else 'Too long'
                     )
                 )
 
@@ -318,21 +318,21 @@ def main(num_epochs = 50,
     max_order_y=7,
     noise_var=0.25,
     featurize_type="fourier",
-    initial_degree=1,
-    hvp="finite_diff",
+    initial_degree=15,
+    hvp="exact",
     arch_train_data="sotl",
     normalize_a_lr=True,
     w_warm_start=3,
     extra_weight_decay=0,
     grad_inner_loop_order=-1,
     grad_outer_loop_order=-1,
-    model_type="max_deg",
+    model_type="sigmoid",
     dataset="fourier",
     device= 'cuda' if torch.cuda.is_available() else 'cpu',
     train_arch=True,
     dry_run=True,
     hinge_loss=0.25,
-    mode = "joint"
+    mode = "bilevel"
     ):
     config = locals()
     if dry_run:
@@ -443,7 +443,7 @@ max_order_y=7
 noise_var=0.25
 featurize_type="fourier"
 initial_degree=2
-hvp="finite_diff"
+hvp="exact"
 normalize_a_lr=True
 w_warm_start=0
 log_grad_norm=True
@@ -452,7 +452,7 @@ extra_weight_decay=0.0001
 grad_inner_loop_order=-1
 grad_outer_loop_order=-1
 arch_train_data="sotl"
-model_type="max_deg"
+model_type="sigmoid"
 dataset="fourier"
 device = 'cpu'
 train_arch=True
