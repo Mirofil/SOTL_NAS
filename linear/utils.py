@@ -110,9 +110,11 @@ def featurize(x: float, max_order:int =4, type:str ="fourier") -> Sequence:
         
     return list(featurized_input)
 
-def eval_features(x:Sequence, max_order:int=2, type:str='fourier', noise_var:float=1) -> Sequence:
+def eval_features(x:Sequence, max_order:int=2, type:str='fourier', noise_var:float=1, summation='raw') -> Sequence:
     noise = np.random.normal(0, noise_var**(1/2))
     final_features = None
+    feature = None
+
     if isinstance(max_order, int):
         final_features = x[:max_order]
         if type == "fourier":
@@ -123,11 +125,18 @@ def eval_features(x:Sequence, max_order:int=2, type:str='fourier', noise_var:flo
         for seq in max_order:
             final_features = final_features + x[seq[0]:seq[1]]
 
-    feature = np.array(final_features).sum()
+    if summation == 'gaussian':
+        weights = random.normal(loc=1, scale=1, size = len(final_features))
+    else:
+        weights = np.ones(shape = len(final_features))
 
-    return [feature+noise]
 
-def data_generator(data_size:int=1000, max_order_generated:int=5, max_order_y:int=None, max_order_x:int=None, noise_var:float=1, x_range:float=None, featurize_type:str='fourier', plot:bool=False):
+    feature = (np.array(final_features) * weights).sum()
+
+    return {"features":[feature+noise], "weights": weights}
+
+def data_generator(data_size:int=1000, max_order_generated:int=5, max_order_y:int=None, max_order_x:int=None, 
+    noise_var:float=1, x_range:float=None, featurize_type:str='fourier', plot:bool=False, shuffle_features=False):
     inputs = []
     labels = []
     if max_order_y is None:
@@ -141,7 +150,8 @@ def data_generator(data_size:int=1000, max_order_generated:int=5, max_order_y:in
     for x in xs:
         final_features = None
         features = featurize(x, max_order=max_order_generated, type=featurize_type)
-        labels.append(eval_features(features, noise_var=noise_var, max_order=max_order_y, type=featurize_type))
+        evaled_features = eval_features(features, noise_var=noise_var, max_order=max_order_y, type=featurize_type)
+        labels.append(evaled_features["features"])
         if isinstance(max_order_x, int):
             final_features = features[:max_order_x]
         elif isinstance(max_order_x, (tuple, list)):
@@ -150,11 +160,20 @@ def data_generator(data_size:int=1000, max_order_generated:int=5, max_order_y:in
                 final_features = final_features + features[seq[0]:seq[1]]
         else:
             raise NotImplementedError
+
         inputs.append(final_features)
+
+    if shuffle_features:
+        perm = np.random.permutation(range(len(inputs[0])))
+        inputs = [[x[i] for i in perm] for x in inputs]
 
     if plot:
         labels = [label[0] for label in labels]
         plt.plot(xs, labels)
+    
+    print(f"Dataset generated with weights: {evaled_features['weights']}")
+
+
     return inputs, labels
 
 

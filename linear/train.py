@@ -1,4 +1,4 @@
-# python linear/train.py --model_type=max_deg --dataset=fourier --dry_run=True --grad_outer_loop_order=None --mode=joint --device=cpu --initial_degree 0.5
+# python linear/train.py --model_type=sigmoid --dataset=fourier --dry_run=False --grad_outer_loop_order=None --mode=joint --device=cpu --initial_degree 1 --hvp=exact
 # python linear/train.py --model_type=max_deg --dataset=fourier --dry_run=False --T=2 --grad_outer_loop_order=1 --grad_inner_loop_order=1 --mode=bilevel --device=cpu
 # python linear/train.py --model_type=MNIST --dataset=MNIST --dry_run=False --T=1 --w_warm_start=0 --grad_outer_loop_order=-1 --grad_inner_loop_order=-1 --mode=bilevel --device=cuda --extra_weight_decay=0.0001 --w_weight_decay=0 --arch_train_data=val
 
@@ -42,6 +42,7 @@ def train_bptt(
     a_optimizer,
     dset_train,
     dset_val,
+    dset_test,
     batch_size: int,
     T: int,
     w_checkpoint_freq: int,
@@ -190,7 +191,8 @@ def train_bptt(
 
 
                     if arch_gradients['dominant_eigenvalues'] is not None:
-                        to_log.update({"Dominant eigenvalue":arch_gradients['dominant_eigenvalues'][0].item()})
+                        # print()
+                        to_log.update({"Dominant eigenvalue":arch_gradients['dominant_eigenvalues'].item()})
 
                     if log_grad_norm:
                         norm = 0
@@ -330,7 +332,7 @@ def main(num_epochs = 50,
     dataset="fourier",
     device= 'cuda' if torch.cuda.is_available() else 'cpu',
     train_arch=True,
-    dry_run=True,
+    dry_run=False,
     hinge_loss=0.25,
     mode = "bilevel"
     ):
@@ -350,7 +352,7 @@ def main(num_epochs = 50,
     # x, y = data_generator(N, max_order_generated=D, max_order_y=[(5,7), (9,13)], noise_var=0.25, featurize_type='fourier')
     # x, y = get_datasets("songs")
 
-    dset_train, dset_val = get_datasets(name=dataset, data_size=N, max_order_generated=D,
+    dset_train, dset_val, dset_test = get_datasets(name=dataset, data_size=N, max_order_generated=D,
         max_order_y=max_order_y,
         noise_var=noise_var,
         featurize_type=featurize_type)
@@ -370,6 +372,7 @@ def main(num_epochs = 50,
         a_optimizer=a_optimizer,
         dset_train=dset_train,
         dset_val=dset_val,
+        dset_test=dset_test,
         logging_freq=logging_freq,
         batch_size=batch_size,
         T=T,

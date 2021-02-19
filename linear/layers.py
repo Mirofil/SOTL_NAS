@@ -8,7 +8,7 @@ import matplotlib.pyplot as plt
 class LinearSquash(torch.nn.Linear):
     def __init__(self, in_features, out_features, bias, squash_type="softmax", **kwargs) -> None:
         super().__init__(in_features,out_features,bias)
-        self.alphas = torch.nn.Parameter(torch.ones(1, in_features))
+        self.alphas = torch.nn.Parameter(torch.zeros(1, in_features))
         if squash_type == "softmax":
             self.squash = F.softmax
         elif squash_type == "sigmoid":

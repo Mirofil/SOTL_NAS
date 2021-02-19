@@ -2,6 +2,9 @@ import pandas as pd
 import torch
 from torchvision import datasets, transforms
 from utils import data_generator
+from pathlib import Path
+import numpy as np
+import torch
 
 def get_datasets(name, path=None, test_split=0.85, **kwargs):
     if name == "songs":
@@ -19,6 +22,35 @@ def get_datasets(name, path=None, test_split=0.85, **kwargs):
         dset_train, dset_test = torch.utils.data.random_split(
             dset, [int(len(dset) * test_split), len(dset) - int(len(dset) * test_split)]
         )
+    elif name == "gisette":
+        if os.name == 'nt':
+            data_path = Path("C:\\Users\\kawga\\Documents\\Oxford\\thesis\\code\\data\\")
+        else:
+            data_path = Path('./data/')
+        f= open(data_path / "gisette_train.data")
+        data=[]
+        for row in f.readlines():
+            data.append((row.strip()).split(" "))
+        f.close()
+
+        f= open(data_path / "gisette_train.labels")
+        classes=[]
+        for row in f.readlines():
+            classes.append((row.strip()).split(" "))
+        f.close()
+
+        data=np.array(data).astype(int)
+        data = torch.tensor(data, dtype=torch.float32)
+
+        classes= np.array(classes).astype(int)
+        classes=classes[:,0]
+        classes = torch.tensor(classes, dtype=torch.float32)
+
+        dset = torch.utils.data.TensorDataset(data, classes)
+        dset_train, dset_test = torch.utils.data.random_split(
+            dset, [int(len(dset) * test_split), len(dset) - int(len(dset) * test_split)]
+        )
+
     elif name == "fourier":
         x, y = data_generator(
             **kwargs
@@ -54,4 +86,8 @@ def get_datasets(name, path=None, test_split=0.85, **kwargs):
                 normalize,
             ]))
     
-    return dset_train, dset_test
+    dset_train, dset_val = torch.utils.data.random_split(
+            dset_train, [int(len(dset_train) * test_split), len(dset_train) - int(len(dset_train) * test_split)]
+        )
+
+    return dset_train, dset_val, dset_test

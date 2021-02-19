@@ -15,8 +15,11 @@ def calculate_weight_decay(model, alpha_w_order=None, w_order=None, adaptive_dec
         param_norm = param_norm + model.adaptive_weight_decay()
     
     if a_order is not None:
-        for arch_param in model.arch_params():
-            param_norm = param_norm + a_coef * torch.sum(torch.abs(arch_param))
+        if model.model_type == 'sigmoid':
+            param_norm = param_norm + a_coef * torch.sum(torch.abs(torch.sigmoid(model.fc1.alphas)))
+        else:
+            for arch_param in model.arch_params():
+                param_norm = param_norm + a_coef * torch.sum(torch.abs(arch_param))
     if w_order is not None:
         for w_param in model.weight_params():
             param_norm = param_norm + w_coef * torch.pow(torch.norm(w_param, w_order), w_order)
