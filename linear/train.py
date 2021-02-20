@@ -1,4 +1,4 @@
-# python linear/train.py --model_type=sigmoid --dataset=gisette --dry_run=False --grad_outer_loop_order=None --mode=joint --device=cpu --initial_degree 1 --hvp=finite_diff --num_epochs=75
+# python linear/train.py --model_type=sigmoid --dataset=gisette --dry_run=False --grad_outer_loop_order=None --mode=bilevel --device=cpu --initial_degree 1 --hvp=finite_diff --num_epochs=75 --w_lr=0.01 --T=50
 # python linear/train.py --model_type=max_deg --dataset=fourier --dry_run=False --T=2 --grad_outer_loop_order=1 --grad_inner_loop_order=1 --mode=bilevel --device=cpu
 # python linear/train.py --model_type=MNIST --dataset=MNIST --dry_run=False --T=1 --w_warm_start=0 --grad_outer_loop_order=-1 --grad_inner_loop_order=-1 --mode=bilevel --device=cuda --extra_weight_decay=0.0001 --w_weight_decay=0 --arch_train_data=val
 
@@ -37,6 +37,9 @@ from typing import *
 from sklearn.linear_model import LogisticRegression, Lasso
 import sklearn.metrics
 import sklearn.feature_selection
+from sklearn.ensemble import ExtraTreesClassifier
+
+
 
 def train_bptt(
     num_epochs: int,
@@ -290,7 +293,7 @@ def train_bptt(
 
 
         print("Epoch: {}, Val Loss: {}, Test Loss: {}, Discretized AUC: {}".format(epoch, val_results.avg, test_results.avg, auc))
-        wandb.log({"Val loss": val_results.avg, "Test loss": test_results.avg, "AUC": auc, "Epoch": epoch})
+        wandb.log({"Val loss": val_results.avg, "Test loss": test_results.avg, "AUC_training": auc, "Epoch": epoch})
         wandb.run.summary["Grad compute speed"] = grad_compute_speed.avg
 
         print(f"Grad compute speed: {grad_compute_speed.avg}s")
@@ -323,16 +326,16 @@ def valid_func(model, dset_val, criterion, device = 'cuda' if torch.cuda.is_avai
 
 
 
-def main(num_epochs = 50,
+def main(num_epochs = 5,
     batch_size = 64,
     D = 18,
     N = 50000,
-    w_lr = 1e-3,
+    w_lr = 1e-2,
     w_momentum=0.0,
-    w_weight_decay=0,
+    w_weight_decay=0.001,
     a_lr = 1e-2,
     a_momentum = 0.0,
-    a_weight_decay = 0,
+    a_weight_decay = 0.1,
     T = 10,
     grad_clip = 1,
     logging_freq = 200,
@@ -437,7 +440,7 @@ def main(num_epochs = 50,
         except:
             print("No model degree info; probably a different model_type was chosen")
     if model_type in ["sigmoid"]:
-        keys = ["F", "NAS", "lasso", "logistic_l1"]
+        keys = ["F", "NAS", "lasso", "logistic_l1", "tree"]
         AUCs = {k:[] for k in keys}
         raw_x = [pair[0].numpy() for pair in dset_train]
         raw_y = [pair[1].numpy() for pair in dset_train]
@@ -445,8 +448,8 @@ def main(num_epochs = 50,
         test_x = [pair[0].numpy() for pair in dset_test]
         test_y = [pair[1].numpy() for pair in dset_test]
 
-        clf_logistic = LogisticRegression(penalty='l1', solver='liblinear').fit(raw_x, raw_y)
-
+        clf_logistic = LogisticRegression(penalty='l1', solver='liblinear', C=1, max_iter=3000).fit(raw_x, raw_y)
+        clf_tree = ExtraTreesClassifier(n_estimators = 50).fit(raw_x, raw_y)
         clf_lasso = sklearn.linear_model.Lasso().fit(raw_x,raw_y)
 
         for k in tqdm(range(1, 100), desc="Computing AUCs for different top-k features"):
@@ -457,7 +460,7 @@ def main(num_epochs = 50,
             AUCs["F"].append(compute_auc(None, k, raw_x, raw_y, test_x, test_y, mode="F"))
             AUCs["lasso"].append(compute_auc(clf_lasso, k, raw_x, raw_y, test_x, test_y, mode ="lasso"))
             AUCs["logistic_l1"].append(compute_auc(clf_logistic, k, raw_x, raw_y, test_x, test_y, mode = "logistic_l1"))
-
+            AUCs["tree"].append(compute_auc(clf_tree, k, raw_x, raw_y, test_x, test_y, mode = "tree"))
             wandb.log({**{key:AUCs[key][k-1] for key in keys}, "k":k})
 
 if __name__ == "__main__":

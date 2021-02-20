@@ -12,7 +12,7 @@ class LinearSquash(torch.nn.Linear):
         if squash_type == "softmax":
             self.squash = F.softmax
         elif squash_type == "sigmoid":
-            self.squash = F.sigmoid
+            self.squash = torch.sigmoid
 
 
     def forward(self, input: Tensor, weight: Tensor = None, alphas: Tensor = None) -> Tensor:

@@ -5,6 +5,7 @@ import sklearn.metrics
 import sklearn.feature_selection
 from sklearn.linear_model import LogisticRegression, Lasso
 import numpy as np
+from sklearn.ensemble import ExtraTreesClassifier
 
 
 def choose_features(model, top_k=20):
@@ -22,7 +23,6 @@ def compute_auc(model,k, raw_x, raw_y, test_x, test_y, mode ="F"):
         selector = sklearn.feature_selection.SelectKBest(univ, k=k).fit(raw_x,raw_y)
         x = selector.transform(raw_x)
         x_test = selector.transform(test_x)
-        clf = LogisticRegression().fit(x, raw_y)
     
     elif mode == "NAS":
         top_k = choose_features(model, top_k=k)
@@ -30,15 +30,16 @@ def compute_auc(model,k, raw_x, raw_y, test_x, test_y, mode ="F"):
         x = [elem[top_k.indices[0].cpu().numpy()] for elem in raw_x]
         x_test = [elem[top_k.indices[0].cpu().numpy()] for elem in test_x]
         # dset_train = list(dset_train) 
-        clf = LogisticRegression().fit(x,raw_y)
     
     elif mode == "lasso" or mode == "logistic_l1":
         selector = sklearn.feature_selection.SelectFromModel(model, prefit=True, threshold=-np.inf, max_features=k)
         x = selector.transform(raw_x)
         x_test = selector.transform(test_x)
-        clf = LogisticRegression().fit(x,raw_y)
+    
+    elif mode == 'tree':
+        clf = ExtraTreesClassifier(n_estimators = 50).fit(raw_x, raw_y)
 
-
+    clf = LogisticRegression(max_iter=1000).fit(x,raw_y)
     preds = clf.predict_proba(x_test)
     auc_score = sklearn.metrics.roc_auc_score(test_y, preds[:, 1])
 
