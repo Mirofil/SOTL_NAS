@@ -58,7 +58,7 @@ def get_datasets(name, path=None, test_split=0.85, **kwargs):
 
         train_classes= np.array(train_classes).astype(int)
         train_classes=train_classes[:,0]
-        train_classes = torch.tensor(train_classes, dtype=torch.float32)
+        train_classes = torch.tensor(train_classes, dtype=torch.long)
         train_classes[train_classes == -1] = 0
 
         test_data=np.array(test_data).astype(int)
@@ -66,7 +66,7 @@ def get_datasets(name, path=None, test_split=0.85, **kwargs):
 
         test_classes= np.array(test_classes).astype(int)
         test_classes=test_classes[:,0]
-        test_classes = torch.tensor(test_classes, dtype=torch.float32)
+        test_classes = torch.tensor(test_classes, dtype=torch.long)
         test_classes[test_classes == -1] = 0
 
         dset_train = torch.utils.data.TensorDataset(train_data, train_classes)

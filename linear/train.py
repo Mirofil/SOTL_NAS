@@ -1,4 +1,4 @@
-# python linear/train.py --model_type=sigmoid --dataset=FashionMNIST --dry_run=False --grad_outer_loop_order=None --mode=bilevel --device=cuda --initial_degree 1 --hvp=finite_diff --num_epochs=50 --w_lr=0.01 --T=10 
+# python linear/train.py --model_type=sigmoid --dataset=gisette --dry_run=False --grad_outer_loop_order=None --mode=bilevel --device=cuda --initial_degree 1 --hvp=finite_diff --num_epochs=50 --w_lr=0.01 --T=10 
 # python linear/train.py --model_type=max_deg --dataset=fourier --dry_run=False --T=2 --grad_outer_loop_order=1 --grad_inner_loop_order=1 --mode=bilevel --device=cpu
 # python linear/train.py --model_type=MNIST --dataset=MNIST --dry_run=False --T=1 --w_warm_start=0 --grad_outer_loop_order=-1 --grad_inner_loop_order=-1 --mode=bilevel --device=cuda --extra_weight_decay=0.0001 --w_weight_decay=0 --arch_train_data=val
 
@@ -286,7 +286,7 @@ def train_bptt(
                 mse, acc = reconstruction_error(model=model,k=50, raw_x=raw_x, raw_y=raw_y, test_x=test_x, test_y=test_y)
         if hessian_tracking:
             eigenvals, eigenvecs = compute_hessian_eigenthings(model, train_loader,
-                                                    criterion, 1, full_dataset=False)
+                                                    criterion, 1, full_dataset=True)
             hessian_eigenvalue = eigenvals[0]              
 
 

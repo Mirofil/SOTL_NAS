@@ -35,7 +35,7 @@ def reconstruction_error(model, k, raw_x, raw_y, test_x, test_y):
 
 
 def compute_auc(model,k, raw_x, raw_y, test_x, test_y, mode ="F"):
-    if mode == "F" or mode == "MI":
+    if mode in ["F", "MI", "chi2"]:
         if mode == "F":
             univ = sklearn.feature_selection.f_classif 
         elif mode == "MI":
