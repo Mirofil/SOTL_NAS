@@ -1,6 +1,8 @@
-# python linear/train.py --model_type=sigmoid --dataset=FashionMNIST --dry_run=False --grad_outer_loop_order=None --mode=bilevel --device=cpu --initial_degree 1 --hvp=finite_diff --num_epochs=50 --w_lr=0.01 --T=10 
+# python linear/train.py --model_type=sigmoid --dataset=FashionMNIST --dry_run=False --grad_outer_loop_order=None --mode=bilevel --device=cuda --initial_degree 1 --hvp=finite_diff --num_epochs=50 --w_lr=0.01 --T=10 
 # python linear/train.py --model_type=max_deg --dataset=fourier --dry_run=False --T=2 --grad_outer_loop_order=1 --grad_inner_loop_order=1 --mode=bilevel --device=cpu
 # python linear/train.py --model_type=MNIST --dataset=MNIST --dry_run=False --T=1 --w_warm_start=0 --grad_outer_loop_order=-1 --grad_inner_loop_order=-1 --mode=bilevel --device=cuda --extra_weight_decay=0.0001 --w_weight_decay=0 --arch_train_data=val
+
+#pip install git+https://github.com/Mirofil/pytorch-hessian-eigenthings.git
 
 import os
 import itertools
@@ -268,7 +270,7 @@ def train_bptt(
             model=model, dset_val=dset_test, criterion=criterion, device=device, print_results=False
         )
 
-        auc, mse, hessian_eigenvalue = None, None, None
+        auc, acc, mse, hessian_eigenvalue = None, None, None, None
         
         if model.model_type in ['sigmoid']:
             raw_x = [pair[0].view(-1).numpy() for pair in dset_train]
@@ -280,7 +282,7 @@ def train_bptt(
             if dataset in ['gisette']:
             # We need binary classification task for this to make sense
                 auc = compute_auc(model=model, raw_x=raw_x, raw_y=raw_y, test_x=test_x, test_y=test_y, k=25, mode="NAS")
-            if dataset in ['MNIST']:
+            if dataset in ['MNIST', 'FashionMNIST']:
                 mse, acc = reconstruction_error(model=model,k=50, raw_x=raw_x, raw_y=raw_y, test_x=test_x, test_y=test_y)
         if hessian_tracking:
             eigenvals, eigenvecs = compute_hessian_eigenthings(model, train_loader,
@@ -291,7 +293,7 @@ def train_bptt(
 
         print("Epoch: {}, Val Loss: {}, Test Loss: {}, Discretized AUC: {}, MSE: {}, Reconstruction Acc: {}, Hess: {}".format(epoch, val_results.avg, test_results.avg, auc, mse, acc, hessian_eigenvalue))
         wandb.log({"Val loss": val_results.avg, "Test loss": test_results.avg, "AUC_training": auc, "MSE training":mse, 
-            "RecAcc training":acc, "Arch. Hessian spectral radius" "Epoch": epoch})
+            "RecAcc training":acc, "Arch. Hessian domin. eigenvalue" "Epoch": epoch})
         wandb.run.summary["Grad compute speed"] = grad_compute_speed.avg
 
         print(f"Grad compute speed: {grad_compute_speed.avg}s")
