@@ -272,8 +272,8 @@ def train_bptt(
             raw_x = [pair[0].view(-1).numpy() for pair in dset_train]
             raw_y = [pair[1].numpy() if type(pair[1]) != int else pair[1] for pair in dset_train]
 
-            test_x = [pair[0].view(-1).numpy() for pair in dset_test]
-            test_y = [pair[1].numpy() if type(pair[1]) != int else pair[1] for pair in dset_test]
+            test_x = [pair[0].view(-1).numpy() for pair in dset_val]
+            test_y = [pair[1].numpy() if type(pair[1]) != int else pair[1] for pair in dset_val]
 
             if dataset in ['gisette']:
             # We need binary classification task for this to make sense
@@ -438,6 +438,7 @@ def main(num_epochs = 5,
             wandb.run.summary["degree_mismatch"] = abs(true_degree-trained_degree)
         except:
             print("No model degree info; probably a different model_type was chosen")
+    
     if model_type in ["sigmoid"]:
         raw_x = [pair[0].view(-1).numpy() for pair in dset_train]
         raw_y = [pair[1].numpy() if type(pair[1]) != int else pair[1] for pair in dset_train]

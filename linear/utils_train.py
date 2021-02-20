@@ -27,7 +27,8 @@ def reconstruction_error(model, k, raw_x, raw_y, test_x, test_y):
     preds = clf.predict(test_x)
     mse = ((preds-test_y)**2).mean()
 
-    tree = ExtraTreesClassifier().fit(x, raw_y)
+    #NOTE the Concrete Autoencoder appendix says there should be 50 trees
+    tree = ExtraTreesClassifier(n_estimators=50).fit(x, raw_y)
     acc = tree.score(test_x, test_y)
 
     return mse, acc
