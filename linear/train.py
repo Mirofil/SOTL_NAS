@@ -31,7 +31,7 @@ import scipy.linalg
 import time
 import fire
 from utils_train import (get_criterion, hinge_loss, get_optimizers, switch_weights, 
-compute_train_loss, calculate_weight_decay, compute_auc)
+    compute_train_loss, calculate_weight_decay, compute_auc, reconstruction_error)
 from tqdm import tqdm
 from typing import *
 from sklearn.linear_model import LogisticRegression, Lasso
@@ -48,6 +48,7 @@ def train_bptt(
     criterion,
     w_optimizer,
     a_optimizer,
+    dataset:str,
     dset_train,
     dset_val,
     dset_test,
@@ -265,7 +266,8 @@ def train_bptt(
             model=model, dset_val=dset_test, criterion=criterion, device=device, print_results=False
         )
 
-        auc=None
+        auc, mse = None, None
+        
         if model.model_type in ['sigmoid']:
             raw_x = [pair[0].view(-1).numpy() for pair in dset_train]
             raw_y = [pair[1].numpy() if type(pair[1]) != int else pair[1] for pair in dset_train]
@@ -273,11 +275,17 @@ def train_bptt(
             test_x = [pair[0].view(-1).numpy() for pair in dset_test]
             test_y = [pair[1].numpy() if type(pair[1]) != int else pair[1] for pair in dset_test]
 
-            auc = compute_auc(model=model, raw_x=raw_x, raw_y=raw_y, test_x=test_x, test_y=test_y, k=25, mode="NAS")
+            if dataset in ['gisette']:
+            # We need binary classification task for this to make sense
+                auc = compute_auc(model=model, raw_x=raw_x, raw_y=raw_y, test_x=test_x, test_y=test_y, k=25, mode="NAS")
+            if dataset in ['MNIST']:
+                mse, acc = reconstruction_error(model=model,k=50, raw_x=raw_x, raw_y=raw_y, test_x=test_x, test_y=test_y)
 
 
-        print("Epoch: {}, Val Loss: {}, Test Loss: {}, Discretized AUC: {}".format(epoch, val_results.avg, test_results.avg, auc))
-        wandb.log({"Val loss": val_results.avg, "Test loss": test_results.avg, "AUC_training": auc, "Epoch": epoch})
+
+        print("Epoch: {}, Val Loss: {}, Test Loss: {}, Discretized AUC: {}, MSE: {}, Reconstruction Acc: {}".format(epoch, val_results.avg, test_results.avg, auc, mse, acc))
+        wandb.log({"Val loss": val_results.avg, "Test loss": test_results.avg, "AUC_training": auc, "MSE training":mse, 
+            "RecAcc training":acc, "Epoch": epoch})
         wandb.run.summary["Grad compute speed"] = grad_compute_speed.avg
 
         print(f"Grad compute speed: {grad_compute_speed.avg}s")
@@ -307,8 +315,8 @@ def valid_func(model, dset_val, criterion, device = 'cuda' if torch.cuda.is_avai
         print("Val loss: {}, Val acc: {}".format(val_meter.avg, val_acc_meter.avg if val_acc_meter.avg > 0 else "Not applicable"))
     return val_meter
 
-
-
+def post_train():
+    pass
 
 def main(num_epochs = 5,
     steps_per_epoch=5,
@@ -385,6 +393,7 @@ def main(num_epochs = 5,
         criterion=criterion,
         w_optimizer=w_optimizer,
         a_optimizer=a_optimizer,
+        dataset=dataset,
         dset_train=dset_train,
         dset_val=dset_val,
         dset_test=dset_test,
@@ -430,29 +439,34 @@ def main(num_epochs = 5,
         except:
             print("No model degree info; probably a different model_type was chosen")
     if model_type in ["sigmoid"]:
-        keys = ["F", "NAS", "lasso", "logistic_l1", "tree", "chi2"]
-        AUCs = {k:[] for k in keys}
         raw_x = [pair[0].view(-1).numpy() for pair in dset_train]
         raw_y = [pair[1].numpy() if type(pair[1]) != int else pair[1] for pair in dset_train]
 
         test_x = [pair[0].view(-1).numpy() for pair in dset_test]
         test_y = [pair[1].numpy() if type(pair[1]) != int else pair[1] for pair in dset_test]
+        if dataset == 'gisette':
+            keys = ["F", "NAS", "lasso", "logistic_l1", "tree", "chi2"]
+            AUCs = {k:[] for k in keys}
 
-        models_to_train = {"logistic_l1":LogisticRegression(penalty='l1', solver='saga', C=1, max_iter=300),
-        "tree":ExtraTreesClassifier(n_estimators = 100), 
-        "lasso":sklearn.linear_model.Lasso()}
-        for k in tqdm(models_to_train.keys(), desc="Training baselines models for AUC computations"):
-            models_to_train[k].fit(raw_x, raw_y)
+            models_to_train = {"logistic_l1":LogisticRegression(penalty='l1', solver='saga', C=1, max_iter=300),
+            "tree":ExtraTreesClassifier(n_estimators = 100), 
+            "lasso":sklearn.linear_model.Lasso()}
+            for k in tqdm(models_to_train.keys(), desc="Training baselines models for AUC computations"):
+                models_to_train[k].fit(raw_x, raw_y)
 
-        models = {**models_to_train,
-         "F":None, "chi2":None, "DFS-NAS":model}
+            models = {**models_to_train,
+            "F":None, "chi2":None, "DFS-NAS":model}
 
-        for k in tqdm(range(1, 100), desc="Computing AUCs for different top-k features"):
+            for k in tqdm(range(1, 100), desc="Computing AUCs for different top-k features"):
 
-            for key, clf_model in models.items():
-                AUCs[key].append(compute_auc(clf_model, k, raw_x, raw_y, test_x, test_y, mode = key))
+                for key, clf_model in models.items():
+                    AUCs[key].append(compute_auc(clf_model, k, raw_x, raw_y, test_x, test_y, mode = key))
 
-            wandb.log({**{key:AUCs[key][k-1] for key in keys}, "k":k})
+                wandb.log({**{key:AUCs[key][k-1] for key in keys}, "k":k})
+        elif dataset == 'MNIST':
+            mse, acc = reconstruction_error(model=model, k=50, raw_x=raw_x, raw_y=raw_y, test_x=test_x, test_y=test_y)
+            wandb.log({"MSE":mse, "RecAcc":acc})
+
 
 if __name__ == "__main__":
     try:

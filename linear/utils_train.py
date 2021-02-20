@@ -3,7 +3,7 @@ import torch.nn as nn
 from torch.optim import SGD, Adam
 import sklearn.metrics
 import sklearn.feature_selection
-from sklearn.linear_model import LogisticRegression, Lasso
+from sklearn.linear_model import LogisticRegression, Lasso, LinearRegression
 import numpy as np
 from sklearn.ensemble import ExtraTreesClassifier
 
@@ -16,6 +16,22 @@ def choose_features(model, top_k=20):
         raise NotImplementedError
 
     return top_k
+
+def reconstruction_error(model, k, raw_x, raw_y, test_x, test_y):
+    # Used to compute reconstruction errors from Concrete Autoencoder paper
+    top_k = choose_features(model, top_k=k)
+    x = [elem[top_k.indices[0].cpu().numpy()] for elem in raw_x]
+    test_x = [elem[top_k.indices[0].cpu().numpy()] for elem in test_x]
+    
+    clf = LinearRegression().fit(x, raw_y)
+    preds = clf.predict(test_x)
+    mse = ((preds-test_y)**2).mean()
+
+    tree = ExtraTreesClassifier().fit(x, raw_y)
+    acc = tree.score(test_x, test_y)
+
+    return mse, acc
+
 
 def compute_auc(model,k, raw_x, raw_y, test_x, test_y, mode ="F"):
     if mode == "F" or mode == "MI":
@@ -33,8 +49,8 @@ def compute_auc(model,k, raw_x, raw_y, test_x, test_y, mode ="F"):
     elif mode == "NAS":
         top_k = choose_features(model, top_k=k)
 
-        x = [elem.view(-1)[top_k.indices[0].cpu().numpy()] for elem in raw_x]
-        test_x = [elem.view(-1)[top_k.indices[0].cpu().numpy()] for elem in test_x]
+        x = [elem[top_k.indices[0].cpu().numpy()] for elem in raw_x]
+        test_x = [elem[top_k.indices[0].cpu().numpy()] for elem in test_x]
     
     elif mode == "lasso" or mode == "logistic_l1" or mode == "tree":
         selector = sklearn.feature_selection.SelectFromModel(model, prefit=True, threshold=-np.inf, max_features=k)
