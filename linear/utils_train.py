@@ -19,25 +19,30 @@ def choose_features(model, top_k=20):
 
 def compute_auc(model,k, raw_x, raw_y, test_x, test_y, mode ="F"):
     if mode == "F" or mode == "MI":
-        univ = sklearn.feature_selection.f_classif if mode=="F" else sklearn.feature_selection.mutual_info_classif
+        if mode == "F":
+            univ = sklearn.feature_selection.f_classif 
+        elif mode == "MI":
+            univ = sklearn.feature_selection.mutual_info_classif
+        elif mode == "chi2":
+            univ = sklearn.feature_selection.chi2
+
         selector = sklearn.feature_selection.SelectKBest(univ, k=k).fit(raw_x,raw_y)
         x = selector.transform(raw_x)
-        x_test = selector.transform(test_x)
+        test_x = selector.transform(test_x)
     
     elif mode == "NAS":
         top_k = choose_features(model, top_k=k)
 
-        x = [elem[top_k.indices[0].cpu().numpy()] for elem in raw_x]
-        x_test = [elem[top_k.indices[0].cpu().numpy()] for elem in test_x]
-        # dset_train = list(dset_train) 
+        x = [elem.view(-1)[top_k.indices[0].cpu().numpy()] for elem in raw_x]
+        test_x = [elem.view(-1)[top_k.indices[0].cpu().numpy()] for elem in test_x]
     
     elif mode == "lasso" or mode == "logistic_l1" or mode == "tree":
         selector = sklearn.feature_selection.SelectFromModel(model, prefit=True, threshold=-np.inf, max_features=k)
         x = selector.transform(raw_x)
-        x_test = selector.transform(test_x)
+        test_x = selector.transform(test_x)
     
     clf = LogisticRegression(max_iter=1000).fit(x,raw_y)
-    preds = clf.predict_proba(x_test)
+    preds = clf.predict_proba(test_x)
     auc_score = sklearn.metrics.roc_auc_score(test_y, preds[:, 1])
 
     return auc_score   

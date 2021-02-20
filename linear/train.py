@@ -43,6 +43,7 @@ from sklearn.ensemble import ExtraTreesClassifier
 
 def train_bptt(
     num_epochs: int,
+    steps_per_epoch:int,
     model,
     criterion,
     w_optimizer,
@@ -93,6 +94,9 @@ def train_bptt(
         
         val_iter = iter(val_loader)
         for batch_idx, batch in enumerate(train_loader):
+            
+            if steps_per_epoch is not None and batch_idx > steps_per_epoch:
+                break
 
             to_log = {}
 
@@ -109,19 +113,9 @@ def train_bptt(
             weight_buffer = WeightBuffer(T=T, checkpoint_freq=w_checkpoint_freq)
             weight_buffer.add(model, 0)
 
-
-
-
             for intra_batch_idx, (x, y) in enumerate(zip(xs, ys),1):
                 x = x.to(device)
                 y = y.to(device)
-
-
-                # y_pred = model(x)
-
-                # param_norm = calculate_weight_decay(model, a_order=1, a_coef=0.0, adaptive_decay=True)
-
-                # loss = criterion(y_pred, y) + param_norm
                 loss = compute_train_loss(x=x,y=y,criterion=criterion, model=model)
                 epoch_loss.update(loss.item())
 
@@ -145,16 +139,6 @@ def train_bptt(
                         "Epoch": epoch,
                         "Batch": true_batch_index,
                     })
-
-                # if true_batch_index % logging_freq == 0:
-                #     print(
-                #         "Epoch: {}, Batch: {}, Loss: {}, Alphas: {}".format(
-                #             epoch,
-                #             true_batch_index,
-                #             epoch_loss.avg,
-                #             [x.data for x in model.arch_params()],
-                #         )
-                #     )
 
             if train_arch:
                 val_xs = None
@@ -267,8 +251,8 @@ def train_bptt(
                         epoch,
                         true_batch_index,
                         epoch_loss.avg,
-                        [x.data for x in model.arch_params()] if len(list(model.weight_params())) < 20 else 'Too long',
-                        [x.data for x in model.weight_params()] if len(list(model.weight_params())) < 20 else 'Too long'
+                        [x.data for x in model.arch_params()] if len(str([x.data for x in model.arch_params()])) < 20 else 'Too long',
+                        [x.data for x in model.weight_params()] if len(str([x.data for x in model.arch_params()])) < 20 else 'Too long'
                     )
                 )
 
@@ -283,11 +267,11 @@ def train_bptt(
 
         auc=None
         if model.model_type in ['sigmoid']:
-            raw_x = [pair[0].numpy() for pair in dset_train]
-            raw_y = [pair[1].numpy() for pair in dset_train]
+            raw_x = [pair[0].view(-1).numpy() for pair in dset_train]
+            raw_y = [pair[1].numpy() if type(pair[1]) != int else pair[1] for pair in dset_train]
 
-            test_x = [pair[0].numpy() for pair in dset_test]
-            test_y = [pair[1].numpy() for pair in dset_test]
+            test_x = [pair[0].view(-1).numpy() for pair in dset_test]
+            test_y = [pair[1].numpy() if type(pair[1]) != int else pair[1] for pair in dset_test]
 
             auc = compute_auc(model=model, raw_x=raw_x, raw_y=raw_y, test_x=test_x, test_y=test_y, k=25, mode="NAS")
 
@@ -327,6 +311,7 @@ def valid_func(model, dset_val, criterion, device = 'cuda' if torch.cuda.is_avai
 
 
 def main(num_epochs = 5,
+    steps_per_epoch=5,
     batch_size = 64,
     D = 18,
     N = 50000,
@@ -352,10 +337,10 @@ def main(num_epochs = 5,
     grad_inner_loop_order=-1,
     grad_outer_loop_order=-1,
     model_type="sigmoid",
-    dataset="gisette",
+    dataset="MNIST",
     device= 'cuda' if torch.cuda.is_available() else 'cpu',
     train_arch=True,
-    dry_run=False,
+    dry_run=True,
     hinge_loss=0.25,
     mode = "bilevel"
     ):
@@ -374,14 +359,18 @@ def main(num_epochs = 5,
     ### MODEL INIT
     # x, y = data_generator(N, max_order_generated=D, max_order_y=[(5,7), (9,13)], noise_var=0.25, featurize_type='fourier')
     # x, y = get_datasets("songs")
-
-    dset_train, dset_val, dset_test, task, n_classes = get_datasets(name=dataset, data_size=N, max_order_generated=D,
+    dataset_info = get_datasets(name=dataset, data_size=N, max_order_generated=D,
         max_order_y=max_order_y,
         noise_var=noise_var,
         featurize_type=featurize_type)
+    dset_train = dataset_info["dset_train"]
+    dset_val = dataset_info["dset_val"]
+    dset_test = dataset_info["dset_test"]
+    task = dataset_info["task"]
+    n_classes = dataset_info["n_classes"]
+    n_features = dataset_info["n_features"]
 
-
-    model = SoTLNet(num_features=int(len(dset_train[0][0])), model_type=model_type, 
+    model = SoTLNet(num_features=int(len(dset_train[0][0])) if n_features is None else n_features, model_type=model_type, 
         degree=initial_degree, weight_decay=extra_weight_decay, task=task, n_classes=n_classes)
     model = model.to(device)
 
@@ -391,6 +380,7 @@ def main(num_epochs = 5,
 
     train_bptt(
         num_epochs=num_epochs,
+        steps_per_epoch=steps_per_epoch,
         model=model,
         criterion=criterion,
         w_optimizer=w_optimizer,
@@ -440,27 +430,28 @@ def main(num_epochs = 5,
         except:
             print("No model degree info; probably a different model_type was chosen")
     if model_type in ["sigmoid"]:
-        keys = ["F", "NAS", "lasso", "logistic_l1", "tree"]
+        keys = ["F", "NAS", "lasso", "logistic_l1", "tree", "chi2"]
         AUCs = {k:[] for k in keys}
-        raw_x = [pair[0].numpy() for pair in dset_train]
-        raw_y = [pair[1].numpy() for pair in dset_train]
+        raw_x = [pair[0].view(-1).numpy() for pair in dset_train]
+        raw_y = [pair[1].numpy() if type(pair[1]) != int else pair[1] for pair in dset_train]
 
-        test_x = [pair[0].numpy() for pair in dset_test]
-        test_y = [pair[1].numpy() for pair in dset_test]
+        test_x = [pair[0].view(-1).numpy() for pair in dset_test]
+        test_y = [pair[1].numpy() if type(pair[1]) != int else pair[1] for pair in dset_test]
 
-        clf_logistic = LogisticRegression(penalty='l1', solver='liblinear', C=1, max_iter=3000).fit(raw_x, raw_y)
-        clf_tree = ExtraTreesClassifier(n_estimators = 50).fit(raw_x, raw_y)
-        clf_lasso = sklearn.linear_model.Lasso().fit(raw_x,raw_y)
+        models_to_train = {"logistic_l1":LogisticRegression(penalty='l1', solver='saga', C=1, max_iter=300),
+        "tree":ExtraTreesClassifier(n_estimators = 100), 
+        "lasso":sklearn.linear_model.Lasso()}
+        for k in tqdm(models_to_train.keys(), desc="Training baselines models for AUC computations"):
+            models_to_train[k].fit(raw_x, raw_y)
+
+        models = {**models_to_train,
+         "F":None, "chi2":None, "DFS-NAS":model}
 
         for k in tqdm(range(1, 100), desc="Computing AUCs for different top-k features"):
 
-            AUCs["NAS"].append(compute_auc(model, k, raw_x, raw_y, test_x, test_y, mode="NAS"))
+            for key, clf_model in models.items():
+                AUCs[key].append(compute_auc(clf_model, k, raw_x, raw_y, test_x, test_y, mode = key))
 
-            # AUCs["MI"].append(auc_score_MI)
-            AUCs["F"].append(compute_auc(None, k, raw_x, raw_y, test_x, test_y, mode="F"))
-            AUCs["lasso"].append(compute_auc(clf_lasso, k, raw_x, raw_y, test_x, test_y, mode ="lasso"))
-            AUCs["logistic_l1"].append(compute_auc(clf_logistic, k, raw_x, raw_y, test_x, test_y, mode = "logistic_l1"))
-            AUCs["tree"].append(compute_auc(clf_tree, k, raw_x, raw_y, test_x, test_y, mode = "tree"))
             wandb.log({**{key:AUCs[key][k-1] for key in keys}, "k":k})
 
 if __name__ == "__main__":
@@ -475,6 +466,7 @@ if __name__ == "__main__":
 
 
 num_epochs = 50
+steps_per_epoch=5
 batch_size = 64
 D = 18
 N = 50000
@@ -502,9 +494,9 @@ grad_inner_loop_order=-1
 grad_outer_loop_order=-1
 arch_train_data="sotl"
 model_type="sigmoid"
-dataset="gisette"
+dataset="MNIST"
 device = 'cpu'
 train_arch=True
-dry_run=False
+dry_run=True
 mode="bilevel"
 config=locals()

@@ -37,6 +37,8 @@ class SoTLNet(RegressionNet):
         super().__init__(**kwargs)
         self.model_type = model_type
         self.task = task
+        self.num_features = num_features
+        self.n_classes = n_classes
         if task == 'reg':
             assert n_classes == 1
         if model_type == "softmax_mult":
@@ -65,6 +67,7 @@ class SoTLNet(RegressionNet):
         else:
             self.alpha_weight_decay = torch.tensor(0)
     def forward(self, x, weight=None, alphas=None):
+        x = x.view(-1, self.num_features)
         return self.model(x, weight, alphas)
 
 
