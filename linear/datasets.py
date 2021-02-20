@@ -130,7 +130,7 @@ def get_datasets(name, path=None, test_split=0.85, **kwargs):
             dset_train, [int(len(dset_train) * test_split), len(dset_train) - int(len(dset_train) * test_split)]
         )
 
-    if name in ['MNIST', 'CIFAR', 'gisette']:
+    if name in ['MNIST', 'CIFAR', 'gisette', "FashionMNIST"]:
         task = 'clf'
     else:
         task = 'reg'

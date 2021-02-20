@@ -1,4 +1,4 @@
-# python linear/train.py --model_type=sigmoid --dataset=MNIST --dry_run=False --grad_outer_loop_order=None --mode=bilevel --device=cpu --initial_degree 1 --hvp=finite_diff --num_epochs=50 --w_lr=0.01 --T=10 
+# python linear/train.py --model_type=sigmoid --dataset=FashionMNIST --dry_run=False --grad_outer_loop_order=None --mode=bilevel --device=cpu --initial_degree 1 --hvp=finite_diff --num_epochs=50 --w_lr=0.01 --T=10 
 # python linear/train.py --model_type=max_deg --dataset=fourier --dry_run=False --T=2 --grad_outer_loop_order=1 --grad_inner_loop_order=1 --mode=bilevel --device=cpu
 # python linear/train.py --model_type=MNIST --dataset=MNIST --dry_run=False --T=1 --w_warm_start=0 --grad_outer_loop_order=-1 --grad_inner_loop_order=-1 --mode=bilevel --device=cuda --extra_weight_decay=0.0001 --w_weight_decay=0 --arch_train_data=val
 
@@ -38,6 +38,7 @@ from sklearn.linear_model import LogisticRegression, Lasso
 import sklearn.metrics
 import sklearn.feature_selection
 from sklearn.ensemble import ExtraTreesClassifier
+from hessian_eigenthings import compute_hessian_eigenthings
 
 
 
@@ -72,7 +73,8 @@ def train_bptt(
     config: Dict,
     mode="joint",
     w_scheduler=None,
-    a_scheduler=None
+    a_scheduler=None,
+    hessian_tracking=True
 ):
     
     train_loader = torch.utils.data.DataLoader(
@@ -266,7 +268,7 @@ def train_bptt(
             model=model, dset_val=dset_test, criterion=criterion, device=device, print_results=False
         )
 
-        auc, mse = None, None
+        auc, mse, hessian_eigenvalue = None, None, None
         
         if model.model_type in ['sigmoid']:
             raw_x = [pair[0].view(-1).numpy() for pair in dset_train]
@@ -280,12 +282,16 @@ def train_bptt(
                 auc = compute_auc(model=model, raw_x=raw_x, raw_y=raw_y, test_x=test_x, test_y=test_y, k=25, mode="NAS")
             if dataset in ['MNIST']:
                 mse, acc = reconstruction_error(model=model,k=50, raw_x=raw_x, raw_y=raw_y, test_x=test_x, test_y=test_y)
+        if hessian_tracking:
+            eigenvals, eigenvecs = compute_hessian_eigenthings(model, train_loader,
+                                                    criterion, 1, full_dataset=False)
+            hessian_eigenvalue = eigenvals[0]              
 
 
 
-        print("Epoch: {}, Val Loss: {}, Test Loss: {}, Discretized AUC: {}, MSE: {}, Reconstruction Acc: {}".format(epoch, val_results.avg, test_results.avg, auc, mse, acc))
+        print("Epoch: {}, Val Loss: {}, Test Loss: {}, Discretized AUC: {}, MSE: {}, Reconstruction Acc: {}, Hess: {}".format(epoch, val_results.avg, test_results.avg, auc, mse, acc, hessian_eigenvalue))
         wandb.log({"Val loss": val_results.avg, "Test loss": test_results.avg, "AUC_training": auc, "MSE training":mse, 
-            "RecAcc training":acc, "Epoch": epoch})
+            "RecAcc training":acc, "Arch. Hessian spectral radius" "Epoch": epoch})
         wandb.run.summary["Grad compute speed"] = grad_compute_speed.avg
 
         print(f"Grad compute speed: {grad_compute_speed.avg}s")
@@ -350,7 +356,8 @@ def main(num_epochs = 5,
     train_arch=True,
     dry_run=True,
     hinge_loss=0.25,
-    mode = "bilevel"
+    mode = "bilevel",
+    hessian_tracking=True
     ):
     config = locals()
     if dry_run:
@@ -385,6 +392,13 @@ def main(num_epochs = 5,
     criterion = get_criterion(model_type, task).to(device)
 
     w_optimizer, a_optimizer = get_optimizers(model, config)
+
+    # train_loader = torch.utils.data.DataLoader(
+    #     dset_train, batch_size=batch_size * T, shuffle=True
+    # )
+    # val_loader = torch.utils.data.DataLoader(dset_val, batch_size=batch_size)
+    # grad_compute_speed = AverageMeter()
+
 
     train_bptt(
         num_epochs=num_epochs,
@@ -504,7 +518,7 @@ normalize_a_lr=True
 w_warm_start=0
 log_grad_norm=True
 log_alphas=False
-extra_weight_decay=0.0001
+extra_weight_decay=0.0000
 grad_inner_loop_order=-1
 grad_outer_loop_order=-1
 arch_train_data="sotl"
@@ -514,4 +528,5 @@ device = 'cpu'
 train_arch=True
 dry_run=True
 mode="bilevel"
+hessian_tracking=False
 config=locals()
