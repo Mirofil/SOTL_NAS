@@ -480,7 +480,7 @@ def main(num_epochs = 5,
                     AUCs[key].append(compute_auc(clf_model, k, raw_x, raw_y, test_x, test_y, mode = key))
 
                 wandb.log({**{key:AUCs[key][k-1] for key in keys}, "k":k})
-        elif dataset == 'MNIST':
+        elif dataset in ['MNIST', 'FashionMNIST']:
             mse, acc = reconstruction_error(model=model, k=50, raw_x=raw_x, raw_y=raw_y, test_x=test_x, test_y=test_y)
             wandb.log({"MSE":mse, "RecAcc":acc})
 
