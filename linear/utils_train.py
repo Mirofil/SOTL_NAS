@@ -1,6 +1,48 @@
 import torch
 import torch.nn as nn
 from torch.optim import SGD, Adam
+import sklearn.metrics
+import sklearn.feature_selection
+from sklearn.linear_model import LogisticRegression, Lasso
+import numpy as np
+
+
+def choose_features(model, top_k=20):
+    if model.model_type == 'sigmoid':
+        top_k = torch.topk(model.fc1.alphas, k=top_k)
+
+    else:
+        raise NotImplementedError
+
+    return top_k
+
+def compute_auc(model,k, raw_x, raw_y, test_x, test_y, mode ="F"):
+    if mode == "F" or mode == "MI":
+        univ = sklearn.feature_selection.f_classif if mode=="F" else sklearn.feature_selection.mutual_info_classif
+        selector = sklearn.feature_selection.SelectKBest(univ, k=k).fit(raw_x,raw_y)
+        x = selector.transform(raw_x)
+        x_test = selector.transform(test_x)
+        clf = LogisticRegression().fit(x, raw_y)
+    
+    elif mode == "NAS":
+        top_k = choose_features(model, top_k=k)
+
+        x = [elem[top_k.indices[0].cpu().numpy()] for elem in raw_x]
+        x_test = [elem[top_k.indices[0].cpu().numpy()] for elem in test_x]
+        # dset_train = list(dset_train) 
+        clf = LogisticRegression().fit(x,raw_y)
+    
+    elif mode == "lasso" or mode == "logistic_l1":
+        selector = sklearn.feature_selection.SelectFromModel(model, prefit=True, threshold=-np.inf, max_features=k)
+        x = selector.transform(raw_x)
+        x_test = selector.transform(test_x)
+        clf = LogisticRegression().fit(x,raw_y)
+
+
+    preds = clf.predict_proba(x_test)
+    auc_score = sklearn.metrics.roc_auc_score(test_y, preds[:, 1])
+
+    return auc_score   
 
 def calculate_weight_decay(model, alpha_w_order=None, w_order=None, adaptive_decay=None, a_order=1, a_coef=0.1, w_coef=0.001):
     param_norm=0
@@ -35,7 +77,7 @@ def compute_train_loss(x, y, criterion, model, y_pred=None, alpha_w_order=None, 
 
     param_norm = calculate_weight_decay(model, alpha_w_order=alpha_w_order, w_order=w_order,adaptive_decay=adaptive_decay, a_order=a_order, a_coef=a_coef, w_coef=w_coef)
 
-    loss = criterion(y_pred, y) + param_norm
+    loss = criterion(y_pred, y.long()) + param_norm
 
     return loss
 def switch_weights(model, weight_buffer_elem):
@@ -68,11 +110,11 @@ def get_optimizers(model, config):
     return w_optimizer, a_optimizer
 
 
-def get_criterion(model_type):
+def get_criterion(model_type, task):
     criterion=None
-    if model_type in ["MNIST", "log_regression"]:
+    if model_type in ["MNIST", "log_regression"] or task == 'clf':
         criterion = torch.nn.CrossEntropyLoss()
-    elif model_type in ["max_deg", "softmax_mult", "linear", "fourier", "polynomial", "sigmoid"]:
+    elif model_type in ["max_deg", "softmax_mult", "linear", "fourier", "polynomial", "sigmoid"] or task == 'reg':
         criterion = torch.nn.MSELoss()
     
     return criterion

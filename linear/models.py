@@ -32,26 +32,30 @@ class RegressionNet(torch.nn.Module):
                 continue
 
 class SoTLNet(RegressionNet):
-    def __init__(self, num_features = 2, model_type = "softmax_mult", weight_decay=0, **kwargs):
+    def __init__(self, num_features = 2, task='reg', model_type = "softmax_mult",
+     weight_decay=0, n_classes=1, **kwargs):
         super().__init__(**kwargs)
         self.model_type = model_type
+        self.task = task
+        if task == 'reg':
+            assert n_classes == 1
         if model_type == "softmax_mult":
-            self.fc1 = LinearSquash(num_features, 1, bias=False, squash_type="softmax", **kwargs)
+            self.fc1 = LinearSquash(num_features, n_classes, bias=False, squash_type="softmax", **kwargs)
             self.model = self.fc1
         elif model_type == "sigmoid":
-            self.fc1 = LinearSquash(num_features, 1, bias=False, squash_type="sigmoid", **kwargs)
+            self.fc1 = LinearSquash(num_features, n_classes, bias=False, squash_type="sigmoid", **kwargs)
             self.model = self.fc1
         elif model_type == "max_deg":
-            self.fc1 = LinearMaxDeg(num_features, 1, bias=False, **kwargs)
+            self.fc1 = LinearMaxDeg(num_features, n_classes, bias=False, **kwargs)
 
             self.model = self.fc1
         elif model_type == "linear":
-            self.fc1 = FlexibleLinear(num_features, 1, bias=False)
+            self.fc1 = FlexibleLinear(num_features, n_classes, bias=False)
             self.model = self.fc1
         elif model_type == "MNIST" or model_type == "MLP":
-            self.model = MLP(input_dim=28*28,hidden_dim=1000,output_dim=10, weight_decay=weight_decay)
+            self.model = MLP(input_dim=28*28,hidden_dim=1000,output_dim=n_classes, weight_decay=weight_decay)
         elif model_type == "log_regression":
-            self.model = LogReg(input_dim=28*28, output_dim=10)
+            self.model = LogReg(input_dim=28*28, output_dim=n_classes)
         else:
             raise NotImplementedError
         self.alphas = []
@@ -62,6 +66,7 @@ class SoTLNet(RegressionNet):
             self.alpha_weight_decay = torch.tensor(0)
     def forward(self, x, weight=None, alphas=None):
         return self.model(x, weight, alphas)
+
 
     def adaptive_weight_decay(self):
         return torch.sum(torch.abs(self.fc1.weight*self.fc1.compute_deg_constants()))

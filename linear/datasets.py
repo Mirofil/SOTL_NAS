@@ -7,6 +7,7 @@ import numpy as np
 import torch
 import os
 def get_datasets(name, path=None, test_split=0.85, **kwargs):
+    n_classes = 1
     if name == "songs":
         if path is None:
             path = r"C:\Users\kawga\Documents\Oxford\thesis\data\YearPredictionMSD.txt"
@@ -45,11 +46,16 @@ def get_datasets(name, path=None, test_split=0.85, **kwargs):
         classes= np.array(classes).astype(int)
         classes=classes[:,0]
         classes = torch.tensor(classes, dtype=torch.float32)
+        classes[classes == -1] = 0
 
         dset = torch.utils.data.TensorDataset(data, classes)
         dset_train, dset_test = torch.utils.data.random_split(
             dset, [int(len(dset) * test_split), len(dset) - int(len(dset) * test_split)]
         )
+
+
+
+        n_classes = 2
 
     elif name == "fourier":
         x, y = data_generator(
@@ -62,6 +68,8 @@ def get_datasets(name, path=None, test_split=0.85, **kwargs):
         dset_train, dset_test = torch.utils.data.random_split(
             dset, [int(len(dset) * test_split), len(dset) - int(len(dset) * test_split)]
         )
+
+        n_classes = 1
     elif name == "MNIST":
         dset_train = datasets.MNIST('./data', train=True, download=True,
                 transform=transforms.Compose([
@@ -70,7 +78,8 @@ def get_datasets(name, path=None, test_split=0.85, **kwargs):
                 ]))
 
         dset_test = datasets.MNIST('./data', train=False, transform=transforms.Compose([transforms.ToTensor(), transforms.Normalize((0.1307,), (0.3081,))]))
-    
+        n_classes = 10
+
     elif name == "CIFAR":
         normalize = transforms.Normalize(mean=[0.485, 0.456, 0.406],
                                          std=[0.229, 0.224, 0.225])
@@ -85,9 +94,15 @@ def get_datasets(name, path=None, test_split=0.85, **kwargs):
                 transforms.ToTensor(),
                 normalize,
             ]))
+        n_classes = 10
     
     dset_train, dset_val = torch.utils.data.random_split(
             dset_train, [int(len(dset_train) * test_split), len(dset_train) - int(len(dset_train) * test_split)]
         )
 
-    return dset_train, dset_val, dset_test
+    if name in ['MNIST', 'CIFAR', 'gisette']:
+        task = 'clf'
+    else:
+        task = 'reg'
+
+    return dset_train, dset_val, dset_test, task, n_classes

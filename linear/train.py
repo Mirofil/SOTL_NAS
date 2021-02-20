@@ -1,4 +1,4 @@
-# python linear/train.py --model_type=sigmoid --dataset=fourier --dry_run=False --grad_outer_loop_order=None --mode=joint --device=cpu --initial_degree 1 --hvp=exact
+# python linear/train.py --model_type=sigmoid --dataset=gisette --dry_run=False --grad_outer_loop_order=None --mode=joint --device=cpu --initial_degree 1 --hvp=finite_diff --num_epochs=75
 # python linear/train.py --model_type=max_deg --dataset=fourier --dry_run=False --T=2 --grad_outer_loop_order=1 --grad_inner_loop_order=1 --mode=bilevel --device=cpu
 # python linear/train.py --model_type=MNIST --dataset=MNIST --dry_run=False --T=1 --w_warm_start=0 --grad_outer_loop_order=-1 --grad_inner_loop_order=-1 --mode=bilevel --device=cuda --extra_weight_decay=0.0001 --w_weight_decay=0 --arch_train_data=val
 
@@ -23,16 +23,20 @@ from utils import (
     eval_features,
     featurize,
     hessian,
-    jacobian,
+    jacobian
 )
 from models import SoTLNet
 from sotl_gradient import sotl_gradient, WeightBuffer
 import scipy.linalg
 import time
 import fire
-from utils_train import get_criterion, hinge_loss, get_optimizers, switch_weights, compute_train_loss, calculate_weight_decay
+from utils_train import (get_criterion, hinge_loss, get_optimizers, switch_weights, 
+compute_train_loss, calculate_weight_decay, compute_auc)
 from tqdm import tqdm
 from typing import *
+from sklearn.linear_model import LogisticRegression, Lasso
+import sklearn.metrics
+import sklearn.feature_selection
 
 def train_bptt(
     num_epochs: int,
@@ -269,8 +273,24 @@ def train_bptt(
         val_results = valid_func(
             model=model, dset_val=dset_val, criterion=criterion, device=device, print_results=False
         )
-        print("Epoch: {}, Val Loss: {}".format(epoch, val_results.avg))
-        wandb.log({"Val loss": val_results.avg, "Epoch": epoch})
+
+        test_results = valid_func(
+            model=model, dset_val=dset_test, criterion=criterion, device=device, print_results=False
+        )
+
+        auc=None
+        if model.model_type in ['sigmoid']:
+            raw_x = [pair[0].numpy() for pair in dset_train]
+            raw_y = [pair[1].numpy() for pair in dset_train]
+
+            test_x = [pair[0].numpy() for pair in dset_test]
+            test_y = [pair[1].numpy() for pair in dset_test]
+
+            auc = compute_auc(model=model, raw_x=raw_x, raw_y=raw_y, test_x=test_x, test_y=test_y, k=25, mode="NAS")
+
+
+        print("Epoch: {}, Val Loss: {}, Test Loss: {}, Discretized AUC: {}".format(epoch, val_results.avg, test_results.avg, auc))
+        wandb.log({"Val loss": val_results.avg, "Test loss": test_results.avg, "AUC": auc, "Epoch": epoch})
         wandb.run.summary["Grad compute speed"] = grad_compute_speed.avg
 
         print(f"Grad compute speed: {grad_compute_speed.avg}s")
@@ -294,7 +314,7 @@ def valid_func(model, dset_val, criterion, device = 'cuda' if torch.cuda.is_avai
                 correct = torch.sum((predicted == y)).item()
                 total = predicted.size()[0]
                 val_acc_meter.update(correct/total)
-            val_loss = criterion(y_pred, y)
+            val_loss = criterion(y_pred, y.long())
             val_meter.update(val_loss.item())
     if print_results:
         print("Val loss: {}, Val acc: {}".format(val_meter.avg, val_acc_meter.avg if val_acc_meter.avg > 0 else "Not applicable"))
@@ -309,7 +329,7 @@ def main(num_epochs = 50,
     N = 50000,
     w_lr = 1e-3,
     w_momentum=0.0,
-    w_weight_decay=1e-3,
+    w_weight_decay=0,
     a_lr = 1e-2,
     a_momentum = 0.0,
     a_weight_decay = 0,
@@ -321,7 +341,7 @@ def main(num_epochs = 50,
     noise_var=0.25,
     featurize_type="fourier",
     initial_degree=15,
-    hvp="exact",
+    hvp="finite_diff",
     arch_train_data="sotl",
     normalize_a_lr=True,
     w_warm_start=3,
@@ -352,15 +372,17 @@ def main(num_epochs = 50,
     # x, y = data_generator(N, max_order_generated=D, max_order_y=[(5,7), (9,13)], noise_var=0.25, featurize_type='fourier')
     # x, y = get_datasets("songs")
 
-    dset_train, dset_val, dset_test = get_datasets(name=dataset, data_size=N, max_order_generated=D,
+    dset_train, dset_val, dset_test, task, n_classes = get_datasets(name=dataset, data_size=N, max_order_generated=D,
         max_order_y=max_order_y,
         noise_var=noise_var,
         featurize_type=featurize_type)
 
-    model = SoTLNet(num_features=int(len(dset_train[0][0])), model_type=model_type, degree=initial_degree, weight_decay=extra_weight_decay)
+
+    model = SoTLNet(num_features=int(len(dset_train[0][0])), model_type=model_type, 
+        degree=initial_degree, weight_decay=extra_weight_decay, task=task, n_classes=n_classes)
     model = model.to(device)
 
-    criterion = get_criterion(model_type).to(device)
+    criterion = get_criterion(model_type, task).to(device)
 
     w_optimizer, a_optimizer = get_optimizers(model, config)
 
@@ -393,8 +415,6 @@ def main(num_epochs = 50,
         config=config,
         mode=mode
     )
-    # train_normal(num_epochs=num_epochs, model=model, dset_train=dset_train,
-    #     logging_freq=logging_freq, batch_size=batch_size, grad_clip=grad_clip, optim="sgd")
     if model_type in ["max_deg", "softmax_mult", "linear"]:
         lapack_solution, res, eff_rank, sing_values = scipy.linalg.lstsq(dset_train[:][0], dset_train[:][1])
         print(f"Cond number:{abs(sing_values.max()/sing_values.min())}")
@@ -416,6 +436,29 @@ def main(num_epochs = 50,
             wandb.run.summary["degree_mismatch"] = abs(true_degree-trained_degree)
         except:
             print("No model degree info; probably a different model_type was chosen")
+    if model_type in ["sigmoid"]:
+        keys = ["F", "NAS", "lasso", "logistic_l1"]
+        AUCs = {k:[] for k in keys}
+        raw_x = [pair[0].numpy() for pair in dset_train]
+        raw_y = [pair[1].numpy() for pair in dset_train]
+
+        test_x = [pair[0].numpy() for pair in dset_test]
+        test_y = [pair[1].numpy() for pair in dset_test]
+
+        clf_logistic = LogisticRegression(penalty='l1', solver='liblinear').fit(raw_x, raw_y)
+
+        clf_lasso = sklearn.linear_model.Lasso().fit(raw_x,raw_y)
+
+        for k in tqdm(range(1, 100), desc="Computing AUCs for different top-k features"):
+
+            AUCs["NAS"].append(compute_auc(model, k, raw_x, raw_y, test_x, test_y, mode="NAS"))
+
+            # AUCs["MI"].append(auc_score_MI)
+            AUCs["F"].append(compute_auc(None, k, raw_x, raw_y, test_x, test_y, mode="F"))
+            AUCs["lasso"].append(compute_auc(clf_lasso, k, raw_x, raw_y, test_x, test_y, mode ="lasso"))
+            AUCs["logistic_l1"].append(compute_auc(clf_logistic, k, raw_x, raw_y, test_x, test_y, mode = "logistic_l1"))
+
+            wandb.log({**{key:AUCs[key][k-1] for key in keys}, "k":k})
 
 if __name__ == "__main__":
     try:
@@ -432,7 +475,7 @@ num_epochs = 50
 batch_size = 64
 D = 18
 N = 50000
-w_lr = 1e-3
+w_lr = 1e-1
 w_momentum=0.0
 w_weight_decay=0.0
 a_lr = 3e-2
@@ -446,7 +489,7 @@ max_order_y=7
 noise_var=0.25
 featurize_type="fourier"
 initial_degree=2
-hvp="exact"
+hvp="finite_diff"
 normalize_a_lr=True
 w_warm_start=0
 log_grad_norm=True
@@ -456,7 +499,7 @@ grad_inner_loop_order=-1
 grad_outer_loop_order=-1
 arch_train_data="sotl"
 model_type="sigmoid"
-dataset="fourier"
+dataset="gisette"
 device = 'cpu'
 train_arch=True
 dry_run=False
