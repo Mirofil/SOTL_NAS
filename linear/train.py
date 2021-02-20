@@ -293,7 +293,7 @@ def train_bptt(
 
         print("Epoch: {}, Val Loss: {}, Test Loss: {}, Discretized AUC: {}, MSE: {}, Reconstruction Acc: {}, Hess: {}".format(epoch, val_results.avg, test_results.avg, auc, mse, acc, hessian_eigenvalue))
         wandb.log({"Val loss": val_results.avg, "Test loss": test_results.avg, "AUC_training": auc, "MSE training":mse, 
-            "RecAcc training":acc, "Arch. Hessian domin. eigenvalue" "Epoch": epoch})
+            "RecAcc training":acc, "Arch. Hessian domin. eigenvalue": hessian_eigenvalue, "Epoch": epoch})
         wandb.run.summary["Grad compute speed"] = grad_compute_speed.avg
 
         print(f"Grad compute speed: {grad_compute_speed.avg}s")
