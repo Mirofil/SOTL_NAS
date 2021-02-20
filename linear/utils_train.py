@@ -47,7 +47,7 @@ def compute_auc(model,k, raw_x, raw_y, test_x, test_y, mode ="F"):
         x = selector.transform(raw_x)
         test_x = selector.transform(test_x)
     
-    elif mode == "NAS":
+    elif mode in ["NAS", "DFS-NAS"]:
         top_k = choose_features(model, top_k=k)
 
         x = [elem[top_k.indices[0].cpu().numpy()] for elem in raw_x]

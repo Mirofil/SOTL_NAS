@@ -1,4 +1,4 @@
-# python linear/train.py --model_type=sigmoid --dataset=gisette --dry_run=False --grad_outer_loop_order=None --mode=bilevel --device=cuda --initial_degree 1 --hvp=finite_diff --num_epochs=50 --w_lr=0.01 --T=10 
+# python linear/train.py --model_type=sigmoid --dataset=gisette --dry_run=False --grad_outer_loop_order=None --mode=bilevel --device=cuda --initial_degree 1 --hvp=finite_diff --num_epochs=50 --w_lr=0.01 --T=3 
 # python linear/train.py --model_type=max_deg --dataset=fourier --dry_run=False --T=2 --grad_outer_loop_order=1 --grad_inner_loop_order=1 --mode=bilevel --device=cpu
 # python linear/train.py --model_type=MNIST --dataset=MNIST --dry_run=False --T=1 --w_warm_start=0 --grad_outer_loop_order=-1 --grad_inner_loop_order=-1 --mode=bilevel --device=cuda --extra_weight_decay=0.0001 --w_weight_decay=0 --arch_train_data=val
 
@@ -281,7 +281,7 @@ def train_bptt(
 
             if dataset in ['gisette']:
             # We need binary classification task for this to make sense
-                auc = compute_auc(model=model, raw_x=raw_x, raw_y=raw_y, test_x=test_x, test_y=test_y, k=25, mode="NAS")
+                auc = compute_auc(model=model, raw_x=raw_x, raw_y=raw_y, test_x=test_x, test_y=test_y, k=25, mode="DFS-NAS")
             if dataset in ['MNIST', 'FashionMNIST']:
                 mse, acc = reconstruction_error(model=model,k=50, raw_x=raw_x, raw_y=raw_y, test_x=test_x, test_y=test_y)
         if hessian_tracking:
@@ -462,7 +462,7 @@ def main(num_epochs = 5,
         test_x = [pair[0].view(-1).numpy() for pair in dset_test]
         test_y = [pair[1].numpy() if type(pair[1]) != int else pair[1] for pair in dset_test]
         if dataset == 'gisette':
-            keys = ["F", "NAS", "lasso", "logistic_l1", "tree", "chi2"]
+            keys = ["F", "DFS-NAS", "lasso", "logistic_l1", "tree", "chi2"]
             AUCs = {k:[] for k in keys}
 
             models_to_train = {"logistic_l1":LogisticRegression(penalty='l1', solver='saga', C=1, max_iter=300),
