@@ -98,6 +98,17 @@ def get_datasets(name, path=None, test_split=0.85, **kwargs):
         dset_test = datasets.MNIST('./data', train=False, transform=transforms.Compose([transforms.ToTensor(), transforms.Normalize((0.1307,), (0.3081,))]))
         n_classes = 10
         n_features=28*28
+    
+    elif name == "FashionMNIST":
+        dset_train = datasets.FashionMNIST('./data', train=True, download=True,
+                transform=transforms.Compose([
+                    transforms.ToTensor(),
+                    transforms.Normalize((0.1307,), (0.3081,))
+                ]))
+
+        dset_test = datasets.FashionMNIST('./data', train=False, transform=transforms.Compose([transforms.ToTensor(), transforms.Normalize((0.1307,), (0.3081,))]))
+        n_classes = 10
+        n_features=28*28
 
     elif name == "CIFAR":
         normalize = transforms.Normalize(mean=[0.485, 0.456, 0.406],
