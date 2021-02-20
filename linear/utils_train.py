@@ -31,14 +31,11 @@ def compute_auc(model,k, raw_x, raw_y, test_x, test_y, mode ="F"):
         x_test = [elem[top_k.indices[0].cpu().numpy()] for elem in test_x]
         # dset_train = list(dset_train) 
     
-    elif mode == "lasso" or mode == "logistic_l1":
+    elif mode == "lasso" or mode == "logistic_l1" or mode == "tree":
         selector = sklearn.feature_selection.SelectFromModel(model, prefit=True, threshold=-np.inf, max_features=k)
         x = selector.transform(raw_x)
         x_test = selector.transform(test_x)
     
-    elif mode == 'tree':
-        clf = ExtraTreesClassifier(n_estimators = 50).fit(raw_x, raw_y)
-
     clf = LogisticRegression(max_iter=1000).fit(x,raw_y)
     preds = clf.predict_proba(x_test)
     auc_score = sklearn.metrics.roc_auc_score(test_y, preds[:, 1])
