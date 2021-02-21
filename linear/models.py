@@ -69,14 +69,14 @@ class SoTLNet(RegressionNet):
             self.alpha_weight_decay = torch.tensor(0)
     def forward(self, x, weight=None, alphas=None, feature_indices=None):
         x = x.view(-1, self.num_features)
-        if feature_indices is not None:
-            for to_delete in range(x.shape[1]):
-                if to_delete not in feature_indices:
-                    x[:, to_delete] = 0 
-        elif self.feature_indices is not None:
-            for to_delete in range(x.shape[1]):
-                if to_delete not in self.feature_indices:
-                    x[:, to_delete] = 0 
+        # if feature_indices is not None:
+        #     for to_delete in range(x.shape[1]):
+        #         if to_delete not in feature_indices:
+        #             x[:, to_delete] = 0 
+        # elif self.feature_indices is not None:
+        #     for to_delete in range(x.shape[1]):
+        #         if to_delete not in self.feature_indices:
+        #             x[:, to_delete] = 0 
         return self.model(x, weight, alphas)
 
     def adaptive_weight_decay(self):

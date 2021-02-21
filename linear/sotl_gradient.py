@@ -149,7 +149,6 @@ def sotl_gradient(
                     dalpha_pos = [a if (a is not None) else torch.zeros(list(model.arch_params())[i].size()).to(device) for i, a in enumerate(torch.autograd.grad(
                         loss2, model.arch_params(), allow_unused=True
                     ))]  # dalpha { L_trn(w+) }
-
                     no_longer_needed_weights = switch_weights(model, old_weights)
 
                     # w- = w_{t-1} - eps*dL(w_t,alpha)dw

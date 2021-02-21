@@ -1,4 +1,4 @@
-# python linear/train.py --model_type=MLP --dataset=MNIST --dry_run=True --arch_train_data sotl --grad_outer_loop_order=None --mode=joint --device=cuda --initial_degree 1 --hvp=finite_diff --epochs=150 --w_lr=0.0001 --T=10 --a_lr=0.01 --hessian_tracking False --w_optim=Adam --a_optim=Adam --train_arch=True --a_weight_decay=1 --smoke_test True
+# python linear/train.py --model_type=sigmoid --dataset=gisette --dry_run=True --arch_train_data sotl --grad_outer_loop_order=None --mode=bilevel --device=cuda --initial_degree 1 --hvp=finite_diff --epochs=150 --w_lr=0.0001 --T=10 --a_lr=0.01 --hessian_tracking False --w_optim=Adam --a_optim=Adam --train_arch=True --a_weight_decay=0.11 --smoke_test False
 # python linear/train.py --model_type=max_deg --dataset=fourier --dry_run=False --T=2 --grad_outer_loop_order=1 --grad_inner_loop_order=1 --mode=bilevel --device=cpu
 # python linear/train.py --model_type=MNIST --dataset=MNIST --dry_run=False --T=1 --w_warm_start=0 --grad_outer_loop_order=-1 --grad_inner_loop_order=-1 --mode=bilevel --device=cuda --extra_weight_decay=0.0001 --w_weight_decay=0 --arch_train_data=val
 
@@ -99,7 +99,7 @@ def train_bptt(
         
         val_iter = iter(val_loader)
         for batch_idx, batch in enumerate(train_loader):
-            
+            # print(model.fc1.weight[0:20])
             if steps_per_epoch is not None and batch_idx > steps_per_epoch:
                 break
 
@@ -206,7 +206,7 @@ def train_bptt(
                             to_log.update({"Alpha weight decay": model.alpha_weight_decay.item()})
 
                     a_optimizer.zero_grad()
-  
+
                     for g, w in zip(total_arch_gradient, model.arch_params()):
                         w.grad = g
                     torch.nn.utils.clip_grad_norm_(model.arch_params(), grad_clip)
@@ -302,7 +302,7 @@ def train_bptt(
 
         print(f"Grad compute speed: {grad_compute_speed.avg}s")
 
-
+        #NOTE this is end of epoch
         w_scheduler.step()
         if a_scheduler is not None:
             a_scheduler.step()
@@ -522,14 +522,14 @@ D = 18
 N = 50000
 w_optim='Adam'
 w_decay_order=2
-w_lr = 1e-1
+w_lr = 1e-3
 w_momentum=0.0
-w_weight_decay=0.0
+w_weight_decay=0.0001
 a_optim='Adam'
 a_decay_order=1
 a_lr = 3e-2
 a_momentum = 0.0
-a_weight_decay = 1
+a_weight_decay = 0.1
 T = 10
 grad_clip = 1
 logging_freq = 200
@@ -549,7 +549,7 @@ grad_outer_loop_order=-1
 arch_train_data="sotl"
 model_type="sigmoid"
 dataset="gisette"
-device = 'cpu'
+device = 'cuda'
 train_arch=True
 dry_run=True
 mode="bilevel"

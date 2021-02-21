@@ -104,13 +104,12 @@ def calculate_weight_decay(model, alpha_w_order=None, w_order=1, adaptive_decay=
         if model.model_type in ['sigmoid', 'MLP']:
             for arch_param in model.arch_params():
                 param_norm = param_norm + a_coef * torch.sum(torch.abs(torch.sigmoid(arch_param)))
-            else:
-                for arch_param in model.arch_params():
-                    param_norm = param_norm + a_coef * torch.sum(torch.abs(arch_param))
+        else:
+            for arch_param in model.arch_params():
+                param_norm = param_norm + a_coef * torch.sum(torch.abs(arch_param))
     if w_order is not None:
         for w_param in model.weight_params():
             param_norm = param_norm + w_coef * torch.pow(torch.norm(w_param, w_order), w_order)
-    
     return param_norm
 
 
