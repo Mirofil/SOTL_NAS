@@ -2,6 +2,7 @@ import torch
 from layers import LinearSquash, LinearMaxDeg, FlexibleLinear, FeatureSelection
 import torch.nn as nn
 import torch.nn.functional as F
+import itertools
 class RegressionNet(torch.nn.Module):
     def __init__(self, num_features = 2, **kwargs):
         super(RegressionNet, self).__init__()
@@ -46,6 +47,9 @@ class SoTLNet(RegressionNet):
             self.model = self.fc1
         elif model_type == "sigmoid":
             self.fc1 = LinearSquash(num_features, n_classes, bias=False, squash_type="sigmoid", **kwargs)
+            self.alpha_feature_selectors = self.fc1.alphas
+            self.feature_normalizers = self.fc1.weight
+            self.squash = torch.sigmoid
             self.model = self.fc1
         elif model_type == "max_deg":
             self.fc1 = LinearMaxDeg(num_features, n_classes, bias=False, **kwargs)

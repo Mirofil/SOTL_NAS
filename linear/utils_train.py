@@ -13,14 +13,16 @@ from sklearn.ensemble import ExtraTreesClassifier
 def choose_features(model, top_k=20, mode='normalized'):
     if model.model_type == 'sigmoid':
         if mode == 'alphas':
-            top_k = torch.topk(model.fc1.alphas.squeeze(), k=top_k)
+            scores = model.alpha_feature_selectors.squeeze()
+            top_k = torch.topk(scores, k=top_k)
         elif mode == 'normalized':
             # NOTE IMPORTANT THOUGHT - doing abs, then mean will give different effect than doing it the other way. If a feature has different signs based on the class predicted, 
             # is it good to drop it because it is conflicting? Or keep it when it has high magnitude and thus high discriminative power?
-            
-            top_k = torch.topk((model.fc1.squash_constants()*torch.mean(torch.abs(model.fc1.weight), dim=0)).squeeze(), k=top_k)
+            scores = (model.squash(model.alpha_feature_selectors)*torch.mean(torch.abs(model.feature_normalizers), dim=0)).squeeze()
+            top_k = torch.topk(scores, k=top_k)
         elif mode == 'weights':
-            top_k = torch.topk(torch.mean(torch.abs(model.fc1.weight), dim=0), k=top_k)
+            scores = torch.mean(torch.abs(model.feature_normalizers), dim=0)
+            top_k = torch.topk(scores, k=top_k)
 
     else:
         raise NotImplementedError
