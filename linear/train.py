@@ -1,8 +1,8 @@
-# python linear/train.py --model_type=sigmoid --dataset=gisette --dry_run=False --grad_outer_loop_order=None --mode=bilevel --device=cuda --initial_degree 1 --hvp=finite_diff --num_epochs=50 --w_lr=0.01 --T=3 
+# python linear/train.py --model_type=sigmoid --dataset=gisette --dry_run=False --arch_train_data val --grad_outer_loop_order=None --mode=bilevel --device=cuda --initial_degree 1 --hvp=finite_diff --num_epochs=100 --w_lr=0.01 --T=10 --a_lr=0.001
 # python linear/train.py --model_type=max_deg --dataset=fourier --dry_run=False --T=2 --grad_outer_loop_order=1 --grad_inner_loop_order=1 --mode=bilevel --device=cpu
 # python linear/train.py --model_type=MNIST --dataset=MNIST --dry_run=False --T=1 --w_warm_start=0 --grad_outer_loop_order=-1 --grad_inner_loop_order=-1 --mode=bilevel --device=cuda --extra_weight_decay=0.0001 --w_weight_decay=0 --arch_train_data=val
 
-#pip install git+https://github.com/Mirofil/pytorch-hessian-eigenthings.git
+#pip install --force git+https://github.com/Mirofil/pytorch-hessian-eigenthings.git
 
 import os
 import itertools
@@ -271,7 +271,7 @@ def train_bptt(
         )
 
         auc, acc, mse, hessian_eigenvalue = None, None, None, None
-        
+        best = {"auc":{"value":0, "alphas":None}, "acc":{"value":0, "alphas":None}}
         if model.model_type in ['sigmoid']:
             raw_x = [pair[0].view(-1).numpy() for pair in dset_train]
             raw_y = [pair[1].numpy() if type(pair[1]) != int else pair[1] for pair in dset_train]
@@ -282,8 +282,12 @@ def train_bptt(
             if dataset in ['gisette']:
             # We need binary classification task for this to make sense
                 auc = compute_auc(model=model, raw_x=raw_x, raw_y=raw_y, test_x=test_x, test_y=test_y, k=25, mode="DFS-NAS")
+                if auc > best["auc"]["value"]:
+                    best["auc"]["value"] = auc
+                    best["auc"]["alphas"] = model.fc1.alphas
             if dataset in ['MNIST', 'FashionMNIST']:
                 mse, acc = reconstruction_error(model=model,k=50, raw_x=raw_x, raw_y=raw_y, test_x=test_x, test_y=test_y)
+
         if hessian_tracking:
             eigenvals, eigenvecs = compute_hessian_eigenthings(model, train_loader,
                                                     criterion, 1, full_dataset=True)
@@ -297,6 +301,11 @@ def train_bptt(
         wandb.run.summary["Grad compute speed"] = grad_compute_speed.avg
 
         print(f"Grad compute speed: {grad_compute_speed.avg}s")
+    print(f"Best found metrics over validation: AUC {best['auc']['value']}")
+
+    if dataset in ['gisette']:
+        # Early stopping essentially. Put back the best performing alphas for checking the top-k performances in post-train stage
+        model.fc1.alphas = best["auc"]["alphas"]
 
 
 def valid_func(model, dset_val, criterion, device = 'cuda' if torch.cuda.is_available() else 'cpu', print_results=True):
@@ -336,7 +345,7 @@ def main(num_epochs = 5,
     w_weight_decay=0.001,
     a_lr = 1e-2,
     a_momentum = 0.0,
-    a_weight_decay = 0.1,
+    a_weight_decay = 0.0,
     T = 10,
     grad_clip = 1,
     logging_freq = 200,
@@ -465,7 +474,7 @@ def main(num_epochs = 5,
             keys = ["F", "DFS-NAS", "lasso", "logistic_l1", "tree", "chi2"]
             AUCs = {k:[] for k in keys}
 
-            models_to_train = {"logistic_l1":LogisticRegression(penalty='l1', solver='saga', C=1, max_iter=300),
+            models_to_train = {"logistic_l1":LogisticRegression(penalty='l1', solver='saga', C=1, max_iter=500),
             "tree":ExtraTreesClassifier(n_estimators = 100), 
             "lasso":sklearn.linear_model.Lasso()}
             for k in tqdm(models_to_train.keys(), desc="Training baselines models for AUC computations"):
