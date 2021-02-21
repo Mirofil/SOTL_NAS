@@ -15,7 +15,9 @@ def choose_features(model, top_k=20, mode='normalized'):
         if mode == 'alphas':
             top_k = torch.topk(model.fc1.alphas, k=top_k)
         elif mode == 'normalized':
-            top_k = torch.topk(model.fc1.squash_constants()*model.fc1.weight, k=top_k)
+            top_k = torch.topk(model.fc1.squash_constants()*torch.abs(model.fc1.weight), k=top_k)
+        elif mode == 'weights':
+            top_k = torch.topk(torch.abs(model.fc1.weight), k=top_k)
 
     else:
         raise NotImplementedError
@@ -39,7 +41,11 @@ def reconstruction_error(model, k, raw_x, raw_y, test_x, test_y, choose_features
     return mse, acc
 
 
-def compute_auc(model,k, raw_x, raw_y, test_x, test_y, mode ="F", choose_features_mode='normalized'):
+def compute_auc(model,k, raw_x, raw_y, test_x, test_y, mode ="F", choose_features_mode=None, verbose=True):
+    # if choose_features_mode is None and hasattr(model, "config"):
+    #     choose_features_mode = model.config["auc_features_mode"]
+    # else:
+    #     choose_features_mode = 'normalized'
     if mode in ["F", "MI", "chi2"]:
         if mode == "F":
             univ = sklearn.feature_selection.f_classif 
@@ -52,11 +58,21 @@ def compute_auc(model,k, raw_x, raw_y, test_x, test_y, mode ="F", choose_feature
         x = selector.transform(raw_x)
         test_x = selector.transform(test_x)
     
-    elif mode in ["NAS", "DFS-NAS"]:
-        top_k = choose_features(model, top_k=k, mode=choose_features_mode)
+    elif mode in ["NAS", "DFS-NAS", "DFS-NAS alphas", "DFS-NAS weights"]:
+        if mode == "DFS-NAS":
+            features_mode = 'normalized'
+        elif mode == 'DFS-NAS alphas':
+            features_mode = 'alphas'
+        elif mode == 'DFS-NAS weights':
+            features_mode = 'weights'
+        top_k = choose_features(model, top_k=k, mode=features_mode)
 
         x = [elem[top_k.indices[0].cpu().numpy()] for elem in raw_x]
         test_x = [elem[top_k.indices[0].cpu().numpy()] for elem in test_x]
+
+        if verbose:
+            print(f"Selected weights: {model.fc1.weight.view(-1)[top_k.indices[0]]}")
+            print(f"Selected alphas: {model.fc1.alphas.view(-1)[top_k.indices[0]]}")
     
     elif mode == "lasso" or mode == "logistic_l1" or mode == "tree":
         selector = sklearn.feature_selection.SelectFromModel(model, prefit=True, threshold=-np.inf, max_features=k)
@@ -66,8 +82,9 @@ def compute_auc(model,k, raw_x, raw_y, test_x, test_y, mode ="F", choose_feature
     clf = LogisticRegression(max_iter=1000).fit(x,raw_y)
     preds = clf.predict_proba(test_x)
     auc_score = sklearn.metrics.roc_auc_score(test_y, preds[:, 1])
+    acc = clf.score(test_x, test_y)
 
-    return auc_score   
+    return auc_score, acc
 
 def calculate_weight_decay(model, alpha_w_order=None, w_order=1, adaptive_decay=None, a_order=1, a_coef=1, w_coef=0.001):
     param_norm=0
@@ -94,13 +111,14 @@ def calculate_weight_decay(model, alpha_w_order=None, w_order=1, adaptive_decay=
     return param_norm
 
 
-def compute_train_loss(x, y, criterion, model, weight_decay=True, y_pred=None, alpha_w_order=None, w_order=1, adaptive_decay=False, a_order=1, a_coef=0.1, w_coef=0.1):
+def compute_train_loss(x, y, criterion, model, weight_decay=True, y_pred=None, alpha_w_order=None, w_order=None, adaptive_decay=False, a_order=None, a_coef=None, w_coef=None):
     assert model is not None or y_pred is not None
 
     if y_pred is None:
         y_pred = model(x)
     if weight_decay:
-        param_norm = calculate_weight_decay(model, alpha_w_order=alpha_w_order, w_order=w_order,adaptive_decay=adaptive_decay, a_order=a_order, a_coef=a_coef, w_coef=w_coef)
+        param_norm = calculate_weight_decay(model, alpha_w_order=alpha_w_order, w_order=model.config["w_decay_order"],adaptive_decay=adaptive_decay, a_order=model.config["a_decay_order"], 
+            a_coef=model.config["a_weight_decay"], w_coef=model.config["w_weight_decay"])
     else:
         param_norm = 0
 
@@ -131,7 +149,7 @@ def get_optimizers(model, config):
     elif config ['a_optim'] =='Adam':
         w_optimizer = Adam(model.weight_params(), lr=config["w_lr"], weight_decay=config["w_weight_decay"])
 
-    w_scheduler = torch.optim.lr_scheduler.StepLR(w_optimizer, round(config["epochs"]/5), gamma=0.2, verbose=False)
+    w_scheduler = torch.optim.lr_scheduler.StepLR(w_optimizer, max(round(config["epochs"]/5), 1), gamma=0.2, verbose=False)
     if config["train_arch"]:
         if config['a_optim'] == 'SGD':
             a_optimizer = SGD(model.arch_params(), lr=config["a_lr"], momentum=config["a_momentum"], weight_decay=config["a_weight_decay"])
@@ -143,7 +161,7 @@ def get_optimizers(model, config):
         a_optimizer = None
     
     if config["train_arch"]:
-        a_scheduler = torch.optim.lr_scheduler.StepLR(a_optimizer, round(config["epochs"]/5), gamma=0.2, verbose=False)
+        a_scheduler = torch.optim.lr_scheduler.StepLR(a_optimizer, max(round(config["epochs"]/5), 1), gamma=0.2, verbose=False)
     else:
         a_scheduler = None
 

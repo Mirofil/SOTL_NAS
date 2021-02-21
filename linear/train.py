@@ -1,4 +1,4 @@
-# python linear/train.py --model_type=sigmoid --dataset=gisette --dry_run=False --arch_train_data sotl --grad_outer_loop_order=None --mode=joint --device=cuda --initial_degree 1 --hvp=finite_diff --epochs=350 --w_lr=0.0001 --T=10 --a_lr=0.01 --hessian_tracking False --w_optim=Adam --a_optim=Adam --train_arch=False
+# python linear/train.py --model_type=sigmoid --dataset=gisette --dry_run=True --arch_train_data sotl --grad_outer_loop_order=None --mode=joint --device=cuda --initial_degree 1 --hvp=finite_diff --epochs=150 --w_lr=0.0001 --T=10 --a_lr=0.01 --hessian_tracking False --w_optim=Adam --a_optim=Adam --train_arch=True --a_weight_decay=1
 # python linear/train.py --model_type=max_deg --dataset=fourier --dry_run=False --T=2 --grad_outer_loop_order=1 --grad_inner_loop_order=1 --mode=bilevel --device=cpu
 # python linear/train.py --model_type=MNIST --dataset=MNIST --dry_run=False --T=1 --w_warm_start=0 --grad_outer_loop_order=-1 --grad_inner_loop_order=-1 --mode=bilevel --device=cuda --extra_weight_decay=0.0001 --w_weight_decay=0 --arch_train_data=val
 
@@ -271,7 +271,7 @@ def train_bptt(
         )
 
         auc, acc, mse, hessian_eigenvalue = None, None, None, None
-        best = {"auc":{"value":0, "alphas":None}, "acc":{"value":0, "alphas":None}}
+        best = {"auc":{"value":0, "alphas":None}, "acc":{"value":0, "alphas":None}} # TODO this needs to be outside of the for loop to be persisent. BUt I think Ill drop it for now regardless
         if model.model_type in ['sigmoid']:
             raw_x = [pair[0].view(-1).numpy() for pair in dset_train]
             raw_y = [pair[1].numpy() if type(pair[1]) != int else pair[1] for pair in dset_train]
@@ -281,7 +281,7 @@ def train_bptt(
 
             if dataset in ['gisette']:
             # We need binary classification task for this to make sense
-                auc = compute_auc(model=model, raw_x=raw_x, raw_y=raw_y, test_x=test_x, test_y=test_y, k=25, mode="DFS-NAS")
+                auc, acc = compute_auc(model=model, raw_x=raw_x, raw_y=raw_y, test_x=test_x, test_y=test_y, k=25, mode="DFS-NAS")
                 if auc > best["auc"]["value"]:
                     best["auc"]["value"] = auc
                     best["auc"]["alphas"] = model.fc1.alphas
@@ -348,12 +348,14 @@ def main(epochs = 5,
     N = 50000,
     w_optim='SGD',
     a_optim='SGD',
+    w_decay_order=2,
     w_lr = 1e-2,
     w_momentum=0.0,
-    w_weight_decay=0.001,
+    w_weight_decay=0.0001,
+    a_decay_order=1,
     a_lr = 1e-2,
     a_momentum = 0.0,
-    a_weight_decay = 0.0,
+    a_weight_decay = 1,
     T = 10,
     grad_clip = 1,
     logging_freq = 200,
@@ -376,7 +378,9 @@ def main(epochs = 5,
     dry_run=True,
     hinge_loss=0.25,
     mode = "bilevel",
-    hessian_tracking=True
+    hessian_tracking=True,
+    auc_features_mode="normalized",
+    smoke_test=False
     ):
     config = locals()
     if dry_run:
@@ -406,6 +410,7 @@ def main(epochs = 5,
 
     model = SoTLNet(num_features=int(len(dset_train[0][0])) if n_features is None else n_features, model_type=model_type, 
         degree=initial_degree, weight_decay=extra_weight_decay, task=task, n_classes=n_classes)
+    model.config = config
     model = model.to(device)
 
     criterion = get_criterion(model_type, task).to(device)
@@ -482,27 +487,32 @@ def main(epochs = 5,
         test_x = [pair[0].view(-1).numpy() for pair in dset_test]
         test_y = [pair[1].numpy() if type(pair[1]) != int else pair[1] for pair in dset_test]
         if dataset == 'gisette':
-            keys = ["F", "DFS-NAS", "lasso", "logistic_l1", "tree", "chi2"]
+            keys = ["F", "DFS-NAS", "DFS-NAS alphas", "DFS-NAS weights", "lasso", "logistic_l1", "tree", "chi2"]
             AUCs = {k:[] for k in keys}
+            accs = {k:[] for k in keys}
 
             models_to_train = {"logistic_l1":LogisticRegression(penalty='l1', solver='saga', C=1, max_iter=500),
             "tree":ExtraTreesClassifier(n_estimators = 100), 
-            "lasso":sklearn.linear_model.Lasso()}
+            "lasso":sklearn.linear_model.Lasso()} if not smoke_test else {}
+            
             for k in tqdm(models_to_train.keys(), desc="Training baselines models for AUC computations"):
                 models_to_train[k].fit(raw_x, raw_y)
 
             models = {**models_to_train,
-            "F":None, "chi2":None, "DFS-NAS":model}
+            "F":None, "chi2":None, "DFS-NAS":model, "DFS-NAS alphas":model, "DFS-NAS weights":model}
 
-            for k in tqdm(range(1, 100), desc="Computing AUCs for different top-k features"):
+            for k in tqdm(range(1, 100 if not smoke_test else 3), desc="Computing AUCs for different top-k features"):
 
                 for key, clf_model in models.items():
-                    AUCs[key].append(compute_auc(clf_model, k, raw_x, raw_y, test_x, test_y, mode = key))
+                    auc, acc = compute_auc(clf_model, k, raw_x, raw_y, test_x, test_y, mode = key)
+                    AUCs[key].append(auc)
+                    accs[key].append(acc)
 
-                wandb.log({**{key:AUCs[key][k-1] for key in keys}, "k":k})
+                wandb.log({**{key:AUCs[key][k-1] for key in keys},**{key:accs[key][k-1] for key in keys}, "k":k})
         elif dataset in ['MNIST', 'FashionMNIST']:
-            mse, acc = reconstruction_error(model=model, k=50, raw_x=raw_x, raw_y=raw_y, test_x=test_x, test_y=test_y)
-            wandb.log({"MSE":mse, "RecAcc":acc})
+            for k in range(1,100 if not smoke_Test else 3):
+                mse, acc = reconstruction_error(model=model, k=k, raw_x=raw_x, raw_y=raw_y, test_x=test_x, test_y=test_y)
+                wandb.log({"MSE":mse, "RecAcc":acc, "k":k})
 
 
 if __name__ == "__main__":

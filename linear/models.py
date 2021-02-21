@@ -66,10 +66,11 @@ class SoTLNet(RegressionNet):
             # self.alphas.append(self.alpha_weight_decay)
         else:
             self.alpha_weight_decay = torch.tensor(0)
-    def forward(self, x, weight=None, alphas=None):
+    def forward(self, x, weight=None, alphas=None, feature_indices=None):
         x = x.view(-1, self.num_features)
+        if feature_indices is not None:
+            x[feature_indices] = 0
         return self.model(x, weight, alphas)
-
 
     def adaptive_weight_decay(self):
         return torch.sum(torch.abs(self.fc1.weight*self.fc1.compute_deg_constants()))
