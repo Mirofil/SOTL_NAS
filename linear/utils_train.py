@@ -138,12 +138,14 @@ def get_optimizers(model, config):
         elif config['a_optim'] == 'Adam':
             a_optimizer = Adam(model.arch_params(), lr=config["a_lr"], weight_decay=config["a_weight_decay"])
 
-        a_scheduler = torch.optim.lr_scheduler.StepLR(a_optimizer, round(config["epochs"]/5), gamma=0.2, verbose=False)
-
     else:
         # Placeholder optimizer that won't do anything - but the parameter list cannot be empty
         a_optimizer = None
     
+    if config["train_arch"]:
+        a_scheduler = torch.optim.lr_scheduler.StepLR(a_optimizer, round(config["epochs"]/5), gamma=0.2, verbose=False)
+    else:
+        a_scheduler = None
 
 
     return w_optimizer, a_optimizer, w_scheduler, a_scheduler
