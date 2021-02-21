@@ -69,7 +69,7 @@ def compute_auc(model,k, raw_x, raw_y, test_x, test_y, mode ="F", choose_feature
 
     return auc_score   
 
-def calculate_weight_decay(model, alpha_w_order=None, w_order=None, adaptive_decay=None, a_order=1, a_coef=1, w_coef=0.001):
+def calculate_weight_decay(model, alpha_w_order=None, w_order=1, adaptive_decay=None, a_order=1, a_coef=1, w_coef=0.001):
     param_norm=0
     if model.alpha_weight_decay != 0 and alpha_w_order is not None:
         for n,weight in model.named_weight_params():
@@ -94,7 +94,7 @@ def calculate_weight_decay(model, alpha_w_order=None, w_order=None, adaptive_dec
     return param_norm
 
 
-def compute_train_loss(x, y, criterion, model, weight_decay=True, y_pred=None, alpha_w_order=None, w_order=1, adaptive_decay=False, a_order=1, a_coef=0.1, w_coef=0.001):
+def compute_train_loss(x, y, criterion, model, weight_decay=True, y_pred=None, alpha_w_order=None, w_order=1, adaptive_decay=False, a_order=1, a_coef=0.1, w_coef=0.1):
     assert model is not None or y_pred is not None
 
     if y_pred is None:
