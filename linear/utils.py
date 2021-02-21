@@ -7,6 +7,13 @@ import math
 import itertools
 from typing import *
 import matplotlib.pyplot as plt
+import random
+def prepare_seed(rand_seed):
+  random.seed(rand_seed)
+  np.random.seed(rand_seed)
+  torch.manual_seed(rand_seed)
+  torch.cuda.manual_seed(rand_seed)
+  torch.cuda.manual_seed_all(rand_seed)
 
 def sample_tau(alpha,beta) -> Tensor:
     return torch.tensor([np.random.gamma(alpha, 1/beta)])

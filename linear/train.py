@@ -1,4 +1,4 @@
-# python linear/train.py --model_type=sigmoid --dataset=gisette --arch_train_data sotl --grad_outer_loop_order=None --mode=bilevel --device=cuda --initial_degree 1 --hvp=finite_diff --epochs=75 --w_lr=0.0001 --T=3 --a_lr=0.01 --hessian_tracking False --w_optim=Adam --a_optim=Adam --train_arch=True --a_weight_decay=0.001 --smoke_test False --dry_run=False --w_weight_decay 0.01
+# python linear/train.py --model_type=sigmoid --dataset=gisette --arch_train_data sotl --grad_outer_loop_order=None --mode=bilevel --device=cuda --initial_degree 1 --hvp=finite_diff --epochs=75 --w_lr=0.0001 --T=25 --a_lr=0.01 --hessian_tracking False --w_optim=Adam --a_optim=Adam --train_arch=True --a_weight_decay=0.001 --smoke_test True --dry_run=False --w_weight_decay 0.01 --random_seed 1
 # python linear/train.py --model_type=max_deg --dataset=fourier --dry_run=False --T=2 --grad_outer_loop_order=1 --grad_inner_loop_order=1 --mode=bilevel --device=cpu
 # python linear/train.py --model_type=MNIST --dataset=MNIST --dry_run=False --T=1 --w_warm_start=0 --grad_outer_loop_order=-1 --grad_inner_loop_order=-1 --mode=bilevel --device=cuda --extra_weight_decay=0.0001 --w_weight_decay=0 --arch_train_data=val
 
@@ -25,7 +25,8 @@ from utils import (
     eval_features,
     featurize,
     hessian,
-    jacobian
+    jacobian,
+    prepare_seed
 )
 from models import SoTLNet
 from sotl_gradient import sotl_gradient, WeightBuffer
@@ -380,8 +381,10 @@ def main(epochs = 5,
     mode = "bilevel",
     hessian_tracking=True,
     auc_features_mode="normalized",
-    smoke_test=False
+    smoke_test=False,
+    random_seed=None
     ):
+
     config = locals()
     if dry_run:
         os.environ['WANDB_MODE'] = 'dryrun'
@@ -392,6 +395,9 @@ def main(epochs = 5,
         wandb.init(project="NAS", group=f"Linear_SOTL")
     except:
         wandb.init(project="NAS", group=f"Linear_SOTL", config=config)
+
+    if random_seed is not None:
+        prepare_seed(random_seed)
 
     dataset_info = get_datasets(name=dataset, data_size=N, max_order_generated=D,
         max_order_y=max_order_y,
