@@ -13,11 +13,12 @@ from sklearn.ensemble import ExtraTreesClassifier
 def choose_features(model, top_k=20, mode='normalized'):
     if model.model_type == 'sigmoid':
         if mode == 'alphas':
-            top_k = torch.topk(model.fc1.alphas, k=top_k)
+            top_k = torch.topk(model.fc1.alphas.squeeze(), k=top_k)
         elif mode == 'normalized':
             # NOTE IMPORTANT THOUGHT - doing abs, then mean will give different effect than doing it the other way. If a feature has different signs based on the class predicted, 
             # is it good to drop it because it is conflicting? Or keep it when it has high magnitude and thus high discriminative power?
-            top_k = torch.topk(model.fc1.squash_constants()*torch.mean(torch.abs(model.fc1.weight), dim=0), k=top_k)
+            
+            top_k = torch.topk((model.fc1.squash_constants()*torch.mean(torch.abs(model.fc1.weight), dim=0)).squeeze(), k=top_k)
         elif mode == 'weights':
             top_k = torch.topk(torch.mean(torch.abs(model.fc1.weight), dim=0), k=top_k)
 
@@ -69,12 +70,12 @@ def compute_auc(model,k, raw_x, raw_y, test_x, test_y, mode ="F", choose_feature
             features_mode = 'weights'
         top_k = choose_features(model, top_k=k, mode=features_mode)
 
-        x = [elem[top_k.indices[0].cpu().numpy()] for elem in raw_x]
-        test_x = [elem[top_k.indices[0].cpu().numpy()] for elem in test_x]
+        x = [elem[top_k.indices.cpu().numpy()] for elem in raw_x]
+        test_x = [elem[top_k.indices.cpu().numpy()] for elem in test_x]
 
         if verbose:
-            print(f"Selected weights: {model.fc1.weight.view(-1)[top_k.indices[0]]}")
-            print(f"Selected alphas: {model.fc1.alphas.view(-1)[top_k.indices[0]]}")
+            print(f"Selected weights: {model.fc1.weight.view(-1)[top_k.indices]}")
+            print(f"Selected alphas: {model.fc1.alphas.view(-1)[top_k.indices]}")
     
     elif mode == "lasso" or mode == "logistic_l1" or mode == "tree":
         selector = sklearn.feature_selection.SelectFromModel(model, prefit=True, threshold=-np.inf, max_features=k)
