@@ -131,7 +131,7 @@ def get_optimizers(model, config):
     elif config ['a_optim'] =='Adam':
         w_optimizer = Adam(model.weight_params(), lr=config["w_lr"], weight_decay=config["w_weight_decay"])
 
-    w_scheduler = torch.optim.lr_scheduler.StepLR(w_optimizer, 40, gamma=0.2, verbose=False)
+    w_scheduler = torch.optim.lr_scheduler.StepLR(w_optimizer, round(config["epochs"]/5), gamma=0.2, verbose=False)
     if config["train_arch"]:
         if config['a_optim'] == 'SGD':
             a_optimizer = SGD(model.arch_params(), lr=config["a_lr"], momentum=config["a_momentum"], weight_decay=config["a_weight_decay"])
@@ -142,7 +142,7 @@ def get_optimizers(model, config):
         # Placeholder optimizer that won't do anything - but the parameter list cannot be empty
         a_optimizer = None
     
-    a_scheduler = torch.optim.lr_scheduler.StepLR(a_optimizer, 40, gamma=0.2, verbose=False)
+    a_scheduler = torch.optim.lr_scheduler.StepLR(a_optimizer, round(config["epochs"]/5), gamma=0.2, verbose=False)
 
 
     return w_optimizer, a_optimizer, w_scheduler, a_scheduler
