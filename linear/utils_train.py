@@ -1,6 +1,8 @@
 import torch
 import torch.nn as nn
 from torch.optim import SGD, Adam
+import torch.optim
+import torch.optim.lr_scheduler
 import sklearn.metrics
 import sklearn.feature_selection
 from sklearn.linear_model import LogisticRegression, Lasso, LinearRegression
@@ -8,18 +10,21 @@ import numpy as np
 from sklearn.ensemble import ExtraTreesClassifier
 
 
-def choose_features(model, top_k=20):
+def choose_features(model, top_k=20, mode='normalized'):
     if model.model_type == 'sigmoid':
-        top_k = torch.topk(model.fc1.alphas, k=top_k)
+        if mode == 'alphas':
+            top_k = torch.topk(model.fc1.alphas, k=top_k)
+        elif mode == 'normalized':
+            top_k = torch.topk(model.fc1.squash_constants()*model.fc1.weight, k=top_k)
 
     else:
         raise NotImplementedError
 
     return top_k
 
-def reconstruction_error(model, k, raw_x, raw_y, test_x, test_y):
+def reconstruction_error(model, k, raw_x, raw_y, test_x, test_y, choose_features_mode = "normalized"):
     # Used to compute reconstruction errors from Concrete Autoencoder paper
-    top_k = choose_features(model, top_k=k)
+    top_k = choose_features(model, top_k=k, mode=choose_features_mode)
     x = [elem[top_k.indices[0].cpu().numpy()] for elem in raw_x]
     test_x = [elem[top_k.indices[0].cpu().numpy()] for elem in test_x]
     
@@ -34,7 +39,7 @@ def reconstruction_error(model, k, raw_x, raw_y, test_x, test_y):
     return mse, acc
 
 
-def compute_auc(model,k, raw_x, raw_y, test_x, test_y, mode ="F"):
+def compute_auc(model,k, raw_x, raw_y, test_x, test_y, mode ="F", choose_features_mode='normalized'):
     if mode in ["F", "MI", "chi2"]:
         if mode == "F":
             univ = sklearn.feature_selection.f_classif 
@@ -48,7 +53,7 @@ def compute_auc(model,k, raw_x, raw_y, test_x, test_y, mode ="F"):
         test_x = selector.transform(test_x)
     
     elif mode in ["NAS", "DFS-NAS"]:
-        top_k = choose_features(model, top_k=k)
+        top_k = choose_features(model, top_k=k, mode=choose_features_mode)
 
         x = [elem[top_k.indices[0].cpu().numpy()] for elem in raw_x]
         test_x = [elem[top_k.indices[0].cpu().numpy()] for elem in test_x]
@@ -122,14 +127,17 @@ def hinge_loss(x,y, threshold):
 
 def get_optimizers(model, config):
     w_optimizer = SGD(model.weight_params(), lr=config["w_lr"], momentum=config["w_momentum"], weight_decay=config["w_weight_decay"])
-    
+    w_scheduler = torch.optim.lr_scheduler.StepLR(w_optimizer, 20, gamma=1, verbose=False)
     if config["train_arch"]:
         a_optimizer = SGD(model.arch_params(), lr=config["a_lr"], momentum=config["a_momentum"], weight_decay=config["a_weight_decay"])
     else:
         # Placeholder optimizer that won't do anything - but the parameter list cannot be empty
         a_optimizer = None
+    
+    a_scheduler = torch.optim.lr_scheduler.StepLR(a_optimizer, 20, gamma=0.1, verbose=False)
 
-    return w_optimizer, a_optimizer
+
+    return w_optimizer, a_optimizer, w_scheduler, a_scheduler
 
 
 def get_criterion(model_type, task):

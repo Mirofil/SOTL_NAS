@@ -1,4 +1,4 @@
-# python linear/train.py --model_type=sigmoid --dataset=gisette --dry_run=False --arch_train_data val --grad_outer_loop_order=None --mode=bilevel --device=cuda --initial_degree 1 --hvp=finite_diff --num_epochs=100 --w_lr=0.01 --T=10 --a_lr=0.001
+# python linear/train.py --model_type=sigmoid --dataset=gisette --dry_run=False --arch_train_data val --grad_outer_loop_order=None --mode=bilevel --device=cuda --initial_degree 1 --hvp=finite_diff --num_epochs=100 --w_lr=0.01 --T=10 --a_lr=0.001 --hessian_tracking False
 # python linear/train.py --model_type=max_deg --dataset=fourier --dry_run=False --T=2 --grad_outer_loop_order=1 --grad_inner_loop_order=1 --mode=bilevel --device=cpu
 # python linear/train.py --model_type=MNIST --dataset=MNIST --dry_run=False --T=1 --w_warm_start=0 --grad_outer_loop_order=-1 --grad_inner_loop_order=-1 --mode=bilevel --device=cuda --extra_weight_decay=0.0001 --w_weight_decay=0 --arch_train_data=val
 
@@ -51,6 +51,8 @@ def train_bptt(
     criterion,
     w_optimizer,
     a_optimizer,
+    w_scheduler,
+    a_scheduler,
     dataset:str,
     dset_train,
     dset_val,
@@ -74,8 +76,6 @@ def train_bptt(
     device:str,
     config: Dict,
     mode="joint",
-    w_scheduler=None,
-    a_scheduler=None,
     hessian_tracking=True
 ):
     
@@ -218,7 +218,7 @@ def train_bptt(
             if mode == "bilevel" and epoch >= w_warm_start:
 
                 weights_after_rollout = switch_weights(model, weight_buffer[0])
-                w_optimizer, _ = get_optimizers(model, config)
+                w_optimizer, a_optimizer, w_scheduler, a_scheduler = get_optimizers(model, config)
                 w_optimizer.load_state_dict(prerollout_w_optim_state_dict)
 
                 #NOTE this train step should be identical to the loop above apart from WeightBuffer management! But it is difficult to abstract this in pure PyTorch, although it could be hacked with kwargs forwarding?
@@ -402,7 +402,7 @@ def main(num_epochs = 5,
 
     criterion = get_criterion(model_type, task).to(device)
 
-    w_optimizer, a_optimizer = get_optimizers(model, config)
+    w_optimizer, a_optimizer, w_scheduler, a_scheduler = get_optimizers(model, config)
 
     # train_loader = torch.utils.data.DataLoader(
     #     dset_train, batch_size=batch_size * T, shuffle=True
@@ -418,6 +418,8 @@ def main(num_epochs = 5,
         criterion=criterion,
         w_optimizer=w_optimizer,
         a_optimizer=a_optimizer,
+        w_scheduler=w_scheduler,
+        a_scheduler=a_scheduler,
         dataset=dataset,
         dset_train=dset_train,
         dset_val=dset_val,
@@ -440,7 +442,8 @@ def main(num_epochs = 5,
         device=device,
         train_arch=train_arch,
         config=config,
-        mode=mode
+        mode=mode,
+        hessian_tracking=hessian_tracking
     )
     if model_type in ["max_deg", "softmax_mult", "linear"]:
         lapack_solution, res, eff_rank, sing_values = scipy.linalg.lstsq(dset_train[:][0], dset_train[:][1])

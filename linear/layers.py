@@ -23,6 +23,9 @@ class LinearSquash(torch.nn.Linear):
         if alphas is None:
             alphas = self.alphas
         return F.linear(input, weight*self.squash(alphas), self.bias)
+    
+    def squash_constants(self):
+        return self.squash(self.alphas)
 
 class LinearMaxDeg(torch.nn.Linear):
     def __init__(self, *args, degree=30, **kwargs) -> None:
