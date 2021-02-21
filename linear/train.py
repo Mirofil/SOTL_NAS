@@ -1,4 +1,4 @@
-# python linear/train.py --model_type=sigmoid --dataset=gisette --dry_run=True --arch_train_data sotl --grad_outer_loop_order=None --mode=joint --device=cuda --initial_degree 1 --hvp=finite_diff --epochs=150 --w_lr=0.0001 --T=10 --a_lr=0.01 --hessian_tracking False --w_optim=Adam --a_optim=Adam --train_arch=True --a_weight_decay=1
+# python linear/train.py --model_type=MLP --dataset=MNIST --dry_run=True --arch_train_data sotl --grad_outer_loop_order=None --mode=joint --device=cuda --initial_degree 1 --hvp=finite_diff --epochs=150 --w_lr=0.0001 --T=10 --a_lr=0.01 --hessian_tracking False --w_optim=Adam --a_optim=Adam --train_arch=True --a_weight_decay=1 --smoke_test True
 # python linear/train.py --model_type=max_deg --dataset=fourier --dry_run=False --T=2 --grad_outer_loop_order=1 --grad_inner_loop_order=1 --mode=bilevel --device=cpu
 # python linear/train.py --model_type=MNIST --dataset=MNIST --dry_run=False --T=1 --w_warm_start=0 --grad_outer_loop_order=-1 --grad_inner_loop_order=-1 --mode=bilevel --device=cuda --extra_weight_decay=0.0001 --w_weight_decay=0 --arch_train_data=val
 
@@ -272,7 +272,7 @@ def train_bptt(
 
         auc, acc, mse, hessian_eigenvalue = None, None, None, None
         best = {"auc":{"value":0, "alphas":None}, "acc":{"value":0, "alphas":None}} # TODO this needs to be outside of the for loop to be persisent. BUt I think Ill drop it for now regardless
-        if model.model_type in ['sigmoid']:
+        if model.model_type in ['sigmoid', "MLP"]:
             raw_x = [pair[0].view(-1).numpy() for pair in dset_train]
             raw_y = [pair[1].numpy() if type(pair[1]) != int else pair[1] for pair in dset_train]
 
@@ -285,7 +285,7 @@ def train_bptt(
                 if auc > best["auc"]["value"]:
                     best["auc"]["value"] = auc
                     best["auc"]["alphas"] = model.fc1.alphas
-            if dataset in ['MNIST', 'FashionMNIST']:
+            if 'MNIST' in dataset:
                 mse, acc = reconstruction_error(model=model,k=50, raw_x=raw_x, raw_y=raw_y, test_x=test_x, test_y=test_y)
 
         if hessian_tracking:
@@ -372,7 +372,7 @@ def main(epochs = 5,
     grad_inner_loop_order=-1,
     grad_outer_loop_order=-1,
     model_type="sigmoid",
-    dataset="MNIST",
+    dataset="MNIST35",
     device= 'cuda' if torch.cuda.is_available() else 'cpu',
     train_arch=True,
     dry_run=True,
@@ -393,10 +393,6 @@ def main(epochs = 5,
     except:
         wandb.init(project="NAS", group=f"Linear_SOTL", config=config)
 
-
-    ### MODEL INIT
-    # x, y = data_generator(N, max_order_generated=D, max_order_y=[(5,7), (9,13)], noise_var=0.25, featurize_type='fourier')
-    # x, y = get_datasets("songs")
     dataset_info = get_datasets(name=dataset, data_size=N, max_order_generated=D,
         max_order_y=max_order_y,
         noise_var=noise_var,
@@ -417,16 +413,10 @@ def main(epochs = 5,
 
     w_optimizer, a_optimizer, w_scheduler, a_scheduler = get_optimizers(model, config)
 
-    # train_loader = torch.utils.data.DataLoader(
-    #     dset_train, batch_size=batch_size * T, shuffle=True
-    # )
-    # val_loader = torch.utils.data.DataLoader(dset_val, batch_size=batch_size)
-    # grad_compute_speed = AverageMeter()
-
 
     train_bptt(
-        epochs=epochs,
-        steps_per_epoch=steps_per_epoch,
+        epochs=epochs if not smoke_test else 4,
+        steps_per_epoch=steps_per_epoch if not smoke_test else 5,
         model=model,
         criterion=criterion,
         w_optimizer=w_optimizer,
@@ -480,7 +470,7 @@ def main(epochs = 5,
         except:
             print("No model degree info; probably a different model_type was chosen")
     
-    if model_type in ["sigmoid"]:
+    if model_type in ["sigmoid", "MLP"]:
         raw_x = [pair[0].view(-1).numpy() for pair in dset_train]
         raw_y = [pair[1].numpy() if type(pair[1]) != int else pair[1] for pair in dset_train]
 
@@ -491,9 +481,9 @@ def main(epochs = 5,
             AUCs = {k:[] for k in keys}
             accs = {k:[] for k in keys}
 
-            models_to_train = {"logistic_l1":LogisticRegression(penalty='l1', solver='saga', C=1, max_iter=500),
+            models_to_train = {"logistic_l1":LogisticRegression(penalty='l1', solver='saga', C=1, max_iter=500 if not smoke_test else 5),
             "tree":ExtraTreesClassifier(n_estimators = 100), 
-            "lasso":sklearn.linear_model.Lasso()} if not smoke_test else {}
+            "lasso":sklearn.linear_model.Lasso()}
             
             for k in tqdm(models_to_train.keys(), desc="Training baselines models for AUC computations"):
                 models_to_train[k].fit(raw_x, raw_y)
@@ -507,10 +497,9 @@ def main(epochs = 5,
                     auc, acc = compute_auc(clf_model, k, raw_x, raw_y, test_x, test_y, mode = key)
                     AUCs[key].append(auc)
                     accs[key].append(acc)
-
                 wandb.log({**{key:AUCs[key][k-1] for key in keys},**{key:accs[key][k-1] for key in keys}, "k":k})
-        elif dataset in ['MNIST', 'FashionMNIST']:
-            for k in range(1,100 if not smoke_Test else 3):
+        elif 'MNIST' in dataset:
+            for k in range(1,100 if not smoke_test else 3):
                 mse, acc = reconstruction_error(model=model, k=k, raw_x=raw_x, raw_y=raw_y, test_x=test_x, test_y=test_y)
                 wandb.log({"MSE":mse, "RecAcc":acc, "k":k})
 
@@ -526,17 +515,21 @@ if __name__ == "__main__":
         fire.Fire(main)
 
 
-num_epochs = 50
+epochs = 50
 steps_per_epoch=5
 batch_size = 64
 D = 18
 N = 50000
+w_optim='Adam'
+w_decay_order=2
 w_lr = 1e-1
 w_momentum=0.0
 w_weight_decay=0.0
+a_optim='Adam'
+a_decay_order=1
 a_lr = 3e-2
 a_momentum = 0.0
-a_weight_decay = 0.1
+a_weight_decay = 1
 T = 10
 grad_clip = 1
 logging_freq = 200
@@ -555,10 +548,11 @@ grad_inner_loop_order=-1
 grad_outer_loop_order=-1
 arch_train_data="sotl"
 model_type="sigmoid"
-dataset="MNIST"
+dataset="gisette"
 device = 'cpu'
 train_arch=True
 dry_run=True
 mode="bilevel"
 hessian_tracking=False
+smoke_test=True
 config=locals()

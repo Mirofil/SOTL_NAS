@@ -1,5 +1,5 @@
 import torch
-from layers import LinearSquash, LinearMaxDeg, FlexibleLinear
+from layers import LinearSquash, LinearMaxDeg, FlexibleLinear, FeatureSelection
 import torch.nn as nn
 import torch.nn.functional as F
 class RegressionNet(torch.nn.Module):
@@ -61,19 +61,31 @@ class SoTLNet(RegressionNet):
         else:
             raise NotImplementedError
         self.alphas = []
+        self.feature_indices = None
+        self.model.feature_indices = self.feature_indices
         if weight_decay > 0:
             self.alpha_weight_decay = torch.nn.Parameter(torch.tensor([weight_decay], dtype=torch.float32, requires_grad=True).unsqueeze(dim=0))
-            # self.alphas.append(self.alpha_weight_decay)
         else:
             self.alpha_weight_decay = torch.tensor(0)
     def forward(self, x, weight=None, alphas=None, feature_indices=None):
         x = x.view(-1, self.num_features)
         if feature_indices is not None:
-            x[feature_indices] = 0
+            for to_delete in range(x.shape[1]):
+                if to_delete not in feature_indices:
+                    x[:, to_delete] = 0 
+        elif self.feature_indices is not None:
+            for to_delete in range(x.shape[1]):
+                if to_delete not in self.feature_indices:
+                    x[:, to_delete] = 0 
         return self.model(x, weight, alphas)
 
     def adaptive_weight_decay(self):
         return torch.sum(torch.abs(self.fc1.weight*self.fc1.compute_deg_constants()))
+        
+    def set_features(self, feature_indices):
+        self.feature_indices = set(feature_indices)
+        self.model.feature_indices = feature_indices
+
         
 class LogReg(nn.Module):
     def __init__(self, input_dim=28*28, output_dim=10):
@@ -90,39 +102,21 @@ class MLP(RegressionNet):
     def __init__(self, input_dim=28*28, hidden_dim=1000, output_dim=10, weight_decay=0, **kwargs):
         super(MLP, self).__init__()
         self._input_dim = input_dim
+        self.feature_selection = FeatureSelection(input_dim)
         self.lin1 = nn.Linear(input_dim, hidden_dim)
         self.lin2 = nn.Linear(hidden_dim, hidden_dim)
-        # self.lin22 = nn.Linear(hidden_dim, hidden_dim)
-        # self.lin23 = nn.Linear(hidden_dim, hidden_dim)
+
 
         self.lin3 = nn.Linear(hidden_dim, output_dim)
-        # if weight_decay > 0:
-        #     self.alpha_weight_decay = torch.nn.Parameter(torch.tensor([weight_decay], dtype=torch.float32, requires_grad=True).unsqueeze(dim=0))
-        # else:
-        #     self.alpha_weight_decay = 0
 
     def forward(self, x, weights=None, alphas=None):
 
-        # with torch.no_grad():
-        #     if weights is not None:
-        #         old_weights = [w.clone() for w in self.weight_params()]
-
-        #         for w_old, w_new in zip(self.weight_params(), weights):
-        #             w_old.copy_(w_new)
-
-
-
         x = x.view(-1, self._input_dim)
+        x = self.feature_selection(x, feature_indices=self.feature_indices)
         x = F.relu(self.lin1(x))
         x = F.relu(self.lin2(x))
-        # x = F.relu(self.lin22(x))
-        # x = F.relu(self.lin23(x))
 
 
         x = self.lin3(x)
 
-        # with torch.no_grad():
-        #     if weights is not None:
-        #         for w_old, w_new in zip(self.weight_params(), old_weights):
-        #             w_old.copy_(w_new)
         return x

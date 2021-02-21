@@ -15,9 +15,11 @@ def choose_features(model, top_k=20, mode='normalized'):
         if mode == 'alphas':
             top_k = torch.topk(model.fc1.alphas, k=top_k)
         elif mode == 'normalized':
-            top_k = torch.topk(model.fc1.squash_constants()*torch.abs(model.fc1.weight), k=top_k)
+            # NOTE IMPORTANT THOUGHT - doing abs, then mean will give different effect than doing it the other way. If a feature has different signs based on the class predicted, 
+            # is it good to drop it because it is conflicting? Or keep it when it has high magnitude and thus high discriminative power?
+            top_k = torch.topk(model.fc1.squash_constants()*torch.mean(torch.abs(model.fc1.weight), dim=0), k=top_k)
         elif mode == 'weights':
-            top_k = torch.topk(torch.abs(model.fc1.weight), k=top_k)
+            top_k = torch.topk(torch.mean(torch.abs(model.fc1.weight), dim=0), k=top_k)
 
     else:
         raise NotImplementedError
@@ -99,11 +101,12 @@ def calculate_weight_decay(model, alpha_w_order=None, w_order=1, adaptive_decay=
         param_norm = param_norm + model.adaptive_weight_decay()
     
     if a_order is not None:
-        if model.model_type == 'sigmoid':
-            param_norm = param_norm + a_coef * torch.sum(torch.abs(torch.sigmoid(model.fc1.alphas)))
-        else:
+        if model.model_type in ['sigmoid', 'MLP']:
             for arch_param in model.arch_params():
-                param_norm = param_norm + a_coef * torch.sum(torch.abs(arch_param))
+                param_norm = param_norm + a_coef * torch.sum(torch.abs(torch.sigmoid(arch_param)))
+            else:
+                for arch_param in model.arch_params():
+                    param_norm = param_norm + a_coef * torch.sum(torch.abs(arch_param))
     if w_order is not None:
         for w_param in model.weight_params():
             param_norm = param_norm + w_coef * torch.pow(torch.norm(w_param, w_order), w_order)
@@ -171,7 +174,7 @@ def get_optimizers(model, config):
 
 def get_criterion(model_type, task):
     criterion=None
-    if model_type in ["MNIST", "log_regression"] or task == 'clf':
+    if model_type in ["MNIST", "log_regression", "MLP"] or task == 'clf':
         criterion = torch.nn.CrossEntropyLoss()
     elif model_type in ["max_deg", "softmax_mult", "linear", "fourier", "polynomial", "sigmoid"] or task == 'reg':
         criterion = torch.nn.MSELoss()

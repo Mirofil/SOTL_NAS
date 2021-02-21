@@ -5,6 +5,7 @@ from torch import Tensor
 import numpy as np
 import matplotlib.pyplot as plt
 
+
 class LinearSquash(torch.nn.Linear):
     def __init__(self, in_features, out_features, bias, squash_type="softmax", **kwargs) -> None:
         super().__init__(in_features,out_features,bias)
@@ -26,6 +27,28 @@ class LinearSquash(torch.nn.Linear):
     
     def squash_constants(self):
         return self.squash(self.alphas)
+
+class FeatureSelection(torch.nn.Module):
+    def __init__(self, in_features, squash_type="sigmoid", **kwargs) -> None:
+        super().__init__()
+        self.weight = torch.nn.Parameter(torch.ones((1,in_features), requires_grad=False))
+        self.feature_indices = {i for i in range(in_features)}
+
+        self.alphas = torch.nn.Parameter(torch.zeros(1, in_features))
+        if squash_type == "softmax":
+            self.squash = F.softmax
+        elif squash_type == "sigmoid":
+            self.squash = torch.sigmoid
+    def forward(self, x: Tensor, feature_indices=None) -> Tensor:
+        if feature_indices is not None:
+            for to_delete in range(x.shape[1]):
+                if to_delete not in feature_indices:
+                    x[:, to_delete] = 0 
+        elif self.feature_indices is not None:
+            for to_delete in range(x.shape[1]):
+                if to_delete not in self.feature_indices:
+                    x[:, to_delete] = 0 
+        return x * self.squash(self.alphas)
 
 class LinearMaxDeg(torch.nn.Linear):
     def __init__(self, *args, degree=30, **kwargs) -> None:

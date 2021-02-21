@@ -6,9 +6,17 @@ from pathlib import Path
 import numpy as np
 import torch
 import os
+from sklearn.datasets import load_svmlight_file
+
+
 def get_datasets(name, path=None, test_split=0.85, **kwargs):
     n_classes = 1
     n_features=None
+    if os.name == 'nt':
+        data_path = Path("C:\\Users\\kawga\\Documents\\Oxford\\thesis\\code\\data\\")
+    else:
+        data_path = Path('./data/')
+
     if name == "songs":
         if path is None:
             path = r"C:\Users\kawga\Documents\Oxford\thesis\data\YearPredictionMSD.txt"
@@ -25,10 +33,7 @@ def get_datasets(name, path=None, test_split=0.85, **kwargs):
             dset, [int(len(dset) * test_split), len(dset) - int(len(dset) * test_split)]
         )
     elif name == "gisette":
-        if os.name == 'nt':
-            data_path = Path("C:\\Users\\kawga\\Documents\\Oxford\\thesis\\code\\data\\")
-        else:
-            data_path = Path('./data/')
+
         f= open(data_path / "gisette_train.data")
         train_data=[]
         for row in f.readlines():
@@ -56,16 +61,14 @@ def get_datasets(name, path=None, test_split=0.85, **kwargs):
         train_data=np.array(train_data).astype(int)
         train_data = torch.tensor(train_data, dtype=torch.float32)
 
-        train_classes= np.array(train_classes).astype(int)
-        train_classes=train_classes[:,0]
+        train_classes= np.array(train_classes).astype(int)[:,0]
         train_classes = torch.tensor(train_classes, dtype=torch.long)
         train_classes[train_classes == -1] = 0
 
         test_data=np.array(test_data).astype(int)
         test_data = torch.tensor(test_data, dtype=torch.float32)
 
-        test_classes= np.array(test_classes).astype(int)
-        test_classes=test_classes[:,0]
+        test_classes= np.array(test_classes).astype(int)[:,0]
         test_classes = torch.tensor(test_classes, dtype=torch.long)
         test_classes[test_classes == -1] = 0
 
@@ -99,6 +102,25 @@ def get_datasets(name, path=None, test_split=0.85, **kwargs):
         n_classes = 10
         n_features=28*28
     
+    elif name == 'MNIST35':
+        
+        x_train, y_train = load_svmlight_file(str(data_path / 'mnist-35-noisy-binary.train.svm'))
+        x_test, y_test = load_svmlight_file(str(data_path / 'mnist-35-noisy-binary.test.svm'))
+
+        x_train = torch.tensor([np.array(elem.todense()) for elem in x_train], dtype=torch.float)
+        y_train = torch.tensor(y_train, dtype=torch.long)
+        y_train[y_train==-1]=0
+
+        x_test = torch.tensor([np.array(elem.todense()) for elem in x_test], dtype=torch.float)
+        y_test = torch.tensor(y_test, dtype=torch.long)
+        y_test[y_test==-1]=0
+
+        dset_train = torch.utils.data.TensorDataset(x_train, y_train)
+        dset_test = torch.utils.data.TensorDataset(x_test, y_test)
+
+        n_classes = 2
+        n_features=28*28
+
     elif name == "FashionMNIST":
         dset_train = datasets.FashionMNIST('./data', train=True, download=True,
                 transform=transforms.Compose([
@@ -130,7 +152,7 @@ def get_datasets(name, path=None, test_split=0.85, **kwargs):
             dset_train, [int(len(dset_train) * test_split), len(dset_train) - int(len(dset_train) * test_split)]
         )
 
-    if name in ['MNIST', 'CIFAR', 'gisette', "FashionMNIST"]:
+    if name in ['MNIST', 'CIFAR', 'gisette', "FashionMNIST", 'MNIST35']:
         task = 'clf'
     else:
         task = 'reg'
@@ -142,5 +164,7 @@ def get_datasets(name, path=None, test_split=0.85, **kwargs):
     results['task'] = task
     results['n_classes'] = n_classes
     results['n_features'] = n_features
-    # return dset_train, dset_val, dset_test, task, n_classes, n_features
+
+    assert all([elem != None for elem in results.values()])
+
     return results
