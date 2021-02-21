@@ -127,14 +127,14 @@ def hinge_loss(x,y, threshold):
 
 def get_optimizers(model, config):
     w_optimizer = SGD(model.weight_params(), lr=config["w_lr"], momentum=config["w_momentum"], weight_decay=config["w_weight_decay"])
-    w_scheduler = torch.optim.lr_scheduler.StepLR(w_optimizer, 20, gamma=1, verbose=False)
+    w_scheduler = torch.optim.lr_scheduler.StepLR(w_optimizer, 40, gamma=0.2, verbose=False)
     if config["train_arch"]:
         a_optimizer = SGD(model.arch_params(), lr=config["a_lr"], momentum=config["a_momentum"], weight_decay=config["a_weight_decay"])
     else:
         # Placeholder optimizer that won't do anything - but the parameter list cannot be empty
         a_optimizer = None
     
-    a_scheduler = torch.optim.lr_scheduler.StepLR(a_optimizer, 20, gamma=0.1, verbose=False)
+    a_scheduler = torch.optim.lr_scheduler.StepLR(a_optimizer, 40, gamma=0.2, verbose=False)
 
 
     return w_optimizer, a_optimizer, w_scheduler, a_scheduler

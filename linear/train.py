@@ -1,4 +1,4 @@
-# python linear/train.py --model_type=sigmoid --dataset=gisette --dry_run=False --arch_train_data val --grad_outer_loop_order=None --mode=bilevel --device=cuda --initial_degree 1 --hvp=finite_diff --num_epochs=100 --w_lr=0.01 --T=10 --a_lr=0.001 --hessian_tracking False
+# python linear/train.py --model_type=sigmoid --dataset=gisette --dry_run=False --arch_train_data val --grad_outer_loop_order=None --mode=bilevel --device=cuda --initial_degree 1 --hvp=finite_diff --num_epochs=150 --w_lr=0.0001 --T=10 --a_lr=0.01 --hessian_tracking False
 # python linear/train.py --model_type=max_deg --dataset=fourier --dry_run=False --T=2 --grad_outer_loop_order=1 --grad_inner_loop_order=1 --mode=bilevel --device=cpu
 # python linear/train.py --model_type=MNIST --dataset=MNIST --dry_run=False --T=1 --w_warm_start=0 --grad_outer_loop_order=-1 --grad_inner_loop_order=-1 --mode=bilevel --device=cuda --extra_weight_decay=0.0001 --w_weight_decay=0 --arch_train_data=val
 
@@ -301,6 +301,11 @@ def train_bptt(
         wandb.run.summary["Grad compute speed"] = grad_compute_speed.avg
 
         print(f"Grad compute speed: {grad_compute_speed.avg}s")
+
+
+        w_scheduler.step()
+        a_scheduler.step()
+
     print(f"Best found metrics over validation: AUC {best['auc']['value']}")
 
     if dataset in ['gisette']:
