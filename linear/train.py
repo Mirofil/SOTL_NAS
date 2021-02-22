@@ -481,7 +481,7 @@ def main(epochs = 5,
         test_x = [pair[0].view(-1).numpy() for pair in dset_test]
         test_y = [pair[1].numpy() if type(pair[1]) != int else pair[1] for pair in dset_test]
         if dataset == 'gisette':
-            keys = ["F", "DFS-NAS", "DFS-NAS alphas", "DFS-NAS weights", "lasso", "logistic_l1", "tree", "chi2"]
+            keys = ["F", "DFS-NAS", "DFS-NAS alphas", "DFS-NAS weights", "lasso", "logistic_l1", "tree"]
             AUCs = {k:[] for k in keys}
             accs = {k:[] for k in keys}
 
@@ -493,7 +493,7 @@ def main(epochs = 5,
                 models_to_train[k].fit(raw_x, raw_y)
 
             models = {**models_to_train,
-            "F":None, "chi2":None, "DFS-NAS":model, "DFS-NAS alphas":model, "DFS-NAS weights":model}
+            "F":None, "DFS-NAS":model, "DFS-NAS alphas":model, "DFS-NAS weights":model}
 
             for k in tqdm(range(1, 100 if not smoke_test else 3), desc="Computing AUCs for different top-k features"):
 
