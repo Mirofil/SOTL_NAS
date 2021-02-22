@@ -7,9 +7,9 @@ import numpy as np
 import torch
 import os
 from sklearn.datasets import load_svmlight_file
+from sklearn import preprocessing
 
-
-def get_datasets(name, path=None, test_split=0.85, **kwargs):
+def get_datasets(name, path=None, test_split=0.85, normalize=True, **kwargs):
     n_classes = 1
     n_features=None
     if os.name == 'nt':
@@ -58,19 +58,19 @@ def get_datasets(name, path=None, test_split=0.85, **kwargs):
             test_classes.append((row.strip()).split(" "))
         f.close()
 
-        train_data=np.array(train_data).astype(int)
-        train_data = torch.tensor(train_data, dtype=torch.float32)
+        train_data=torch.tensor(np.array(train_data).astype(int), dtype=torch.float32)
 
-        train_classes= np.array(train_classes).astype(int)[:,0]
-        train_classes = torch.tensor(train_classes, dtype=torch.long)
+        train_classes= torch.tensor(np.array(train_classes).astype(int)[:,0], dtype=torch.long)
         train_classes[train_classes == -1] = 0
 
-        test_data=np.array(test_data).astype(int)
-        test_data = torch.tensor(test_data, dtype=torch.float32)
+        test_data = torch.tensor(np.array(test_data).astype(int), dtype=torch.float32)
 
-        test_classes= np.array(test_classes).astype(int)[:,0]
-        test_classes = torch.tensor(test_classes, dtype=torch.long)
+        test_classes= torch.tensor(np.array(test_classes).astype(int)[:,0], dtype=torch.long)
         test_classes[test_classes == -1] = 0
+
+        if normalize:
+            train_data = torch.tensor(preprocessing.StandardScaler().fit_transform(train_data), dtype=torch.float32)
+            test_data= torch.tensor(preprocessing.StandardScaler().fit_transform(test_data), dtype=torch.float32)
 
         dset_train = torch.utils.data.TensorDataset(train_data, train_classes)
         dset_test = torch.utils.data.TensorDataset(test_data,test_classes)

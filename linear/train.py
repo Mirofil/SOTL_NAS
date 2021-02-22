@@ -339,8 +339,6 @@ def valid_func(model, dset_val, criterion, device = 'cuda' if torch.cuda.is_avai
         print("Val loss: {}, Val acc: {}".format(val_meter.avg, val_acc_meter.avg if val_acc_meter.avg > 0 else "Not applicable"))
     return val_meter
 
-def post_train():
-    pass
 
 def main(epochs = 5,
     steps_per_epoch=5,
@@ -555,10 +553,11 @@ grad_outer_loop_order=-1
 arch_train_data="sotl"
 model_type="sigmoid"
 dataset="gisette"
-device = 'cuda'
+device = 'cpu'
 train_arch=True
 dry_run=True
 mode="bilevel"
 hessian_tracking=False
 smoke_test=True
+rand_seed = None
 config=locals()
