@@ -43,8 +43,7 @@ class SoTLNet(RegressionNet):
         self.task = task
         self.num_features = num_features
         self.n_classes = n_classes
-        if task == 'reg':
-            assert n_classes == 1
+
         if model_type == "softmax_mult":
             self.fc1 = LinearSquash(num_features, n_classes, bias=False, squash_type="softmax", **kwargs)
             self.model = self.fc1
