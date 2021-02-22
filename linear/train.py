@@ -283,9 +283,9 @@ def train_bptt(
             if dataset in ['gisette']:
             # We need binary classification task for this to make sense
                 auc, acc = compute_auc(model=model, raw_x=raw_x, raw_y=raw_y, test_x=test_x, test_y=test_y, k=25, mode="DFS-NAS")
-                if auc > best["auc"]["value"]:
-                    best["auc"]["value"] = auc
-                    best["auc"]["alphas"] = model.fc1.alphas
+                # if auc > best["auc"]["value"]:
+                #     best["auc"]["value"] = auc
+                #     best["auc"]["alphas"] = model.alpha_feature_selectors
             if 'MNIST' in dataset:
                 mse, acc = reconstruction_error(model=model,k=50, raw_x=raw_x, raw_y=raw_y, test_x=test_x, test_y=test_y)
 
@@ -310,9 +310,9 @@ def train_bptt(
 
     print(f"Best found metrics over validation: AUC {best['auc']['value']}")
 
-    if dataset in ['gisette']:
-        # Early stopping essentially. Put back the best performing alphas for checking the top-k performances in post-train stage
-        model.fc1.alphas = best["auc"]["alphas"]
+    # if dataset in ['gisette']:
+    #     # Early stopping essentially. Put back the best performing alphas for checking the top-k performances in post-train stage
+    #     model.fc1.alphas = best["auc"]["alphas"]
 
 
 def valid_func(model, dset_val, criterion, device = 'cuda' if torch.cuda.is_available() else 'cpu', print_results=True):
@@ -501,7 +501,7 @@ def main(epochs = 5,
                     auc, acc = compute_auc(clf_model, k, raw_x, raw_y, test_x, test_y, mode = key)
                     AUCs[key].append(auc)
                     accs[key].append(acc)
-                wandb.log({**{key:AUCs[key][k-1] for key in keys},**{key:accs[key][k-1] for key in keys}, "k":k})
+                wandb.log({**{key+"_auc":AUCs[key][k-1] for key in keys},**{key+"_acc":accs[key][k-1] for key in keys}, "k":k})
         elif 'MNIST' in dataset:
             for k in range(1,100 if not smoke_test else 3):
                 mse, acc = reconstruction_error(model=model, k=k, raw_x=raw_x, raw_y=raw_y, test_x=test_x, test_y=test_y)

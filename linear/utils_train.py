@@ -76,8 +76,8 @@ def compute_auc(model,k, raw_x, raw_y, test_x, test_y, mode ="F", choose_feature
         test_x = [elem[top_k.indices.cpu().numpy()] for elem in test_x]
 
         if verbose:
-            print(f"Selected weights: {model.fc1.weight.view(-1)[top_k.indices]}")
-            print(f"Selected alphas: {model.fc1.alphas.view(-1)[top_k.indices]}")
+            print(f"Selected weights: {model.feature_normalizers.view(-1)[top_k.indices]}")
+            print(f"Selected alphas: {model.alpha_feature_selectors.view(-1)[top_k.indices]}")
     
     elif mode == "lasso" or mode == "logistic_l1" or mode == "tree":
         selector = sklearn.feature_selection.SelectFromModel(model, prefit=True, threshold=-np.inf, max_features=k)
@@ -226,6 +226,6 @@ def train_normal(
             if batch_idx % logging_freq == 0:
                 print(
                     "Epoch: {}, Batch: {}, Loss: {}, Alphas: {}".format(
-                        epoch, batch_idx, epoch_loss.avg, model.fc1.alphas.data
+                        epoch, batch_idx, epoch_loss.avg, model.alpha_feature_selectors.data
                     )
                 )
