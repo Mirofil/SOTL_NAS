@@ -1,4 +1,4 @@
-# python linear/train.py --model_type=AE --dataset=MNISTsmall --arch_train_data sotl --grad_outer_loop_order=None --mode=bilevel --device=cuda --initial_degree 1 --hvp=finite_diff --epochs=75 --w_lr=0.0001 --T=10 --a_lr=0.01 --hessian_tracking True --w_optim=Adam --a_optim=Adam --w_warm_start 0 --train_arch=True --a_weight_decay=0.001 --smoke_test False --dry_run=False --w_weight_decay 1 --rand_seed 1
+# python linear/train.py --model_type=AE --dataset=MNIST --arch_train_data sotl --grad_outer_loop_order=None --mode=bilevel --device=cuda --initial_degree 1 --hvp=finite_diff --epochs=75 --w_lr=0.0001 --T=10 --a_lr=0.01 --hessian_tracking True --w_optim=Adam --a_optim=Adam --w_warm_start 0 --train_arch=True --a_weight_decay=0.001 --smoke_test False --dry_run=False --w_weight_decay 1 --rand_seed 1
 # python linear/train.py --model_type=max_deg --dataset=fourier --dry_run=False --T=2 --grad_outer_loop_order=1 --grad_inner_loop_order=1 --mode=bilevel --device=cpu
 # python linear/train.py --model_type=MNIST --dataset=MNIST --dry_run=False --T=1 --w_warm_start=0 --grad_outer_loop_order=-1 --grad_inner_loop_order=-1 --mode=bilevel --device=cuda --extra_weight_decay=0.0001 --w_weight_decay=0 --arch_train_data=val
 
@@ -215,8 +215,6 @@ def train_bptt(
                     a_optimizer.step()
 
 
-                    wandb.log(to_log)
-
             if mode == "bilevel" and epoch >= w_warm_start:
 
                 weights_after_rollout = switch_weights(model, weight_buffer[0])
@@ -297,8 +295,9 @@ def train_bptt(
 
 
         print("Epoch: {}, Val Loss: {}, Test Loss: {}, Discretized AUC: {}, MSE: {}, Reconstruction Acc: {}, Hess: {}".format(epoch, val_results.avg, test_results.avg, auc, mse, acc, hessian_eigenvalue))
-        wandb.log({"Val loss": val_results.avg, "Val acc": val_acc_results.avg, "Test loss": test_results.avg, "Test acc": test_acc_results.avg, "AUC_training": auc, "MSE training":mse, 
-            "RecAcc training":acc, "Arch. Hessian domin. eigenvalue": hessian_eigenvalue, "Epoch": epoch})
+        to_log = {**to_log, "Val loss": val_results.avg, "Val acc": val_acc_results.avg, "Test loss": test_results.avg, "Test acc": test_acc_results.avg, "AUC_training": auc, "MSE training":mse, 
+            "RecAcc training":acc, "Arch. Hessian domin. eigenvalue": hessian_eigenvalue, "Epoch": epoch}
+        wandb.log({model.model_type:{dataset:{**to_log}}})
         wandb.run.summary["Grad compute speed"] = grad_compute_speed.avg
 
         print(f"Grad compute speed: {grad_compute_speed.avg}s")
@@ -502,7 +501,7 @@ def main(epochs = 5,
                     auc, acc = compute_auc(clf_model, k, raw_x, raw_y, test_x, test_y, mode = key)
                     AUCs[key].append(auc)
                     accs[key].append(acc)
-                wandb.log({**{key+"_auc":AUCs[key][k-1] for key in keys},**{key+"_acc":accs[key][k-1] for key in keys}, "k":k})
+                wandb.log({model_type:{dataset:{**{key+"_auc":AUCs[key][k-1] for key in keys},**{key+"_acc":accs[key][k-1] for key in keys}, "k":k}}})
         elif 'MNIST' in dataset:
 
             for k in tqdm(range(1,100 if not smoke_test else 3, 2), desc='Computing reconstructions for MNIST-like datasets'):
@@ -556,13 +555,14 @@ def main(epochs = 5,
                         train_arch=False,
                         config=config,
                         mode='joint',
-                        hessian_tracking=False
+                        hessian_tracking=False,
+                        log_suffix=f"_retrainedK={k}"
                     )
 
                     val_loss, val_acc = valid_func(model, dset_test, criterion)
                     to_log["retrained_loss"] = val_loss.avg
                     to_log["retrained_acc"] = val_acc.avg
-                
+                to_log = {model_type:{dataset:{**to_log}}}
                 wandb.log(to_log)
 
 
