@@ -4,16 +4,14 @@ import torch.nn as nn
 from torch import Tensor
 import numpy as np
 import matplotlib.pyplot as plt
+from traits import FeatureSelectableTrait
 
 
-class LinearSquash(torch.nn.Linear):
+class LinearSquash(torch.nn.Linear, FeatureSelectableTrait):
     def __init__(self, in_features, out_features, bias, squash_type="softmax", **kwargs) -> None:
         super().__init__(in_features,out_features,bias)
         self.alphas = torch.nn.Parameter(torch.zeros(1, in_features))
-        if squash_type == "softmax":
-            self.squash = F.softmax
-        elif squash_type == "sigmoid":
-            self.squash = torch.sigmoid
+        self.squash_type = squash_type
 
 
     def forward(self, input: Tensor, weight: Tensor = None, alphas: Tensor = None) -> Tensor:
@@ -27,18 +25,28 @@ class LinearSquash(torch.nn.Linear):
     
     def squash_constants(self):
         return self.squash(self.alphas)
+    
+    def squash(self, *args, **kwargs):
+        if self.squash_type == "softmax":
+            return F.softmax
+        elif self.squash_type == "sigmoid":
+            return torch.sigmoid
 
-class FeatureSelection(torch.nn.Module):
+    def alpha_feature_selectors(self):
+        return self.alphas
+    
+    def feature_normalizers(self):
+        return self.weight
+
+class FeatureSelection(torch.nn.Module, FeatureSelectableTrait):
     def __init__(self, in_features, squash_type="sigmoid", **kwargs) -> None:
         super().__init__()
         self.weight = torch.nn.Parameter(torch.ones((1,in_features), requires_grad=False))
         self.feature_indices = {i for i in range(in_features)}
 
         self.alphas = torch.nn.Parameter(torch.zeros(1, in_features))
-        if squash_type == "softmax":
-            self.squash = F.softmax
-        elif squash_type == "sigmoid":
-            self.squash = torch.sigmoid
+        self.squash_type = squash_type
+
     def forward(self, x: Tensor, feature_indices=None) -> Tensor:
         if feature_indices is not None:
             for to_delete in range(x.shape[1]):
@@ -49,6 +57,12 @@ class FeatureSelection(torch.nn.Module):
                 if to_delete not in self.feature_indices:
                     x[:, to_delete] = 0 
         return x * self.squash(self.alphas)
+
+    def squash(self, *args, **kwargs):
+        if self.squash_type == "softmax":
+            return F.softmax(*args, **kwargs)
+        elif self.squash_type == "sigmoid":
+            return torch.sigmoid(*args, **kwargs)
 
 class LinearMaxDeg(torch.nn.Linear):
     def __init__(self, *args, degree=30, **kwargs) -> None:

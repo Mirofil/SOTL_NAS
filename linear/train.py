@@ -34,7 +34,8 @@ import scipy.linalg
 import time
 import fire
 from utils_train import (get_criterion, hinge_loss, get_optimizers, switch_weights, 
-    compute_train_loss, calculate_weight_decay, compute_auc, reconstruction_error)
+    compute_train_loss, calculate_weight_decay, compute_auc, 
+    reconstruction_error, choose_features)
 from tqdm import tqdm
 from typing import *
 from sklearn.linear_model import LogisticRegression, Lasso
@@ -257,17 +258,17 @@ def train_bptt(
                         epoch,
                         true_batch_index,
                         epoch_loss.avg,
-                        [x.data for x in model.arch_params()] if len(str([x.data for x in model.arch_params()])) < 20 else 'Too long',
-                        [x.data for x in model.weight_params()] if len(str([x.data for x in model.arch_params()])) < 20 else 'Too long'
+                        [x.data for x in model.arch_params()] if len(str([x.data for x in model.arch_params()])) < 20 else f'Too long, sample: {str([x.data for x in model.arch_params()])[0:50]}',
+                        [x.data for x in model.weight_params()] if len(str([x.data for x in model.arch_params()])) < 20 else f'Too long, sample: {str([x.data for x in model.arch_params()])[0:50]}'
                     )
                 )
 
 
-        val_results = valid_func(
+        val_results, val_acc_results = valid_func(
             model=model, dset_val=dset_val, criterion=criterion, device=device, print_results=False
         )
 
-        test_results = valid_func(
+        test_results, test_acc_results = valid_func(
             model=model, dset_val=dset_test, criterion=criterion, device=device, print_results=False
         )
 
@@ -337,7 +338,7 @@ def valid_func(model, dset_val, criterion, device = 'cuda' if torch.cuda.is_avai
             val_meter.update(val_loss.item())
     if print_results:
         print("Val loss: {}, Val acc: {}".format(val_meter.avg, val_acc_meter.avg if val_acc_meter.avg > 0 else "Not applicable"))
-    return val_meter
+    return val_meter, val_acc_meter
 
 
 def main(epochs = 5,
@@ -456,12 +457,12 @@ def main(epochs = 5,
         lapack_solution, res, eff_rank, sing_values = scipy.linalg.lstsq(dset_train[:][0], dset_train[:][1])
         print(f"Cond number:{abs(sing_values.max()/sing_values.min())}")
 
-        val_meter = valid_func(model=model, dset_val=dset_val, criterion=criterion, device=device, print_results=False)
+        val_meter, val_acc_meter = valid_func(model=model, dset_val=dset_val, criterion=criterion, device=device, print_results=False)
 
         model.fc1.weight = torch.nn.Parameter(torch.tensor(lapack_solution).to(device))
         model.fc1.to(device)
 
-        val_meter2 = valid_func(model=model, dset_val=dset_val, criterion=criterion, device=device, print_results=False)
+        val_meter2, val_acc_meter2 = valid_func(model=model, dset_val=dset_val, criterion=criterion, device=device, print_results=False)
 
         print(
             f"Trained val loss: {val_meter.avg}, SciPy solver val loss: {val_meter2.avg}, difference: {val_meter.avg - val_meter2.avg} (ie. {(val_meter.avg/val_meter2.avg-1)*100}% more)"
@@ -503,8 +504,60 @@ def main(epochs = 5,
                     accs[key].append(acc)
                 wandb.log({**{key+"_auc":AUCs[key][k-1] for key in keys},**{key+"_acc":accs[key][k-1] for key in keys}, "k":k})
         elif 'MNIST' in dataset:
-            for k in range(1,100 if not smoke_test else 3):
+
+            for k in tqdm(range(1,100 if not smoke_test else 3), desc='Computing reconstructions for MNIST-like datasets'):
                 mse, acc = reconstruction_error(model=model, k=k, raw_x=raw_x, raw_y=raw_y, test_x=test_x, test_y=test_y)
+                # if k in [10, 40, 70]:
+                #     features = choose_features(model, top_k=k, mode='normalized')
+                #     retrained_model = SoTLNet(num_features=int(len(dset_train[0][0])) if n_features is None else n_features, model_type=model_type, 
+                #     degree=initial_degree, weight_decay=extra_weight_decay, task=task, n_classes=n_classes)
+                #     retrained_model.config = config
+                #     retrained_model = retrained_model.to(device)
+                #     retrained_model.set_features(features)
+
+                    
+                #     criterion = get_criterion(model_type, task).to(device)
+
+                #     w_optimizer, a_optimizer, w_scheduler, a_scheduler = get_optimizers(model, config)
+
+                #     # Retrain as before BUT must set train_arch=False and change the model=retrained_model at least!
+                #     train_bptt(
+                #         epochs=20,
+                #         steps_per_epoch=steps_per_epoch,
+                #         model=retrained_model,
+                #         criterion=criterion,
+                #         w_optimizer=w_optimizer,
+                #         a_optimizer=a_optimizer,
+                #         w_scheduler=w_scheduler,
+                #         a_scheduler=a_scheduler,
+                #         dataset=dataset,
+                #         dset_train=dset_train,
+                #         dset_val=dset_val,
+                #         dset_test=dset_test,
+                #         logging_freq=logging_freq,
+                #         batch_size=batch_size,
+                #         T=T,
+                #         grad_clip=grad_clip,
+                #         w_lr=w_lr,
+                #         w_checkpoint_freq=w_checkpoint_freq,
+                #         grad_inner_loop_order=grad_inner_loop_order,
+                #         grad_outer_loop_order=grad_outer_loop_order,
+                #         hvp=hvp,
+                #         arch_train_data=arch_train_data,
+                #         normalize_a_lr=normalize_a_lr,
+                #         log_grad_norm=True,
+                #         log_alphas=True,
+                #         w_warm_start=w_warm_start,
+                #         extra_weight_decay=extra_weight_decay,
+                #         device=device,
+                #         train_arch=False,
+                #         config=config,
+                #         mode='joint',
+                #         hessian_tracking=False
+                #     )
+
+
+                
                 wandb.log({"MSE":mse, "RecAcc":acc, "k":k})
 
 
@@ -519,7 +572,7 @@ if __name__ == "__main__":
         fire.Fire(main)
 
 
-epochs = 50
+epochs = 75
 steps_per_epoch=5
 batch_size = 64
 D = 18
@@ -551,9 +604,9 @@ extra_weight_decay=0.0000
 grad_inner_loop_order=-1
 grad_outer_loop_order=-1
 arch_train_data="sotl"
-model_type="sigmoid"
-dataset="gisette"
-device = 'cpu'
+model_type="MLP"
+dataset="MNIST"
+device = 'cuda'
 train_arch=True
 dry_run=True
 mode="bilevel"

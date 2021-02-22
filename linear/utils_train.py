@@ -8,20 +8,22 @@ import sklearn.feature_selection
 from sklearn.linear_model import LogisticRegression, Lasso, LinearRegression
 import numpy as np
 from sklearn.ensemble import ExtraTreesClassifier
+from traits import FeatureSelectableTrait
+import torch.functional as F
 
 
 def choose_features(model, top_k=20, mode='normalized'):
-    if model.model_type == 'sigmoid':
+    if model.model_type in ['sigmoid', 'MLP'] or issubclass(model, FeatureSelectableTrait):
         if mode == 'alphas':
-            scores = model.alpha_feature_selectors.squeeze()
+            scores = model.alpha_feature_selectors().squeeze()
             top_k = torch.topk(scores, k=top_k)
         elif mode == 'normalized':
             # NOTE IMPORTANT THOUGHT - doing abs, then mean will give different effect than doing it the other way. If a feature has different signs based on the class predicted, 
             # is it good to drop it because it is conflicting? Or keep it when it has high magnitude and thus high discriminative power?
-            scores = (model.squash(model.alpha_feature_selectors)*torch.mean(torch.abs(model.feature_normalizers), dim=0)).squeeze()
+            scores = (model.model.squash(model.alpha_feature_selectors())*torch.mean(torch.abs(model.feature_normalizers()), dim=0)).squeeze()
             top_k = torch.topk(scores, k=top_k)
         elif mode == 'weights':
-            scores = torch.mean(torch.abs(model.feature_normalizers), dim=0)
+            scores = torch.mean(torch.abs(model.feature_normalizers()), dim=0)
             top_k = torch.topk(scores, k=top_k)
 
     else:
@@ -32,8 +34,8 @@ def choose_features(model, top_k=20, mode='normalized'):
 def reconstruction_error(model, k, raw_x, raw_y, test_x, test_y, choose_features_mode = "normalized"):
     # Used to compute reconstruction errors from Concrete Autoencoder paper
     top_k = choose_features(model, top_k=k, mode=choose_features_mode)
-    x = [elem[top_k.indices[0].cpu().numpy()] for elem in raw_x]
-    test_x = [elem[top_k.indices[0].cpu().numpy()] for elem in test_x]
+    x = [elem[top_k.indices.cpu().numpy()] for elem in raw_x]
+    test_x = [elem[top_k.indices.cpu().numpy()] for elem in test_x]
     
     clf = LinearRegression().fit(x, raw_y)
     preds = clf.predict(test_x)
@@ -76,8 +78,8 @@ def compute_auc(model,k, raw_x, raw_y, test_x, test_y, mode ="F", choose_feature
         test_x = [elem[top_k.indices.cpu().numpy()] for elem in test_x]
 
         if verbose:
-            print(f"Selected weights: {model.feature_normalizers.view(-1)[top_k.indices]}")
-            print(f"Selected alphas: {model.alpha_feature_selectors.view(-1)[top_k.indices]}")
+            print(f"Selected weights: {model.feature_normalizers().view(-1)[top_k.indices]}")
+            print(f"Selected alphas: {model.alpha_feature_selectors().view(-1)[top_k.indices]}")
     
     elif mode == "lasso" or mode == "logistic_l1" or mode == "tree":
         selector = sklearn.feature_selection.SelectFromModel(model, prefit=True, threshold=-np.inf, max_features=k)
@@ -173,6 +175,8 @@ def get_optimizers(model, config):
 
     return w_optimizer, a_optimizer, w_scheduler, a_scheduler
 
+def AEloss(output,target):
+    return F.mse_loss(output, output)
 
 def get_criterion(model_type, task):
     criterion=None
@@ -180,6 +184,8 @@ def get_criterion(model_type, task):
         criterion = torch.nn.CrossEntropyLoss()
     elif model_type in ["max_deg", "softmax_mult", "linear", "fourier", "polynomial", "sigmoid"] or task == 'reg':
         criterion = torch.nn.MSELoss()
+    elif model_type in ["AE"]:
+        criterion = AEloss
     
     return criterion
 
@@ -226,6 +232,6 @@ def train_normal(
             if batch_idx % logging_freq == 0:
                 print(
                     "Epoch: {}, Batch: {}, Loss: {}, Alphas: {}".format(
-                        epoch, batch_idx, epoch_loss.avg, model.alpha_feature_selectors.data
+                        epoch, batch_idx, epoch_loss.avg, model.alpha_feature_selectors().data
                     )
                 )
