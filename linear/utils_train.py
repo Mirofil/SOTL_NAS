@@ -10,10 +10,10 @@ import numpy as np
 from sklearn.ensemble import ExtraTreesClassifier
 from traits import FeatureSelectableTrait
 import torch.functional as F
-
+from sklearn.decomposition import PCA
 
 def choose_features(model, top_k=20, mode='normalized'):
-    if model.model_type in ['sigmoid', 'MLP'] or issubclass(model, FeatureSelectableTrait):
+    if model.model_type in ['sigmoid', 'MLP'] or issubclass(type(model.model), FeatureSelectableTrait):
         if mode == 'alphas':
             scores = model.alpha_feature_selectors().squeeze()
             top_k = torch.topk(scores, k=top_k)
@@ -33,9 +33,15 @@ def choose_features(model, top_k=20, mode='normalized'):
 
 def reconstruction_error(model, k, raw_x, raw_y, test_x, test_y, choose_features_mode = "normalized"):
     # Used to compute reconstruction errors from Concrete Autoencoder paper
-    top_k = choose_features(model, top_k=k, mode=choose_features_mode)
-    x = [elem[top_k.indices.cpu().numpy()] for elem in raw_x]
-    test_x = [elem[top_k.indices.cpu().numpy()] for elem in test_x]
+    if choose_features_mode == "PCA":
+        pca = PCA(n_components = k)
+        pca.fit(raw_x)
+        x = pca.transform(raw_x)
+        test_x = pca.transform(test_x)
+    else:
+        top_k = choose_features(model, top_k=k, mode=choose_features_mode)
+        x = [elem[top_k.indices.cpu().numpy()] for elem in raw_x]
+        test_x = [elem[top_k.indices.cpu().numpy()] for elem in test_x]
     
     clf = LinearRegression().fit(x, raw_y)
     preds = clf.predict(test_x)
@@ -48,7 +54,7 @@ def reconstruction_error(model, k, raw_x, raw_y, test_x, test_y, choose_features
     return mse, acc
 
 
-def compute_auc(model,k, raw_x, raw_y, test_x, test_y, mode ="F", choose_features_mode=None, verbose=True):
+def compute_auc(model, k, raw_x, raw_y, test_x, test_y, mode ="F", choose_features_mode=None, verbose=True):
     # if choose_features_mode is None and hasattr(model, "config"):
     #     choose_features_mode = model.config["auc_features_mode"]
     # else:
@@ -81,6 +87,12 @@ def compute_auc(model,k, raw_x, raw_y, test_x, test_y, mode ="F", choose_feature
             print(f"Selected weights: {model.feature_normalizers().view(-1)[top_k.indices]}")
             print(f"Selected alphas: {model.alpha_feature_selectors().view(-1)[top_k.indices]}")
     
+    elif mode == "PCA":
+        pca = PCA(n_components = k)
+        pca.fit(raw_x)
+        x = pca.transform(raw_x)
+        test_x = pca.transform(test_x)
+
     elif mode == "lasso" or mode == "logistic_l1" or mode == "tree":
         selector = sklearn.feature_selection.SelectFromModel(model, prefit=True, threshold=-np.inf, max_features=k)
         x = selector.transform(raw_x)
@@ -95,6 +107,11 @@ def compute_auc(model,k, raw_x, raw_y, test_x, test_y, mode ="F", choose_feature
 
 def calculate_weight_decay(model, alpha_w_order=None, w_order=1, adaptive_decay=None, a_order=1, a_coef=1, w_coef=0.001):
     param_norm=0
+    param_norm_a = 0
+    param_norm_w = 0
+    D_a = 0
+    D_w = 0
+    # TODO think about how to do param_norms in this alpha_weight_decay and adaptive_decay setting
     if model.alpha_weight_decay != 0 and alpha_w_order is not None:
         for n,weight in model.named_weight_params():
             if 'weight' in n:
@@ -102,19 +119,23 @@ def calculate_weight_decay(model, alpha_w_order=None, w_order=1, adaptive_decay=
         param_norm = torch.multiply(model.alpha_weight_decay, param_norm)
 
     if adaptive_decay != None and adaptive_decay != False and hasattr(model, "adaptive_weight_decay"):
-        # print(model.adaptive_weight_decay())
         param_norm = param_norm + model.adaptive_weight_decay()
     
     if a_order is not None:
         if model.model_type in ['sigmoid', 'MLP']:
             for arch_param in model.arch_params():
-                param_norm = param_norm + a_coef * torch.sum(torch.abs(torch.sigmoid(arch_param)))
+                param_norm_a = param_norm_a + a_coef * torch.sum(torch.abs(torch.sigmoid(arch_param)))
+                D_a = D_a + torch.numel(arch_param)
+
         else:
             for arch_param in model.arch_params():
-                param_norm = param_norm + a_coef * torch.sum(torch.abs(arch_param))
+                param_norm_a = param_norm_a + a_coef * torch.sum(torch.abs(arch_param))
+                D_a = D_a + torch.numel(arch_param)
     if w_order is not None:
         for w_param in model.weight_params():
-            param_norm = param_norm + w_coef * torch.pow(torch.norm(w_param, w_order), w_order)
+            param_norm_w = param_norm_w + w_coef * torch.pow(torch.norm(w_param, w_order), w_order)
+            D_w = D_w + torch.numel(w_param)
+    param_norm = param_norm_a/D_a + param_norm_w/D_w
     return param_norm
 
 
@@ -132,6 +153,7 @@ def compute_train_loss(x, y, criterion, model, weight_decay=True, y_pred=None, a
     loss = criterion(y_pred, y.long()) + param_norm
 
     return loss
+
 def switch_weights(model, weight_buffer_elem):
     with torch.no_grad():
         old_weights = [w.clone() for w in model.weight_params()]

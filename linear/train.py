@@ -1,4 +1,4 @@
-# python linear/train.py --model_type=sigmoid --dataset=gisette --arch_train_data sotl --grad_outer_loop_order=None --mode=bilevel --device=cuda --initial_degree 1 --hvp=finite_diff --epochs=75 --w_lr=0.0001 --T=25 --a_lr=0.01 --hessian_tracking False --w_optim=Adam --a_optim=Adam --train_arch=True --a_weight_decay=0.001 --smoke_test True --dry_run=False --w_weight_decay 0.01 --rand_seed 1
+# python linear/train.py --model_type=AE --dataset=MNIST --arch_train_data sotl --grad_outer_loop_order=None --mode=bilevel --device=cuda --initial_degree 1 --hvp=finite_diff --epochs=75 --w_lr=0.0001 --T=10 --a_lr=0.01 --hessian_tracking False --w_optim=Adam --a_optim=Adam --w_warm_start 0 --train_arch=True --a_weight_decay=0.001 --smoke_test False --dry_run=False --w_weight_decay 1 --rand_seed 1
 # python linear/train.py --model_type=max_deg --dataset=fourier --dry_run=False --T=2 --grad_outer_loop_order=1 --grad_inner_loop_order=1 --mode=bilevel --device=cpu
 # python linear/train.py --model_type=MNIST --dataset=MNIST --dry_run=False --T=1 --w_warm_start=0 --grad_outer_loop_order=-1 --grad_inner_loop_order=-1 --mode=bilevel --device=cuda --extra_weight_decay=0.0001 --w_weight_decay=0 --arch_train_data=val
 
@@ -78,7 +78,8 @@ def train_bptt(
     device:str,
     config: Dict,
     mode="joint",
-    hessian_tracking=True
+    hessian_tracking=True,
+    log_suffix=""
 ):
     
     train_loader = torch.utils.data.DataLoader(
@@ -93,7 +94,7 @@ def train_bptt(
     if device is None:
         device = 'cuda' if torch.cuda.is_available() else 'cpu'
 
-    for epoch in range(epochs):
+    for epoch in tqdm(range(epochs), desc='Iterating over epochs'):
         model.train()
 
         epoch_loss = AverageMeter()
@@ -101,7 +102,6 @@ def train_bptt(
         
         val_iter = iter(val_loader)
         for batch_idx, batch in enumerate(train_loader):
-            # print(model.fc1.weight[0:20])
             if steps_per_epoch is not None and batch_idx > steps_per_epoch:
                 break
 
@@ -252,16 +252,15 @@ def train_bptt(
                             "Batch": true_batch_index,
                         })
 
-            if true_batch_index % logging_freq == 0 or batch_idx == len(train_loader)-1:
-                print(
-                    "Epoch: {}, Batch: {}, Loss: {}, Alphas: {}, Weights: {}".format(
-                        epoch,
-                        true_batch_index,
-                        epoch_loss.avg,
-                        [x.data for x in model.arch_params()] if len(str([x.data for x in model.arch_params()])) < 20 else f'Too long, sample: {str([x.data for x in model.arch_params()])[0:50]}',
-                        [x.data for x in model.weight_params()] if len(str([x.data for x in model.arch_params()])) < 20 else f'Too long, sample: {str([x.data for x in model.arch_params()])[0:50]}'
-                    )
-                )
+        print(
+            "Epoch: {}, Batch: {}, Loss: {}, Alphas: {}, Weights: {}".format(
+                epoch,
+                true_batch_index,
+                epoch_loss.avg,
+                [x.data for x in model.arch_params()] if len(str([x.data for x in model.arch_params()])) < 20 else f'Too long',
+                [x.data for x in model.weight_params()] if len(str([x.data for x in model.arch_params()])) < 20 else f'Too long'
+            )
+        )
 
 
         val_results, val_acc_results = valid_func(
@@ -274,21 +273,21 @@ def train_bptt(
 
         auc, acc, mse, hessian_eigenvalue = None, None, None, None
         best = {"auc":{"value":0, "alphas":None}, "acc":{"value":0, "alphas":None}} # TODO this needs to be outside of the for loop to be persisent. BUt I think Ill drop it for now regardless
-        if model.model_type in ['sigmoid', "MLP"]:
+        if model.model_type in ['sigmoid', "MLP", "AE"]:
             raw_x = [pair[0].view(-1).numpy() for pair in dset_train]
             raw_y = [pair[1].numpy() if type(pair[1]) != int else pair[1] for pair in dset_train]
 
-            test_x = [pair[0].view(-1).numpy() for pair in dset_val]
-            test_y = [pair[1].numpy() if type(pair[1]) != int else pair[1] for pair in dset_val]
+            val_x = [pair[0].view(-1).numpy() for pair in dset_val]
+            val_y = [pair[1].numpy() if type(pair[1]) != int else pair[1] for pair in dset_val]
 
             if dataset in ['gisette']:
             # We need binary classification task for this to make sense
-                auc, acc = compute_auc(model=model, raw_x=raw_x, raw_y=raw_y, test_x=test_x, test_y=test_y, k=25, mode="DFS-NAS")
+                auc, acc = compute_auc(model=model, raw_x=raw_x, raw_y=raw_y, test_x=val_x, test_y=val_y, k=25, mode="DFS-NAS")
                 # if auc > best["auc"]["value"]:
                 #     best["auc"]["value"] = auc
                 #     best["auc"]["alphas"] = model.alpha_feature_selectors
             if 'MNIST' in dataset:
-                mse, acc = reconstruction_error(model=model,k=50, raw_x=raw_x, raw_y=raw_y, test_x=test_x, test_y=test_y)
+                mse, acc = reconstruction_error(model=model, k=50, raw_x=raw_x, raw_y=raw_y, test_x=val_x, test_y=val_y)
 
         if hessian_tracking:
             eigenvals, eigenvecs = compute_hessian_eigenthings(model, train_loader,
@@ -298,7 +297,7 @@ def train_bptt(
 
 
         print("Epoch: {}, Val Loss: {}, Test Loss: {}, Discretized AUC: {}, MSE: {}, Reconstruction Acc: {}, Hess: {}".format(epoch, val_results.avg, test_results.avg, auc, mse, acc, hessian_eigenvalue))
-        wandb.log({"Val loss": val_results.avg, "Test loss": test_results.avg, "AUC_training": auc, "MSE training":mse, 
+        wandb.log({"Val loss": val_results.avg, "Val acc": val_acc_results.avg, "Test loss": test_results.avg, "Test acc": test_acc_results.avg, "AUC_training": auc, "MSE training":mse, 
             "RecAcc training":acc, "Arch. Hessian domin. eigenvalue": hessian_eigenvalue, "Epoch": epoch})
         wandb.run.summary["Grad compute speed"] = grad_compute_speed.avg
 
@@ -475,14 +474,14 @@ def main(epochs = 5,
         except:
             print("No model degree info; probably a different model_type was chosen")
     
-    if model_type in ["sigmoid", "MLP"]:
+    if model_type in ["sigmoid", "MLP", "AE"]:
         raw_x = [pair[0].view(-1).numpy() for pair in dset_train]
         raw_y = [pair[1].numpy() if type(pair[1]) != int else pair[1] for pair in dset_train]
 
         test_x = [pair[0].view(-1).numpy() for pair in dset_test]
         test_y = [pair[1].numpy() if type(pair[1]) != int else pair[1] for pair in dset_test]
         if dataset == 'gisette':
-            keys = ["F", "DFS-NAS", "DFS-NAS alphas", "DFS-NAS weights", "lasso", "logistic_l1", "tree"]
+            keys = ["F", "DFS-NAS", "DFS-NAS alphas", "DFS-NAS weights", "lasso", "logistic_l1", "tree", "PCA"]
             AUCs = {k:[] for k in keys}
             accs = {k:[] for k in keys}
 
@@ -494,7 +493,8 @@ def main(epochs = 5,
                 models_to_train[k].fit(raw_x, raw_y)
 
             models = {**models_to_train,
-            "F":None, "DFS-NAS":model, "DFS-NAS alphas":model, "DFS-NAS weights":model}
+            "F":None, "DFS-NAS":model, "DFS-NAS alphas":model, "DFS-NAS weights":model, 
+            "PCA":None}
 
             for k in tqdm(range(1, 100 if not smoke_test else 3), desc="Computing AUCs for different top-k features"):
 
@@ -505,60 +505,65 @@ def main(epochs = 5,
                 wandb.log({**{key+"_auc":AUCs[key][k-1] for key in keys},**{key+"_acc":accs[key][k-1] for key in keys}, "k":k})
         elif 'MNIST' in dataset:
 
-            for k in tqdm(range(1,100 if not smoke_test else 3), desc='Computing reconstructions for MNIST-like datasets'):
+            for k in tqdm(range(1,100 if not smoke_test else 3, 2), desc='Computing reconstructions for MNIST-like datasets'):
                 mse, acc = reconstruction_error(model=model, k=k, raw_x=raw_x, raw_y=raw_y, test_x=test_x, test_y=test_y)
-                # if k in [10, 40, 70]:
-                #     features = choose_features(model, top_k=k, mode='normalized')
-                #     retrained_model = SoTLNet(num_features=int(len(dset_train[0][0])) if n_features is None else n_features, model_type=model_type, 
-                #     degree=initial_degree, weight_decay=extra_weight_decay, task=task, n_classes=n_classes)
-                #     retrained_model.config = config
-                #     retrained_model = retrained_model.to(device)
-                #     retrained_model.set_features(features)
+                to_log = {}
+                to_log.update({"MSE":mse, "RecAcc":acc, "k":k})
+                # We also want to examine the model perforamnce if it was retrained using only the selected features and without architecture training
+                if k in [9, 39, 69]:
+                    features = choose_features(model, top_k=k, mode='normalized')
+                    retrained_model = SoTLNet(num_features=int(len(dset_train[0][0])) if n_features is None else n_features, model_type=model_type, 
+                        degree=initial_degree, weight_decay=extra_weight_decay, task=task, n_classes=n_classes)
+                    retrained_model.config = config
+                    retrained_model = retrained_model.to(device)
+                    retrained_model.set_features(features.indices)
 
                     
-                #     criterion = get_criterion(model_type, task).to(device)
+                    criterion = get_criterion(model_type, task).to(device)
 
-                #     w_optimizer, a_optimizer, w_scheduler, a_scheduler = get_optimizers(model, config)
+                    w_optimizer, a_optimizer, w_scheduler, a_scheduler = get_optimizers(model, config)
 
-                #     # Retrain as before BUT must set train_arch=False and change the model=retrained_model at least!
-                #     train_bptt(
-                #         epochs=20,
-                #         steps_per_epoch=steps_per_epoch,
-                #         model=retrained_model,
-                #         criterion=criterion,
-                #         w_optimizer=w_optimizer,
-                #         a_optimizer=a_optimizer,
-                #         w_scheduler=w_scheduler,
-                #         a_scheduler=a_scheduler,
-                #         dataset=dataset,
-                #         dset_train=dset_train,
-                #         dset_val=dset_val,
-                #         dset_test=dset_test,
-                #         logging_freq=logging_freq,
-                #         batch_size=batch_size,
-                #         T=T,
-                #         grad_clip=grad_clip,
-                #         w_lr=w_lr,
-                #         w_checkpoint_freq=w_checkpoint_freq,
-                #         grad_inner_loop_order=grad_inner_loop_order,
-                #         grad_outer_loop_order=grad_outer_loop_order,
-                #         hvp=hvp,
-                #         arch_train_data=arch_train_data,
-                #         normalize_a_lr=normalize_a_lr,
-                #         log_grad_norm=True,
-                #         log_alphas=True,
-                #         w_warm_start=w_warm_start,
-                #         extra_weight_decay=extra_weight_decay,
-                #         device=device,
-                #         train_arch=False,
-                #         config=config,
-                #         mode='joint',
-                #         hessian_tracking=False
-                #     )
+                    # Retrain as before BUT must set train_arch=False and change the model=retrained_model at least!
+                    train_bptt(
+                        epochs=20,
+                        steps_per_epoch=steps_per_epoch,
+                        model=retrained_model,
+                        criterion=criterion,
+                        w_optimizer=w_optimizer,
+                        a_optimizer=a_optimizer,
+                        w_scheduler=w_scheduler,
+                        a_scheduler=a_scheduler,
+                        dataset=dataset,
+                        dset_train=dset_train,
+                        dset_val=dset_val,
+                        dset_test=dset_test,
+                        logging_freq=logging_freq,
+                        batch_size=batch_size,
+                        T=T,
+                        grad_clip=grad_clip,
+                        w_lr=w_lr,
+                        w_checkpoint_freq=w_checkpoint_freq,
+                        grad_inner_loop_order=grad_inner_loop_order,
+                        grad_outer_loop_order=grad_outer_loop_order,
+                        hvp=hvp,
+                        arch_train_data=arch_train_data,
+                        normalize_a_lr=normalize_a_lr,
+                        log_grad_norm=True,
+                        log_alphas=True,
+                        w_warm_start=w_warm_start,
+                        extra_weight_decay=extra_weight_decay,
+                        device=device,
+                        train_arch=False,
+                        config=config,
+                        mode='joint',
+                        hessian_tracking=False
+                    )
 
-
+                    val_loss, val_acc = valid_func(model, dset_test, criterion)
+                    to_log["retrained_loss"] = val_loss.avg
+                    to_log["retrained_acc"] = val_acc.avg
                 
-                wandb.log({"MSE":mse, "RecAcc":acc, "k":k})
+                wandb.log(to_log)
 
 
 if __name__ == "__main__":
@@ -604,8 +609,8 @@ extra_weight_decay=0.0000
 grad_inner_loop_order=-1
 grad_outer_loop_order=-1
 arch_train_data="sotl"
-model_type="MLP"
-dataset="MNIST"
+model_type="AE"
+dataset="gisette"
 device = 'cuda'
 train_arch=True
 dry_run=True

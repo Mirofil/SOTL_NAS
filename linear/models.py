@@ -61,11 +61,11 @@ class SoTLNet(RegressionNet):
             self.fc1 = FlexibleLinear(num_features, n_classes, bias=False)
             self.model = self.fc1
         elif model_type == "MNIST" or model_type == "MLP":
-            self.model = MLP(input_dim=28*28,hidden_dim=1000,output_dim=n_classes, weight_decay=weight_decay)
+            self.model = MLP(input_dim=num_features,hidden_dim=1000,output_dim=n_classes, weight_decay=weight_decay)
         elif model_type == "log_regression":
-            self.model = LogReg(input_dim=28*28, output_dim=n_classes)
+            self.model = LogReg(input_dim=num_features, output_dim=n_classes)
         elif model_type == "AE":
-            self.model = AE(input_dim=28*28)
+            self.model = AE(input_dim=num_features)
         else:
             raise NotImplementedError
         self.alphas = []
@@ -143,6 +143,7 @@ class MLP(RegressionNet, FeatureSelectableTrait):
 class AE(RegressionNet, FeatureSelectableTrait):
     def __init__(self, input_dim=28*28, **kwargs):
         super().__init__()
+        self._input_dim = input_dim
         self.feature_selection = FeatureSelection(input_dim)
         self.encoder_hidden_layer = nn.Linear(
             in_features=input_dim, out_features=128
@@ -157,7 +158,7 @@ class AE(RegressionNet, FeatureSelectableTrait):
             in_features=128, out_features=input_dim
         )
 
-    def forward(self, x):
+    def forward(self, x, *args, **kwargs):
         x = x.view(-1, self._input_dim)
         x = self.feature_selection(x, feature_indices=self.feature_indices)
         activation = self.encoder_hidden_layer(x)
@@ -169,7 +170,8 @@ class AE(RegressionNet, FeatureSelectableTrait):
         activation = self.decoder_output_layer(activation)
         reconstructed = torch.relu(activation)
         return reconstructed
-
+    def squash(self, *args, **kwargs):
+        return self.feature_selection.squash(*args, **kwargs)
     def alpha_feature_selectors(self):
         return self.feature_selection.alphas
     

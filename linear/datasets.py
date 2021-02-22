@@ -9,6 +9,7 @@ import os
 from sklearn.datasets import load_svmlight_file
 from sklearn import preprocessing
 
+
 def get_datasets(name, path=None, test_split=0.85, normalize=True, **kwargs):
     n_classes = 1
     n_features=None
@@ -77,6 +78,7 @@ def get_datasets(name, path=None, test_split=0.85, normalize=True, **kwargs):
 
         n_classes = 2
         n_features=5000
+
     elif name == "fourier":
         x, y = data_generator(
             **kwargs
@@ -90,8 +92,39 @@ def get_datasets(name, path=None, test_split=0.85, normalize=True, **kwargs):
         )
 
         n_classes = 1
+    elif name == 'isolet':
+        x_train = np.genfromtxt(data_path / 'isolet1+2+3+4.data', delimiter = ',', usecols = range(0, 617), encoding = 'UTF-8')
+        y_train = np.genfromtxt(data_path / 'isolet1+2+3+4.data', delimiter = ',', usecols = [617], encoding = 'UTF-8')
+        x_test = np.genfromtxt(data_path / 'isolet5.data', delimiter = ',', usecols = range(0, 617), encoding = 'UTF-8')
+        y_test = np.genfromtxt(data_path / 'isolet5.data', delimiter = ',', usecols = [617], encoding = 'UTF-8')
         
-    elif name == "MNIST":
+        X = preprocessing.MinMaxScaler(feature_range=(0,1)).fit_transform(np.concatenate((x_train, x_test)))
+        x_train = torch.tensor(X[: len(y_train)], dtype=torch.float32)
+        x_test = torch.tensor(X[len(y_train):], dtype=torch.float32)
+
+        y_train = torch.tensor(y_train, dtype=torch.long)
+        y_test = torch.tensor(y_test, dtype=torch.long)
+
+        dset_train = torch.utils.data.TensorDataset(x_train, y_train)
+        dset_test = torch.utils.data.TensorDataset(x_test, y_test)
+    
+    elif name == 'activity':
+        x_train = np.loadtxt(os.path.join('datasets/dataset_uci', 'final_X_train.txt'), delimiter = ',', encoding = 'UTF-8')
+        x_test = np.loadtxt(os.path.join('datasets/dataset_uci', 'final_X_test.txt'), delimiter = ',', encoding = 'UTF-8')
+        y_train = np.loadtxt(os.path.join('datasets/dataset_uci', 'final_y_train.txt'), delimiter = ',', encoding = 'UTF-8')
+        y_test = np.loadtxt(os.path.join('datasets/dataset_uci', 'final_y_test.txt'), delimiter = ',', encoding = 'UTF-8')
+        
+        X = preprocessing.MinMaxScaler(feature_range=(0,1)).fit_transform(np.concatenate((x_train, x_test)))
+        x_train = torch.tensor(X[: len(y_train)], dtype=torch.float32)
+        x_test = torch.tensor(X[len(y_train):], dtype=torch.float32)
+
+        y_train = torch.tensor(y_train, dtype=torch.long)
+        y_test = torch.tensor(y_test, dtype=torch.long)
+
+        dset_train = torch.utils.data.TensorDataset(x_train, y_train)
+        dset_test = torch.utils.data.TensorDataset(x_test, y_test)
+
+    elif name == "MNIST" or name == "MNISTsmall":
         dset_train = datasets.MNIST('./data', train=True, download=True,
                 transform=transforms.Compose([
                     transforms.ToTensor(),
@@ -99,6 +132,13 @@ def get_datasets(name, path=None, test_split=0.85, normalize=True, **kwargs):
                 ]))
 
         dset_test = datasets.MNIST('./data', train=False, transform=transforms.Compose([transforms.ToTensor(), transforms.Normalize((0.1307,), (0.3081,))]))
+        
+        if name == "MNISTsmall":
+            # This should replicate the MNIST version from the Concrete Autoencoder
+            dset_train, dset_test = torch.utils.data.random_split(
+                dset_test, [int(len(dset_train) * 0.6), len(dset_train) - int(len(dset_train) * 0.6)]
+            )
+        
         n_classes = 10
         n_features=28*28
     
@@ -129,6 +169,14 @@ def get_datasets(name, path=None, test_split=0.85, normalize=True, **kwargs):
                 ]))
 
         dset_test = datasets.FashionMNIST('./data', train=False, transform=transforms.Compose([transforms.ToTensor(), transforms.Normalize((0.1307,), (0.3081,))]))
+        
+        if name == "FashionMNISTsmall":
+            # This should replicate the MNIST version from the Concrete Autoencoder
+            dset_train, dset_test = torch.utils.data.random_split(
+                dset_test, [int(len(dset_train) * 0.6), len(dset_train) - int(len(dset_train) * 0.6)]
+            )
+        
+        
         n_classes = 10
         n_features=28*28
 
