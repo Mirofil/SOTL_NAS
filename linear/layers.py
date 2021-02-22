@@ -28,9 +28,9 @@ class LinearSquash(torch.nn.Linear, FeatureSelectableTrait):
     
     def squash(self, *args, **kwargs):
         if self.squash_type == "softmax":
-            return F.softmax
+            return F.softmax(*args, **kwargs)
         elif self.squash_type == "sigmoid":
-            return torch.sigmoid
+            return torch.sigmoid(*args, **kwargs)
 
     def alpha_feature_selectors(self):
         return self.alphas
