@@ -136,7 +136,7 @@ def get_datasets(name, path=None, test_split=0.85, normalize=True, **kwargs):
         if name == "MNISTsmall":
             # This should replicate the MNIST version from the Concrete Autoencoder
             dset_train, dset_test = torch.utils.data.random_split(
-                dset_test, [int(len(dset_train) * 0.6), len(dset_train) - int(len(dset_train) * 0.6)]
+                dset_test, [int(len(dset_test) * 0.6), len(dset_test) - int(len(dset_test) * 0.6)]
             )
         
         n_classes = 10
@@ -161,7 +161,7 @@ def get_datasets(name, path=None, test_split=0.85, normalize=True, **kwargs):
         n_classes = 2
         n_features=28*28
 
-    elif name == "FashionMNIST":
+    elif name == "FashionMNIST" or name == "FashionMNISTsmall":
         dset_train = datasets.FashionMNIST('./data', train=True, download=True,
                 transform=transforms.Compose([
                     transforms.ToTensor(),
@@ -173,7 +173,7 @@ def get_datasets(name, path=None, test_split=0.85, normalize=True, **kwargs):
         if name == "FashionMNISTsmall":
             # This should replicate the MNIST version from the Concrete Autoencoder
             dset_train, dset_test = torch.utils.data.random_split(
-                dset_test, [int(len(dset_train) * 0.6), len(dset_train) - int(len(dset_train) * 0.6)]
+                dset_test, [int(len(dset_test) * 0.6), len(dset_test) - int(len(dset_test) * 0.6)]
             )
         
         
