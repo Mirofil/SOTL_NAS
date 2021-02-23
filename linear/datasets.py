@@ -9,7 +9,7 @@ import os
 from sklearn.datasets import load_svmlight_file
 from sklearn import preprocessing
 from PIL import Image
-
+from urllib.request import urlopen
 
 def get_datasets(name, path=None, test_split=0.85, normalize=True, **kwargs):
     n_classes = None
@@ -130,10 +130,10 @@ def get_datasets(name, path=None, test_split=0.85, normalize=True, **kwargs):
         train_resp_url = 'https://archive.ics.uci.edu/ml/machine-learning-databases/madelon/MADELON/madelon_train.labels'
         val_resp_url = 'https://archive.ics.uci.edu/ml/machine-learning-databases/madelon/madelon_valid.labels'
         test_data_url = 'http://archive.ics.uci.edu/ml/machine-learning-databases/madelon/MADELON/madelon_test.data'
-        x_train = torch.tensor(np.loadtxt(urllib2.urlopen(train_data_url)))
-        y_train = torch.tensor(np.loadtxt(urllib2.urlopen(train_resp_url)), dtype=torch.long)
-        x_test =  torch.tensor(p.loadtxt(urllib2.urlopen(val_data_url)))
-        y_test =  torch.tensor(np.loadtxt(urllib2.urlopen(val_resp_url)), dtype=torch.long)
+        x_train = torch.tensor(np.loadtxt(urlopen(train_data_url)))
+        y_train = torch.tensor(np.loadtxt(urlopen(train_resp_url)), dtype=torch.long)
+        x_test =  torch.tensor(p.loadtxt(urlopen(val_data_url)))
+        y_test =  torch.tensor(np.loadtxt(urlopen(val_resp_url)), dtype=torch.long)
         scaler = preprocessing.StandardScaler().fit(X_train)
         x_train = scaler.transform(x_train)
         x_test = scaler.transform(x_test)   
