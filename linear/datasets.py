@@ -8,6 +8,7 @@ import torch
 import os
 from sklearn.datasets import load_svmlight_file
 from sklearn import preprocessing
+from PIL import Image
 
 
 def get_datasets(name, path=None, test_split=0.85, normalize=True, **kwargs):
@@ -124,19 +125,41 @@ def get_datasets(name, path=None, test_split=0.85, normalize=True, **kwargs):
         dset_train = torch.utils.data.TensorDataset(x_train, y_train)
         dset_test = torch.utils.data.TensorDataset(x_test, y_test)
     elif name=="madelon":
-            train_data_url = 'https://archive.ics.uci.edu/ml/machine-learning-databases/madelon/MADELON/madelon_train.data'
-            val_data_url = 'https://archive.ics.uci.edu/ml/machine-learning-databases/madelon/MADELON/madelon_valid.data'
-            train_resp_url = 'https://archive.ics.uci.edu/ml/machine-learning-databases/madelon/MADELON/madelon_train.labels'
-            val_resp_url = 'https://archive.ics.uci.edu/ml/machine-learning-databases/madelon/madelon_valid.labels'
-            test_data_url = 'http://archive.ics.uci.edu/ml/machine-learning-databases/madelon/MADELON/madelon_test.data'
-            x_train = torch.tensor(np.loadtxt(urllib2.urlopen(train_data_url)))
-            y_train = torch.tensor(np.loadtxt(urllib2.urlopen(train_resp_url)), dtype=torch.long)
-            x_test =  torch.tensor(p.loadtxt(urllib2.urlopen(val_data_url)))
-            y_test =  torch.tensor(np.loadtxt(urllib2.urlopen(val_resp_url)), dtype=torch.long)
-            scaler = preprocessing.StandardScaler().fit(X_train)
-            x_train = scaler.transform(x_train)
-            x_test = scaler.transform(x_test)   
-            # TODO finish
+        train_data_url = 'https://archive.ics.uci.edu/ml/machine-learning-databases/madelon/MADELON/madelon_train.data'
+        val_data_url = 'https://archive.ics.uci.edu/ml/machine-learning-databases/madelon/MADELON/madelon_valid.data'
+        train_resp_url = 'https://archive.ics.uci.edu/ml/machine-learning-databases/madelon/MADELON/madelon_train.labels'
+        val_resp_url = 'https://archive.ics.uci.edu/ml/machine-learning-databases/madelon/madelon_valid.labels'
+        test_data_url = 'http://archive.ics.uci.edu/ml/machine-learning-databases/madelon/MADELON/madelon_test.data'
+        x_train = torch.tensor(np.loadtxt(urllib2.urlopen(train_data_url)))
+        y_train = torch.tensor(np.loadtxt(urllib2.urlopen(train_resp_url)), dtype=torch.long)
+        x_test =  torch.tensor(p.loadtxt(urllib2.urlopen(val_data_url)))
+        y_test =  torch.tensor(np.loadtxt(urllib2.urlopen(val_resp_url)), dtype=torch.long)
+        scaler = preprocessing.StandardScaler().fit(X_train)
+        x_train = scaler.transform(x_train)
+        x_test = scaler.transform(x_test)   
+        # TODO finish
+    elif name == "coil":
+        samples = []
+        for i in range(1, 21):
+            for image_index in range(72):
+                obj_img = Image.open(data_path / 'coil-20-proc' / f'obj{i}__{image_index}.png')
+                rescaled = obj_img.resize((20,20))
+                pixels_values = [float(x) for x in list(rescaled.getdata())]
+                sample = np.array(pixels_values + [i])
+                samples.append(sample)
+        samples = np.array(samples)
+        np.random.shuffle(samples)
+        data = samples[:, :-1]
+        targets = (samples[:, -1] + 0.5).astype(np.int64)
+        data = (data - data.min()) / (data.max() - data.min())
+        
+        l = data.shape[0] * 4 // 5
+
+        x_train, y_train = torch.tensor(data[:l]), torch.tensor(targets[:l], dtype=torch.long)
+        x_test, y_test = torch.tensor(data[l:]), torch.tensor(targets[l:], dtype=torch.long)
+        dset_train = torch.utils.data.TensorDataset(x_train, y_train)
+        dset_test = torch.utils.data.TensorDataset(x_test, y_test)
+
     elif name == "MNIST" or name == "MNISTsmall":
         dset_train = datasets.MNIST('./data', train=True, download=True,
                 transform=transforms.Compose([
@@ -213,7 +236,7 @@ def get_datasets(name, path=None, test_split=0.85, normalize=True, **kwargs):
             dset_train, [int(len(dset_train) * test_split), len(dset_train) - int(len(dset_train) * test_split)]
         )
 
-    if name in ['MNIST', 'CIFAR', "FashionMNIST", 'isolet', 'madelon', 'activity']:
+    if name in ['MNIST', 'CIFAR', "FashionMNIST", 'isolet', 'madelon', 'activity', 'coil']:
         task = 'multiclass'
     elif name in ['gisette', 'MNIST35']:
         task = 'binary'

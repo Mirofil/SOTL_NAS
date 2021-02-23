@@ -7,6 +7,7 @@
 import os
 import itertools
 import math
+from pathlib import Path
 
 import numpy
 import numpy as np
@@ -44,8 +45,7 @@ import sklearn.metrics
 import sklearn.feature_selection
 from sklearn.ensemble import ExtraTreesClassifier
 from hessian_eigenthings import compute_hessian_eigenthings
-
-
+import pickle
 
 def train_bptt(
     epochs: int,
@@ -505,16 +505,27 @@ def main(epochs = 5,
         accs = {k:[] for k in [*keys, *fit_once_keys]}
         MSEs = {k:[] for k in [*keys, *fit_once_keys]}
 
-        models_to_train = {"logistic_l1":LogisticRegression(penalty='l1', solver='saga', C=1, max_iter=700 if not smoke_test else 5),
+
+
+        models_to_train = {"logistic_l1":LogisticRegression(penalty='l1', solver='saga', C=1, max_iter=700 if not smoke_test else 5) if not os.path.exists(f"./checkpoints/{model_name}_{dataset}.pkl"),
         "tree":ExtraTreesClassifier(n_estimators = 100), 
         "lasso":sklearn.linear_model.Lasso()}
 
+
+        for model_name in tqdm(models_to_train.keys(), desc="Either loading or training SKLearn models"):
+            fname = Path(f"./checkpoints/{model_name}_{dataset}.pkl")
+            if os.path.exists(fname):
+                with open(fname, 'rb') as f:
+                    models_to_train[model_name] = pickle.load(f)
+            
+            else:
+                models_to_train[model_name].fit(raw_x, raw_y)
+                if not smoke_test:
+                    with open(fname, 'wb') as f:
+                        pickle.dump(model_name, f)
+
         fit_once = {k:choose_features(model=None, x_train=raw_x, x_test=test_x, y_train=raw_y, top_k=100, mode = k) for k in tqdm(fit_once_keys, desc= "Fitting baseline SKFeature models")}
-
         
-        for k in tqdm(models_to_train.keys(), desc="Training baselines models for AUC computations"):
-            models_to_train[k].fit(raw_x, raw_y)
-
         models = {**models_to_train,
             "F":None, "DFS-NAS":model, "DFS-NAS alphas":model, "DFS-NAS weights":model, 
             **fit_once}
