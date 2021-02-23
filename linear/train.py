@@ -1,4 +1,4 @@
-# python linear/train.py --model_type=AE --dataset=MNIST --arch_train_data sotl --grad_outer_loop_order=None --mode=bilevel --device=cuda --initial_degree 1 --hvp=finite_diff --epochs=75 --w_lr=0.0001 --T=10 --a_lr=0.01 --hessian_tracking True --w_optim=Adam --a_optim=Adam --w_warm_start 0 --train_arch=True --a_weight_decay=0.001 --smoke_test False --dry_run=False --w_weight_decay=0.001 --rand_seed 1
+# python linear/train.py --model_type=AE --dataset=FashionMNISTsmall --arch_train_data sotl --grad_outer_loop_order=None --mode=bilevel --device=cuda --initial_degree 1 --hvp=finite_diff --epochs=75 --w_lr=0.0001 --T=10 --a_lr=0.01 --hessian_tracking False --w_optim=Adam --a_optim=Adam --w_warm_start 0 --train_arch=True --a_weight_decay=0.01 --smoke_test False --dry_run=True --w_weight_decay=0.01 --rand_seed 1
 # python linear/train.py --model_type=max_deg --dataset=fourier --dry_run=False --T=2 --grad_outer_loop_order=1 --grad_inner_loop_order=1 --mode=bilevel --device=cpu
 # python linear/train.py --model_type=MNIST --dataset=MNIST --dry_run=False --T=1 --w_warm_start=0 --grad_outer_loop_order=-1 --grad_inner_loop_order=-1 --mode=bilevel --device=cuda --extra_weight_decay=0.0001 --w_weight_decay=0 --arch_train_data=val
 
@@ -124,6 +124,7 @@ def train_bptt(
                 x = x.to(device)
                 y = y.to(device)
                 loss = compute_train_loss(x=x,y=y,criterion=criterion, model=model)
+  
                 epoch_loss.update(loss.item())
 
                 grads = torch.autograd.grad(
@@ -332,7 +333,16 @@ def valid_func(model, dset_val, criterion, device = 'cuda' if torch.cuda.is_avai
                 correct = torch.sum((predicted == y)).item()
                 total = predicted.size()[0]
                 val_acc_meter.update(correct/total)
-            val_loss = criterion(y_pred, y.long())
+            if type(criterion) is torch.nn.modules.loss.MSELoss:
+                # TODO The reshape seems to be necessary for auto-encoder - not sure why the shape is still mangled up even though I tried to reshape when returning from AE
+                if model.model_type == "AE":
+                    val_loss = criterion(y_pred, x)
+                else:
+                    val_loss = criterion(y_pred, y)
+
+            elif type(criterion) is torch.nn.CrossEntropyLoss:
+                val_loss = criterion(y_pred, y.long()) 
+
             val_meter.update(val_loss.item())
     if print_results:
         print("Val loss: {}, Val acc: {}".format(val_meter.avg, val_acc_meter.avg if val_acc_meter.avg > 0 else "Not applicable"))
@@ -412,7 +422,7 @@ def main(epochs = 5,
     model.config = config
     model = model.to(device)
 
-    criterion = get_criterion(model_type, task).to(device)
+    criterion = get_criterion(model_type, task)
 
     w_optimizer, a_optimizer, w_scheduler, a_scheduler = get_optimizers(model, config)
 
@@ -520,7 +530,7 @@ def main(epochs = 5,
                     
                     criterion = get_criterion(model_type, task).to(device)
 
-                    w_optimizer, a_optimizer, w_scheduler, a_scheduler = get_optimizers(model, config)
+                    w_optimizer, a_optimizer, w_scheduler, a_scheduler = get_optimizers(retrained_model, config)
 
                     # Retrain as before BUT must set train_arch=False and change the model=retrained_model at least!
                     train_bptt(
@@ -610,7 +620,7 @@ grad_inner_loop_order=-1
 grad_outer_loop_order=-1
 arch_train_data="sotl"
 model_type="AE"
-dataset="gisette"
+dataset="MNISTsmall"
 device = 'cuda'
 train_arch=True
 dry_run=True

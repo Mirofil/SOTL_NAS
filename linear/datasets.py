@@ -11,7 +11,7 @@ from sklearn import preprocessing
 
 
 def get_datasets(name, path=None, test_split=0.85, normalize=True, **kwargs):
-    n_classes = 1
+    n_classes = None
     n_features=None
     if os.name == 'nt':
         data_path = Path("C:\\Users\\kawga\\Documents\\Oxford\\thesis\\code\\data\\")
@@ -204,6 +204,11 @@ def get_datasets(name, path=None, test_split=0.85, normalize=True, **kwargs):
         task = 'clf'
     else:
         task = 'reg'
+
+    if n_classes is None:
+        n_classes = len(dset_train[0][1])
+    if n_features is None:
+        n_features = dset_train[0][0].shape[1]
 
     results = {}
     results['dset_train'] = dset_train

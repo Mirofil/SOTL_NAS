@@ -3,7 +3,7 @@ from layers import LinearSquash, LinearMaxDeg, FlexibleLinear, FeatureSelection
 import torch.nn as nn
 import torch.nn.functional as F
 import itertools
-from traits import FeatureSelectableTrait
+from traits import FeatureSelectableTrait, AutoEncoder, Regressor, Classifier
 
 class RegressionNet(torch.nn.Module):
     def __init__(self, num_features = 2, **kwargs):
@@ -74,6 +74,7 @@ class SoTLNet(RegressionNet):
         else:
             self.alpha_weight_decay = torch.tensor(0)
     def forward(self, x, weight=None, alphas=None, feature_indices=None):
+        orig_shape = x.shape
         x = x.view(-1, self.num_features)
         if feature_indices is not None:
             for to_delete in range(x.shape[1]):
@@ -83,7 +84,7 @@ class SoTLNet(RegressionNet):
             for to_delete in range(x.shape[1]):
                 if to_delete not in self.feature_indices:
                     x[:, to_delete] = 0 
-        return self.model(x, weight, alphas)
+        return self.model(x, weight, alphas).reshape(orig_shape)
 
     def adaptive_weight_decay(self):
         return torch.sum(torch.abs(self.fc1.weight*self.fc1.compute_deg_constants()))
@@ -138,7 +139,7 @@ class MLP(RegressionNet, FeatureSelectableTrait):
     def feature_normalizers(self):
         return self.feature_selection.weight
 
-class AE(RegressionNet, FeatureSelectableTrait):
+class AE(RegressionNet, FeatureSelectableTrait, AutoEncoder):
     def __init__(self, input_dim=28*28, **kwargs):
         super().__init__()
         self._input_dim = input_dim
@@ -157,6 +158,7 @@ class AE(RegressionNet, FeatureSelectableTrait):
         )
 
     def forward(self, x, *args, **kwargs):
+        orig_shape = x.shape
         x = x.view(-1, self._input_dim)
         x = self.feature_selection(x, feature_indices=self.feature_indices)
         activation = self.encoder_hidden_layer(x)
@@ -167,6 +169,7 @@ class AE(RegressionNet, FeatureSelectableTrait):
         activation = torch.relu(activation)
         activation = self.decoder_output_layer(activation)
         reconstructed = torch.relu(activation)
+        reconstructed = reconstructed.reshape(orig_shape)
         return reconstructed
     def squash(self, *args, **kwargs):
         return self.feature_selection.squash(*args, **kwargs)

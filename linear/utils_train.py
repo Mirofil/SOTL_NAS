@@ -8,8 +8,8 @@ import sklearn.feature_selection
 from sklearn.linear_model import LogisticRegression, Lasso, LinearRegression
 import numpy as np
 from sklearn.ensemble import ExtraTreesClassifier
-from traits import FeatureSelectableTrait
-import torch.functional as F
+from traits import FeatureSelectableTrait, AutoEncoder
+import torch.nn.functional as F
 from sklearn.decomposition import PCA
 
 def choose_features(model, top_k=20, mode='normalized'):
@@ -144,13 +144,22 @@ def compute_train_loss(x, y, criterion, model, weight_decay=True, y_pred=None, a
 
     if y_pred is None:
         y_pred = model(x)
+    if issubclass(type(model.model), AutoEncoder):
+        y = x
+
+
     if weight_decay:
         param_norm = calculate_weight_decay(model, alpha_w_order=alpha_w_order, w_order=model.config["w_decay_order"],adaptive_decay=adaptive_decay, a_order=model.config["a_decay_order"], 
             a_coef=model.config["a_weight_decay"], w_coef=model.config["w_weight_decay"])
     else:
         param_norm = 0
 
-    loss = criterion(y_pred, y.long()) + param_norm
+    if type(criterion) is torch.nn.modules.loss.MSELoss:
+        loss = criterion(y_pred, y) + param_norm
+
+    elif type(criterion) is torch.nn.CrossEntropyLoss:
+        loss = criterion(y_pred, y.long()) + param_norm
+
 
     return loss
 
@@ -184,30 +193,24 @@ def get_optimizers(model, config):
             a_optimizer = SGD(model.arch_params(), lr=config["a_lr"], momentum=config["a_momentum"], weight_decay=config["a_weight_decay"])
         elif config['a_optim'] == 'Adam':
             a_optimizer = Adam(model.arch_params(), lr=config["a_lr"], weight_decay=config["a_weight_decay"])
+        a_scheduler = torch.optim.lr_scheduler.StepLR(a_optimizer, max(round(config["epochs"]/5), 1), gamma=0.2, verbose=False)
 
     else:
         # Placeholder optimizer that won't do anything - but the parameter list cannot be empty
         a_optimizer = None
-    
-    if config["train_arch"]:
-        a_scheduler = torch.optim.lr_scheduler.StepLR(a_optimizer, max(round(config["epochs"]/5), 1), gamma=0.2, verbose=False)
-    else:
         a_scheduler = None
 
 
     return w_optimizer, a_optimizer, w_scheduler, a_scheduler
 
-def AEloss(output,target):
-    return F.mse_loss(output, output)
 
 def get_criterion(model_type, task):
     criterion=None
-    if model_type in ["MNIST", "log_regression", "MLP"] or task == 'clf':
+    if model_type in ["MNIST", "log_regression", "MLP"]:
         criterion = torch.nn.CrossEntropyLoss()
-    elif model_type in ["max_deg", "softmax_mult", "linear", "fourier", "polynomial", "sigmoid"] or task == 'reg':
+    elif model_type in ["max_deg", "softmax_mult", "linear", "fourier", "polynomial", "sigmoid", "AE"]:
         criterion = torch.nn.MSELoss()
-    elif model_type in ["AE"]:
-        criterion = AEloss
+
     
     return criterion
 

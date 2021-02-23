@@ -14,3 +14,15 @@ class FeatureSelectableTrait(ABC):
     @abstractmethod
     def feature_normalizers(self):
         pass
+
+class AutoEncoder:
+    def __init__(self):
+        super().__init__()
+
+class Regressor:
+    def __init__(self):
+        super().__init__()
+
+class Classifier:
+    def __init__(self):
+        super().__init__()
