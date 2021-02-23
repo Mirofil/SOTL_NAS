@@ -18,7 +18,7 @@ def reconstruction_error(model, k, raw_x, raw_y, test_x,
     test_y, mode = "normalized"):
     # Used to compute reconstruction errors from Concrete Autoencoder paper
     indices, x, test_x = choose_features(model=model, x_train=raw_x, 
-        x_test=test_x, top_k=k, mode=mode)
+        x_test=test_x, y_train=raw_y, top_k=k, mode=mode)
     
     clf = LinearRegression().fit(x, raw_y)
     preds = clf.predict(test_x)
