@@ -1,4 +1,4 @@
-# python linear/train.py --model_type=AE --dataset=FashionMNISTsmall --arch_train_data sotl --grad_outer_loop_order=None --mode=bilevel --device=cuda --initial_degree 1 --hvp=finite_diff --epochs=75 --w_lr=0.0001 --T=10 --a_lr=0.01 --hessian_tracking False --w_optim=Adam --a_optim=Adam --w_warm_start 0 --train_arch=True --a_weight_decay=0.01 --smoke_test False --dry_run=True --w_weight_decay=0.01 --rand_seed 1
+# python linear/train.py --model_type=AE --dataset=gisette --arch_train_data sotl --grad_outer_loop_order=None --mode=bilevel --device=cuda --initial_degree 1 --hvp=finite_diff --epochs=50 --w_lr=0.0001 --T=10 --a_lr=0.01 --hessian_tracking False --w_optim=Adam --a_optim=Adam --w_warm_start 0 --train_arch=True --a_weight_decay=0.001 --smoke_test True --dry_run=True --w_weight_decay=0.00001 --rand_seed 1
 # python linear/train.py --model_type=max_deg --dataset=fourier --dry_run=False --T=2 --grad_outer_loop_order=1 --grad_inner_loop_order=1 --mode=bilevel --device=cpu
 # python linear/train.py --model_type=MNIST --dataset=MNIST --dry_run=False --T=1 --w_warm_start=0 --grad_outer_loop_order=-1 --grad_inner_loop_order=-1 --mode=bilevel --device=cuda --extra_weight_decay=0.0001 --w_weight_decay=0 --arch_train_data=val
 
@@ -35,7 +35,8 @@ import time
 import fire
 from utils_train import (get_criterion, hinge_loss, get_optimizers, switch_weights, 
     compute_train_loss, calculate_weight_decay, compute_auc, 
-    reconstruction_error, choose_features)
+    reconstruction_error)
+from utils_features import choose_features
 from tqdm import tqdm
 from typing import *
 from sklearn.linear_model import LogisticRegression, Lasso
@@ -55,6 +56,7 @@ def train_bptt(
     a_optimizer,
     w_scheduler,
     a_scheduler,
+    dataset_cfg:Dict,
     dataset:str,
     dset_train,
     dset_val,
@@ -77,9 +79,10 @@ def train_bptt(
     train_arch:bool,
     device:str,
     config: Dict,
-    mode="joint",
-    hessian_tracking=True,
-    log_suffix=""
+    mode:str="joint",
+    hessian_tracking:bool=True,
+    log_suffix:str="",
+    features:Sequence=None
 ):
     
     train_loader = torch.utils.data.DataLoader(
@@ -110,6 +113,9 @@ def train_bptt(
             xs, ys = torch.split(batch[0], batch_size), torch.split(
                 batch[1], batch_size
             )
+            if features is not None:
+                xs = [x[:, features] for x in xs]
+            
 
             if mode == "bilevel":
                 
@@ -122,6 +128,7 @@ def train_bptt(
 
             for intra_batch_idx, (x, y) in enumerate(zip(xs, ys),1):
                 x = x.to(device)
+
                 y = y.to(device)
                 loss = compute_train_loss(x=x,y=y,criterion=criterion, model=model)
   
@@ -273,11 +280,11 @@ def train_bptt(
         auc, acc, mse, hessian_eigenvalue = None, None, None, None
         best = {"auc":{"value":0, "alphas":None}, "acc":{"value":0, "alphas":None}} # TODO this needs to be outside of the for loop to be persisent. BUt I think Ill drop it for now regardless
         if model.model_type in ['sigmoid', "MLP", "AE"]:
-            raw_x = [pair[0].view(-1).numpy() for pair in dset_train]
-            raw_y = [pair[1].numpy() if type(pair[1]) != int else pair[1] for pair in dset_train]
+            raw_x = np.array([pair[0].view(-1).numpy() for pair in dset_train])
+            raw_y = np.array([pair[1].numpy() if type(pair[1]) != int else pair[1] for pair in dset_train])
 
-            val_x = [pair[0].view(-1).numpy() for pair in dset_val]
-            val_y = [pair[1].numpy() if type(pair[1]) != int else pair[1] for pair in dset_val]
+            val_x = np.array([pair[0].view(-1).numpy() for pair in dset_val])
+            val_y = np.array([pair[1].numpy() if type(pair[1]) != int else pair[1] for pair in dset_val])
 
             if dataset in ['gisette']:
             # We need binary classification task for this to make sense
@@ -285,7 +292,7 @@ def train_bptt(
                 # if auc > best["auc"]["value"]:
                 #     best["auc"]["value"] = auc
                 #     best["auc"]["alphas"] = model.alpha_feature_selectors
-            if 'MNIST' in dataset:
+            if 'MNIST' in dataset or dataset in ['isolet', 'activity']:
                 mse, acc = reconstruction_error(model=model, k=50, raw_x=raw_x, raw_y=raw_y, test_x=val_x, test_y=val_y)
 
         if hessian_tracking:
@@ -375,7 +382,7 @@ def main(epochs = 5,
     hvp="finite_diff",
     arch_train_data="sotl",
     normalize_a_lr=True,
-    w_warm_start=3,
+    w_warm_start=0,
     extra_weight_decay=0,
     grad_inner_loop_order=-1,
     grad_outer_loop_order=-1,
@@ -436,6 +443,7 @@ def main(epochs = 5,
         a_optimizer=a_optimizer,
         w_scheduler=w_scheduler,
         a_scheduler=a_scheduler,
+        dataset_cfg=dataset_info,
         dataset=dataset,
         dset_train=dset_train,
         dset_val=dset_val,
@@ -484,26 +492,30 @@ def main(epochs = 5,
             print("No model degree info; probably a different model_type was chosen")
     
     if model_type in ["sigmoid", "MLP", "AE"]:
-        raw_x = [pair[0].view(-1).numpy() for pair in dset_train]
-        raw_y = [pair[1].numpy() if type(pair[1]) != int else pair[1] for pair in dset_train]
+        raw_x = np.array([pair[0].view(-1).numpy() for pair in dset_train])
+        raw_y = np.array([pair[1].numpy() if type(pair[1]) != int else pair[1] for pair in dset_train])
 
-        test_x = [pair[0].view(-1).numpy() for pair in dset_test]
-        test_y = [pair[1].numpy() if type(pair[1]) != int else pair[1] for pair in dset_test]
+        test_x = np.array([pair[0].view(-1).numpy() for pair in dset_test])
+        test_y = np.array([pair[1].numpy() if type(pair[1]) != int else pair[1] for pair in dset_test])
         if dataset == 'gisette':
-            keys = ["F", "DFS-NAS", "DFS-NAS alphas", "DFS-NAS weights", "lasso", "logistic_l1", "tree", "PCA"]
-            AUCs = {k:[] for k in keys}
-            accs = {k:[] for k in keys}
+            fit_once_keys = ["MCFS", "PFA", "Lap", "PCA"]
+            keys = ["F", "DFS-NAS", "DFS-NAS alphas", "DFS-NAS weights", "lasso", "logistic_l1", "tree"]
+            AUCs = {k:[] for k in [*keys, *fit_once_keys]}
+            accs = {k:[] for k in [*keys, *fit_once_keys]}
 
             models_to_train = {"logistic_l1":LogisticRegression(penalty='l1', solver='saga', C=1, max_iter=700 if not smoke_test else 5),
             "tree":ExtraTreesClassifier(n_estimators = 100), 
             "lasso":sklearn.linear_model.Lasso()}
+
+            fit_once = {k:choose_features(model=None, x_train=raw_x, x_test=test_x, y_train=raw_y, top_k=100, mode = k) for k in tqdm(fit_once_keys, desc= "Fitting baseline SKFeature models")}
+ 
             
             for k in tqdm(models_to_train.keys(), desc="Training baselines models for AUC computations"):
                 models_to_train[k].fit(raw_x, raw_y)
 
             models = {**models_to_train,
             "F":None, "DFS-NAS":model, "DFS-NAS alphas":model, "DFS-NAS weights":model, 
-            "PCA":None}
+            **fit_once}
 
             for k in tqdm(range(1, 100 if not smoke_test else 3), desc="Computing AUCs for different top-k features"):
 
@@ -511,21 +523,23 @@ def main(epochs = 5,
                     auc, acc = compute_auc(clf_model, k, raw_x, raw_y, test_x, test_y, mode = key)
                     AUCs[key].append(auc)
                     accs[key].append(acc)
-                wandb.log({model_type:{dataset:{**{key+"_auc":AUCs[key][k-1] for key in keys},**{key+"_acc":accs[key][k-1] for key in keys}, "k":k}}})
-        elif 'MNIST' in dataset:
+                wandb.log({model_type:{dataset:{**{key+"_auc":AUCs[key][k-1] for key in [*keys, *fit_once_keys]},
+                    **{key+"_acc":accs[key][k-1] for key in [*keys, *fit_once_keys]}, "k":k}}})
+        
+        elif 'MNIST' in dataset or dataset in ['isolet', 'madelon', 'activity']:
 
             for k in tqdm(range(1,100 if not smoke_test else 3, 2), desc='Computing reconstructions for MNIST-like datasets'):
                 mse, acc = reconstruction_error(model=model, k=k, raw_x=raw_x, raw_y=raw_y, test_x=test_x, test_y=test_y)
                 to_log = {}
                 to_log.update({"MSE":mse, "RecAcc":acc, "k":k})
                 # We also want to examine the model perforamnce if it was retrained using only the selected features and without architecture training
-                if k in [9, 39, 69]:
-                    features = choose_features(model, top_k=k, mode='normalized')
-                    retrained_model = SoTLNet(num_features=int(len(dset_train[0][0])) if n_features is None else n_features, model_type=model_type, 
+                if k in [9, 39, 69] or (smoke_test and k == 1):
+                    features, _, _  = choose_features(model, top_k=k, mode='normalized')
+                    retrained_model = SoTLNet(num_features=k, model_type=model_type, 
                         degree=initial_degree, weight_decay=extra_weight_decay, task=task, n_classes=n_classes)
                     retrained_model.config = config
                     retrained_model = retrained_model.to(device)
-                    retrained_model.set_features(features.indices)
+                    # retrained_model.set_features(features.indices)
 
                     
                     criterion = get_criterion(model_type, task).to(device)
@@ -564,9 +578,10 @@ def main(epochs = 5,
                         device=device,
                         train_arch=False,
                         config=config,
-                        mode='joint',
+                        mode='bilevel',
                         hessian_tracking=False,
-                        log_suffix=f"_retrainedK={k}"
+                        log_suffix=f"_retrainedK={k}",
+                        features=features.indices
                     )
 
                     val_loss, val_acc = valid_func(model, dset_test, criterion)

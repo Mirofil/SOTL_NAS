@@ -11,37 +11,14 @@ from sklearn.ensemble import ExtraTreesClassifier
 from traits import FeatureSelectableTrait, AutoEncoder
 import torch.nn.functional as F
 from sklearn.decomposition import PCA
+from utils_features import mcfs_ours, pfa_transform, lap_ours, pca, univariate_test, sklearn_model, choose_features
 
-def choose_features(model, top_k=20, mode='normalized'):
-    if model.model_type in ['sigmoid', 'MLP'] or issubclass(type(model.model), FeatureSelectableTrait):
-        if mode == 'alphas':
-            scores = model.alpha_feature_selectors().squeeze()
-            top_k = torch.topk(scores, k=top_k)
-        elif mode == 'normalized':
-            # NOTE IMPORTANT THOUGHT - doing abs, then mean will give different effect than doing it the other way. If a feature has different signs based on the class predicted, 
-            # is it good to drop it because it is conflicting? Or keep it when it has high magnitude and thus high discriminative power?
-            scores = (model.model.squash(model.alpha_feature_selectors())*torch.mean(torch.abs(model.feature_normalizers()), dim=0)).squeeze()
-            top_k = torch.topk(scores, k=top_k)
-        elif mode == 'weights':
-            scores = torch.mean(torch.abs(model.feature_normalizers()), dim=0)
-            top_k = torch.topk(scores, k=top_k)
 
-    else:
-        raise NotImplementedError
-
-    return top_k
-
-def reconstruction_error(model, k, raw_x, raw_y, test_x, test_y, choose_features_mode = "normalized"):
+def reconstruction_error(model, k, raw_x, raw_y, test_x, 
+    test_y, choose_features_mode = "normalized"):
     # Used to compute reconstruction errors from Concrete Autoencoder paper
-    if choose_features_mode == "PCA":
-        pca = PCA(n_components = k)
-        pca.fit(raw_x)
-        x = pca.transform(raw_x)
-        test_x = pca.transform(test_x)
-    else:
-        top_k = choose_features(model, top_k=k, mode=choose_features_mode)
-        x = [elem[top_k.indices.cpu().numpy()] for elem in raw_x]
-        test_x = [elem[top_k.indices.cpu().numpy()] for elem in test_x]
+    indices, x, test_x = choose_features(model=model, x_train=raw_x, 
+        x_test=test_x, top_k=k, mode=choose_features_mode)
     
     clf = LinearRegression().fit(x, raw_y)
     preds = clf.predict(test_x)
@@ -55,48 +32,8 @@ def reconstruction_error(model, k, raw_x, raw_y, test_x, test_y, choose_features
 
 
 def compute_auc(model, k, raw_x, raw_y, test_x, test_y, mode ="F", choose_features_mode=None, verbose=True):
-    # if choose_features_mode is None and hasattr(model, "config"):
-    #     choose_features_mode = model.config["auc_features_mode"]
-    # else:
-    #     choose_features_mode = 'normalized'
-    if mode in ["F", "MI", "chi2"]:
-        if mode == "F":
-            univ = sklearn.feature_selection.f_classif 
-        elif mode == "MI":
-            univ = sklearn.feature_selection.mutual_info_classif
-        elif mode == "chi2":
-            univ = sklearn.feature_selection.chi2
 
-        selector = sklearn.feature_selection.SelectKBest(univ, k=k).fit(raw_x,raw_y)
-        x = selector.transform(raw_x)
-        test_x = selector.transform(test_x)
-    
-    elif mode in ["NAS", "DFS-NAS", "DFS-NAS alphas", "DFS-NAS weights"]:
-        if mode == "DFS-NAS":
-            features_mode = 'normalized'
-        elif mode == 'DFS-NAS alphas':
-            features_mode = 'alphas'
-        elif mode == 'DFS-NAS weights':
-            features_mode = 'weights'
-        top_k = choose_features(model, top_k=k, mode=features_mode)
-
-        x = [elem[top_k.indices.cpu().numpy()] for elem in raw_x]
-        test_x = [elem[top_k.indices.cpu().numpy()] for elem in test_x]
-
-        if verbose:
-            print(f"Selected weights: {model.feature_normalizers().view(-1)[top_k.indices]}")
-            print(f"Selected alphas: {model.alpha_feature_selectors().view(-1)[top_k.indices]}")
-    
-    elif mode == "PCA":
-        pca = PCA(n_components = k)
-        pca.fit(raw_x)
-        x = pca.transform(raw_x)
-        test_x = pca.transform(test_x)
-
-    elif mode == "lasso" or mode == "logistic_l1" or mode == "tree":
-        selector = sklearn.feature_selection.SelectFromModel(model, prefit=True, threshold=-np.inf, max_features=k)
-        x = selector.transform(raw_x)
-        test_x = selector.transform(test_x)
+    indices, x, test_x = choose_features(model=model, x_train=raw_x, y_train=raw_y, x_test=test_x, mode=mode, top_k=k)
     
     clf = LogisticRegression(max_iter=1000).fit(x,raw_y)
     preds = clf.predict_proba(test_x)
@@ -144,9 +81,9 @@ def compute_train_loss(x, y, criterion, model, weight_decay=True, y_pred=None, a
 
     if y_pred is None:
         y_pred = model(x)
-    if issubclass(type(model.model), AutoEncoder):
+    if issubclass(type(model.model), AutoEncoder) or 'AE' in model.model_type:
         y = x
-
+        assert y_pred.shape == x.shape
 
     if weight_decay:
         param_norm = calculate_weight_decay(model, alpha_w_order=alpha_w_order, w_order=model.config["w_decay_order"],adaptive_decay=adaptive_decay, a_order=model.config["a_decay_order"], 
@@ -187,13 +124,13 @@ def get_optimizers(model, config):
     elif config ['a_optim'] =='Adam':
         w_optimizer = Adam(model.weight_params(), lr=config["w_lr"], weight_decay=config["w_weight_decay"])
 
-    w_scheduler = torch.optim.lr_scheduler.StepLR(w_optimizer, max(round(config["epochs"]/5), 1), gamma=0.2, verbose=False)
+    w_scheduler = torch.optim.lr_scheduler.StepLR(w_optimizer, max(round(config["epochs"]/2), 1), gamma=0.5, verbose=False)
     if config["train_arch"]:
         if config['a_optim'] == 'SGD':
             a_optimizer = SGD(model.arch_params(), lr=config["a_lr"], momentum=config["a_momentum"], weight_decay=config["a_weight_decay"])
         elif config['a_optim'] == 'Adam':
             a_optimizer = Adam(model.arch_params(), lr=config["a_lr"], weight_decay=config["a_weight_decay"])
-        a_scheduler = torch.optim.lr_scheduler.StepLR(a_optimizer, max(round(config["epochs"]/5), 1), gamma=0.2, verbose=False)
+        a_scheduler = torch.optim.lr_scheduler.StepLR(a_optimizer, max(round(config["epochs"]/2), 1), gamma=0.5, verbose=False)
 
     else:
         # Placeholder optimizer that won't do anything - but the parameter list cannot be empty
@@ -203,6 +140,10 @@ def get_optimizers(model, config):
 
     return w_optimizer, a_optimizer, w_scheduler, a_scheduler
 
+def vae_loss(recon_x, x, mu, log_var):
+    BCE = F.binary_cross_entropy(recon_x, x.view(-1, 784), reduction='sum')
+    KLD = -0.5 * torch.sum(1 + log_var - mu.pow(2) - log_var.exp())
+    return BCE + KLD
 
 def get_criterion(model_type, task):
     criterion=None

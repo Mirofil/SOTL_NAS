@@ -74,7 +74,7 @@ def get_datasets(name, path=None, test_split=0.85, normalize=True, **kwargs):
             test_data= torch.tensor(preprocessing.StandardScaler().fit_transform(test_data), dtype=torch.float32)
 
         dset_train = torch.utils.data.TensorDataset(train_data, train_classes)
-        dset_test = torch.utils.data.TensorDataset(test_data,test_classes)
+        dset_test = torch.utils.data.TensorDataset(test_data, test_classes)
 
         n_classes = 2
         n_features=5000
@@ -109,10 +109,10 @@ def get_datasets(name, path=None, test_split=0.85, normalize=True, **kwargs):
         dset_test = torch.utils.data.TensorDataset(x_test, y_test)
     
     elif name == 'activity':
-        x_train = np.loadtxt(os.path.join('datasets/dataset_uci', 'final_X_train.txt'), delimiter = ',', encoding = 'UTF-8')
-        x_test = np.loadtxt(os.path.join('datasets/dataset_uci', 'final_X_test.txt'), delimiter = ',', encoding = 'UTF-8')
-        y_train = np.loadtxt(os.path.join('datasets/dataset_uci', 'final_y_train.txt'), delimiter = ',', encoding = 'UTF-8')
-        y_test = np.loadtxt(os.path.join('datasets/dataset_uci', 'final_y_test.txt'), delimiter = ',', encoding = 'UTF-8')
+        x_train = np.loadtxt(data_path / 'har/train/X_train.txt')
+        x_test = np.loadtxt(data_path /  'har/test/X_test.txt')
+        y_train = np.loadtxt(data_path / 'har/train/y_train.txt')
+        y_test = np.loadtxt(data_path /  'har/test/y_test.txt')
         
         X = preprocessing.MinMaxScaler(feature_range=(0,1)).fit_transform(np.concatenate((x_train, x_test)))
         x_train = torch.tensor(X[: len(y_train)], dtype=torch.float32)
@@ -123,7 +123,20 @@ def get_datasets(name, path=None, test_split=0.85, normalize=True, **kwargs):
 
         dset_train = torch.utils.data.TensorDataset(x_train, y_train)
         dset_test = torch.utils.data.TensorDataset(x_test, y_test)
-
+    elif name=="madelon":
+            train_data_url = 'https://archive.ics.uci.edu/ml/machine-learning-databases/madelon/MADELON/madelon_train.data'
+            val_data_url = 'https://archive.ics.uci.edu/ml/machine-learning-databases/madelon/MADELON/madelon_valid.data'
+            train_resp_url = 'https://archive.ics.uci.edu/ml/machine-learning-databases/madelon/MADELON/madelon_train.labels'
+            val_resp_url = 'https://archive.ics.uci.edu/ml/machine-learning-databases/madelon/madelon_valid.labels'
+            test_data_url = 'http://archive.ics.uci.edu/ml/machine-learning-databases/madelon/MADELON/madelon_test.data'
+            x_train = torch.tensor(np.loadtxt(urllib2.urlopen(train_data_url)))
+            y_train = torch.tensor(np.loadtxt(urllib2.urlopen(train_resp_url)), dtype=torch.long)
+            x_test =  torch.tensor(p.loadtxt(urllib2.urlopen(val_data_url)))
+            y_test =  torch.tensor(np.loadtxt(urllib2.urlopen(val_resp_url)), dtype=torch.long)
+            scaler = preprocessing.StandardScaler().fit(X_train)
+            x_train = scaler.transform(x_train)
+            x_test = scaler.transform(x_test)   
+            # TODO finish
     elif name == "MNIST" or name == "MNISTsmall":
         dset_train = datasets.MNIST('./data', train=True, download=True,
                 transform=transforms.Compose([
@@ -200,15 +213,21 @@ def get_datasets(name, path=None, test_split=0.85, normalize=True, **kwargs):
             dset_train, [int(len(dset_train) * test_split), len(dset_train) - int(len(dset_train) * test_split)]
         )
 
-    if name in ['MNIST', 'CIFAR', 'gisette', "FashionMNIST", 'MNIST35']:
-        task = 'clf'
+    if name in ['MNIST', 'CIFAR', "FashionMNIST", 'isolet', 'madelon', 'activity']:
+        task = 'multiclass'
+    elif name in ['gisette', 'MNIST35']:
+        task = 'binary'
     else:
         task = 'reg'
 
     if n_classes is None:
-        n_classes = len(dset_train[0][1])
+        if len(dset_train[0][1].size()) == 0:
+            n_classes = 1
+        else:
+            n_classes = dset_train[0][1].size()[1]
+
     if n_features is None:
-        n_features = dset_train[0][0].shape[1]
+        n_features = dset_train[0][0].view(1, -1).shape[1]
 
     results = {}
     results['dset_train'] = dset_train
