@@ -63,7 +63,7 @@ def dfs_transform(model, x_train, x_test, k, mode, verbose=True, features_mode =
     # test_x = [elem[indices.indices.cpu()] for elem in x_test]
     test_x = x_test[:, indices.indices.cpu().numpy()]
 
-    if verbose:
+    if verbose and k % 10 == 0 and features_mode == 'alphas':
         print(f"{mode} selected weights: {model.feature_normalizers().view(-1)[indices.indices]}")
         print(f"{mode} selected alphas: {model.alpha_feature_selectors().view(-1)[indices.indices]}")
 

@@ -1,4 +1,4 @@
-# python linear/train.py --model_type=AE --dataset=gisette --arch_train_data sotl --grad_outer_loop_order=None --mode=bilevel --device=cuda --initial_degree 1 --hvp=finite_diff --epochs=50 --w_lr=0.0001 --T=10 --a_lr=0.01 --hessian_tracking False --w_optim=Adam --a_optim=Adam --w_warm_start 0 --train_arch=True --a_weight_decay=0.001 --smoke_test True --dry_run=True --w_weight_decay=0.00001 --rand_seed 1
+# python linear/train.py --model_type=AE --dataset=FashionMNISTsmall --arch_train_data sotl --grad_outer_loop_order=None --mode=bilevel --device=cuda --initial_degree 1 --hvp=finite_diff --epochs=13 --w_lr=0.0001 --T=10 --a_lr=0.01 --hessian_tracking False --w_optim=Adam --a_optim=Adam --w_warm_start 10 --train_arch=True --a_weight_decay=0.001 --smoke_test False --dry_run=False --w_weight_decay=0.00001 --rand_seed 1
 # python linear/train.py --model_type=max_deg --dataset=fourier --dry_run=False --T=2 --grad_outer_loop_order=1 --grad_inner_loop_order=1 --mode=bilevel --device=cpu
 # python linear/train.py --model_type=MNIST --dataset=MNIST --dry_run=False --T=1 --w_warm_start=0 --grad_outer_loop_order=-1 --grad_inner_loop_order=-1 --mode=bilevel --device=cuda --extra_weight_decay=0.0001 --w_weight_decay=0 --arch_train_data=val
 
@@ -279,7 +279,7 @@ def train_bptt(
 
         auc, acc, mse, hessian_eigenvalue = None, None, None, None
         best = {"auc":{"value":0, "alphas":None}, "acc":{"value":0, "alphas":None}} # TODO this needs to be outside of the for loop to be persisent. BUt I think Ill drop it for now regardless
-        if model.model_type in ['sigmoid', "MLP", "AE"]:
+        if model.model_type in ['sigmoid', "MLP", "AE", "linearAE"]:
             raw_x = np.array([pair[0].view(-1).numpy() for pair in dset_train])
             raw_y = np.array([pair[1].numpy() if type(pair[1]) != int else pair[1] for pair in dset_train])
 
@@ -342,7 +342,7 @@ def valid_func(model, dset_val, criterion, device = 'cuda' if torch.cuda.is_avai
                 val_acc_meter.update(correct/total)
             if type(criterion) is torch.nn.modules.loss.MSELoss:
                 # TODO The reshape seems to be necessary for auto-encoder - not sure why the shape is still mangled up even though I tried to reshape when returning from AE
-                if model.model_type == "AE":
+                if "AE" in model.model_type:
                     val_loss = criterion(y_pred, x)
                 else:
                     val_loss = criterion(y_pred, y)
@@ -491,104 +491,113 @@ def main(epochs = 5,
         except:
             print("No model degree info; probably a different model_type was chosen")
     
-    if model_type in ["sigmoid", "MLP", "AE"]:
+    else:
         raw_x = np.array([pair[0].view(-1).numpy() for pair in dset_train])
         raw_y = np.array([pair[1].numpy() if type(pair[1]) != int else pair[1] for pair in dset_train])
 
         test_x = np.array([pair[0].view(-1).numpy() for pair in dset_test])
         test_y = np.array([pair[1].numpy() if type(pair[1]) != int else pair[1] for pair in dset_test])
-        if dataset == 'gisette':
-            fit_once_keys = ["MCFS", "PFA", "Lap", "PCA"]
-            keys = ["F", "DFS-NAS", "DFS-NAS alphas", "DFS-NAS weights", "lasso", "logistic_l1", "tree"]
-            AUCs = {k:[] for k in [*keys, *fit_once_keys]}
-            accs = {k:[] for k in [*keys, *fit_once_keys]}
 
-            models_to_train = {"logistic_l1":LogisticRegression(penalty='l1', solver='saga', C=1, max_iter=700 if not smoke_test else 5),
-            "tree":ExtraTreesClassifier(n_estimators = 100), 
-            "lasso":sklearn.linear_model.Lasso()}
+        fit_once_keys = ["MCFS", "PFA", "Lap", "PCA"]
+        keys = ["F", "DFS-NAS", "DFS-NAS alphas", "DFS-NAS weights", "lasso", "logistic_l1", "tree"]
+        metrics = {"auc":{k:[] for k in [*keys, *fit_once_keys]}, "acc": {k:[] for k in [*keys, *fit_once_keys]}, "mse": {k:[] for k in [*keys, *fit_once_keys]}}
+        AUCs = {k:[] for k in [*keys, *fit_once_keys]}
+        accs = {k:[] for k in [*keys, *fit_once_keys]}
+        MSEs = {k:[] for k in [*keys, *fit_once_keys]}
 
-            fit_once = {k:choose_features(model=None, x_train=raw_x, x_test=test_x, y_train=raw_y, top_k=100, mode = k) for k in tqdm(fit_once_keys, desc= "Fitting baseline SKFeature models")}
- 
-            
-            for k in tqdm(models_to_train.keys(), desc="Training baselines models for AUC computations"):
-                models_to_train[k].fit(raw_x, raw_y)
+        models_to_train = {"logistic_l1":LogisticRegression(penalty='l1', solver='saga', C=1, max_iter=700 if not smoke_test else 5),
+        "tree":ExtraTreesClassifier(n_estimators = 100), 
+        "lasso":sklearn.linear_model.Lasso()}
 
-            models = {**models_to_train,
+        fit_once = {k:choose_features(model=None, x_train=raw_x, x_test=test_x, y_train=raw_y, top_k=100, mode = k) for k in tqdm(fit_once_keys, desc= "Fitting baseline SKFeature models")}
+
+        
+        for k in tqdm(models_to_train.keys(), desc="Training baselines models for AUC computations"):
+            models_to_train[k].fit(raw_x, raw_y)
+
+        models = {**models_to_train,
             "F":None, "DFS-NAS":model, "DFS-NAS alphas":model, "DFS-NAS weights":model, 
             **fit_once}
+        if dataset == 'gisette':
+
 
             for k in tqdm(range(1, 100 if not smoke_test else 3), desc="Computing AUCs for different top-k features"):
 
                 for key, clf_model in models.items():
                     auc, acc = compute_auc(clf_model, k, raw_x, raw_y, test_x, test_y, mode = key)
+                    metrics["auc"][key].append(auc)
+                    metrics["acc"][key].append(auc)
                     AUCs[key].append(auc)
                     accs[key].append(acc)
                 wandb.log({model_type:{dataset:{**{key+"_auc":AUCs[key][k-1] for key in [*keys, *fit_once_keys]},
                     **{key+"_acc":accs[key][k-1] for key in [*keys, *fit_once_keys]}, "k":k}}})
         
-        elif 'MNIST' in dataset or dataset in ['isolet', 'madelon', 'activity']:
+        else:
 
-            for k in tqdm(range(1,100 if not smoke_test else 3, 2), desc='Computing reconstructions for MNIST-like datasets'):
-                mse, acc = reconstruction_error(model=model, k=k, raw_x=raw_x, raw_y=raw_y, test_x=test_x, test_y=test_y)
-                to_log = {}
-                to_log.update({"MSE":mse, "RecAcc":acc, "k":k})
-                # We also want to examine the model perforamnce if it was retrained using only the selected features and without architecture training
-                if k in [9, 39, 69] or (smoke_test and k == 1):
-                    features, _, _  = choose_features(model, top_k=k, mode='normalized')
-                    retrained_model = SoTLNet(num_features=k, model_type=model_type, 
-                        degree=initial_degree, weight_decay=extra_weight_decay, task=task, n_classes=n_classes)
-                    retrained_model.config = config
-                    retrained_model = retrained_model.to(device)
-                    # retrained_model.set_features(features.indices)
+            for k in tqdm(range(1,100 if not smoke_test else 5, 1), desc='Computing reconstructions for MNIST-like datasets'):
+                for key, clf_model in models.items():
+                    mse, acc = reconstruction_error(model=clf_model, k=k, raw_x=raw_x, raw_y=raw_y, test_x=test_x, test_y=test_y)
+                    metrics["mse"][key].append(mse)
+                    metrics["acc"][key].append(acc)
 
-                    
-                    criterion = get_criterion(model_type, task).to(device)
+                    # We also want to examine the model perforamnce if it was retrained using only the selected features and without architecture training
+                    # if k in [9, 39, 69] or (smoke_test and k == 1):
+                    #     features, _, _  = choose_features(model, top_k=k, mode='normalized')
+                    #     retrained_model = SoTLNet(num_features=k, model_type=model_type, 
+                    #         degree=initial_degree, weight_decay=extra_weight_decay, task=task, n_classes=n_classes)
+                    #     retrained_model.config = config
+                    #     retrained_model = retrained_model.to(device)
+                    #     # retrained_model.set_features(features.indices)
 
-                    w_optimizer, a_optimizer, w_scheduler, a_scheduler = get_optimizers(retrained_model, config)
+                        
+                    #     criterion = get_criterion(model_type, task).to(device)
 
-                    # Retrain as before BUT must set train_arch=False and change the model=retrained_model at least!
-                    train_bptt(
-                        epochs=20,
-                        steps_per_epoch=steps_per_epoch,
-                        model=retrained_model,
-                        criterion=criterion,
-                        w_optimizer=w_optimizer,
-                        a_optimizer=a_optimizer,
-                        w_scheduler=w_scheduler,
-                        a_scheduler=a_scheduler,
-                        dataset=dataset,
-                        dset_train=dset_train,
-                        dset_val=dset_val,
-                        dset_test=dset_test,
-                        logging_freq=logging_freq,
-                        batch_size=batch_size,
-                        T=T,
-                        grad_clip=grad_clip,
-                        w_lr=w_lr,
-                        w_checkpoint_freq=w_checkpoint_freq,
-                        grad_inner_loop_order=grad_inner_loop_order,
-                        grad_outer_loop_order=grad_outer_loop_order,
-                        hvp=hvp,
-                        arch_train_data=arch_train_data,
-                        normalize_a_lr=normalize_a_lr,
-                        log_grad_norm=True,
-                        log_alphas=True,
-                        w_warm_start=w_warm_start,
-                        extra_weight_decay=extra_weight_decay,
-                        device=device,
-                        train_arch=False,
-                        config=config,
-                        mode='bilevel',
-                        hessian_tracking=False,
-                        log_suffix=f"_retrainedK={k}",
-                        features=features.indices
-                    )
+                    #     w_optimizer, a_optimizer, w_scheduler, a_scheduler = get_optimizers(retrained_model, config)
 
-                    val_loss, val_acc = valid_func(model, dset_test, criterion)
-                    to_log["retrained_loss"] = val_loss.avg
-                    to_log["retrained_acc"] = val_acc.avg
-                to_log = {model_type:{dataset:{**to_log}}}
-                wandb.log(to_log)
+                    #     # Retrain as before BUT must set train_arch=False and change the model=retrained_model at least!
+                    #     train_bptt(
+                    #         epochs=20,
+                    #         steps_per_epoch=steps_per_epoch,
+                    #         model=retrained_model,
+                    #         criterion=criterion,
+                    #         w_optimizer=w_optimizer,
+                    #         a_optimizer=a_optimizer,
+                    #         w_scheduler=w_scheduler,
+                    #         a_scheduler=a_scheduler,
+                    #         dataset=dataset,
+                    #         dset_train=dset_train,
+                    #         dset_val=dset_val,
+                    #         dset_test=dset_test,
+                    #         logging_freq=logging_freq,
+                    #         batch_size=batch_size,
+                    #         T=T,
+                    #         grad_clip=grad_clip,
+                    #         w_lr=w_lr,
+                    #         w_checkpoint_freq=w_checkpoint_freq,
+                    #         grad_inner_loop_order=grad_inner_loop_order,
+                    #         grad_outer_loop_order=grad_outer_loop_order,
+                    #         hvp=hvp,
+                    #         arch_train_data=arch_train_data,
+                    #         normalize_a_lr=normalize_a_lr,
+                    #         log_grad_norm=True,
+                    #         log_alphas=True,
+                    #         w_warm_start=w_warm_start,
+                    #         extra_weight_decay=extra_weight_decay,
+                    #         device=device,
+                    #         train_arch=False,
+                    #         config=config,
+                    #         mode='bilevel',
+                    #         hessian_tracking=False,
+                    #         log_suffix=f"_retrainedK={k}",
+                    #         features=features.indices
+                    #     )
+
+                    #     val_loss, val_acc = valid_func(model, dset_test, criterion)
+                    #     to_log["retrained_loss"] = val_loss.avg
+                    #     to_log["retrained_acc"] = val_acc.avg
+
+                wandb.log({model_type:{dataset:{**{key+"_mse":metrics["mse"][key][k-1] for key in [*keys, *fit_once_keys]},
+                    **{key+"_acc":metrics["acc"][key][k-1] for key in [*keys, *fit_once_keys]}, "k":k}}})
 
 
 if __name__ == "__main__":

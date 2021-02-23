@@ -121,7 +121,7 @@ def hinge_loss(x,y, threshold):
 def get_optimizers(model, config):
     if config["w_optim"] == 'SGD':
         w_optimizer = SGD(model.weight_params(), lr=config["w_lr"], momentum=config["w_momentum"], weight_decay=config["w_weight_decay"])
-    elif config ['a_optim'] =='Adam':
+    elif config ['w_optim'] =='Adam':
         w_optimizer = Adam(model.weight_params(), lr=config["w_lr"], weight_decay=config["w_weight_decay"])
 
     w_scheduler = torch.optim.lr_scheduler.StepLR(w_optimizer, max(round(config["epochs"]/2), 1), gamma=0.5, verbose=False)
@@ -149,7 +149,7 @@ def get_criterion(model_type, task):
     criterion=None
     if model_type in ["MNIST", "log_regression", "MLP"]:
         criterion = torch.nn.CrossEntropyLoss()
-    elif model_type in ["max_deg", "softmax_mult", "linear", "fourier", "polynomial", "sigmoid", "AE"]:
+    elif model_type in ["max_deg", "softmax_mult", "linear", "fourier", "polynomial", "sigmoid", "AE", "linearAE"]:
         criterion = torch.nn.MSELoss()
 
     

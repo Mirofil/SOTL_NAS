@@ -64,6 +64,8 @@ class SoTLNet(RegressionNet):
             self.model = LogReg(input_dim=num_features, output_dim=n_classes)
         elif model_type == "AE":
             self.model = AE(input_dim=num_features)
+        elif model_type == "linearAE":
+            self.model = LinearAE(input_dim=num_features)
         else:
             raise NotImplementedError
         self.alphas = []
@@ -139,6 +141,42 @@ class MLP(RegressionNet, FeatureSelectableTrait):
     def feature_normalizers(self):
         return self.feature_selection.weight
 
+class LinearAE(RegressionNet, FeatureSelectableTrait, AutoEncoder):
+    def __init__(self, input_dim=28*28, dropout_p=0.2, **kwargs):
+        super().__init__()
+        self._input_dim = input_dim
+        # self.input_dropout = nn.Dropout(dropout_p)
+        self.feature_selection = FeatureSelection(input_dim)
+        self.encoder = nn.Sequential(
+            nn.Linear(in_features=input_dim, out_features=128), 
+            nn.ReLU(True),
+            nn.Dropout(dropout_p),
+            nn.Linear(in_features=128, out_features=128),
+            nn.ReLU(True),
+            nn.Dropout(dropout_p))
+        self.decoder = nn.Sequential(
+            nn.Linear(in_features=128, out_features=input_dim),
+            nn.ReLU(True)
+        )
+
+    def forward(self, x, *args, **kwargs):
+        orig_shape = x.shape
+        x = x.view(-1, self._input_dim)
+        # x = self.input_dropout(x) #TODO use dropout on the input or not ??
+        x = self.feature_selection(x, feature_indices=self.feature_indices)
+        x = self.encoder(x)
+        x = self.decoder(x)
+        x = x.reshape(orig_shape)
+        return x
+
+    def squash(self, *args, **kwargs):
+        return self.feature_selection.squash(*args, **kwargs)
+
+    def alpha_feature_selectors(self):
+        return self.feature_selection.alphas
+    
+    def feature_normalizers(self):
+        return self.feature_selection.weight
 class AE(RegressionNet, FeatureSelectableTrait, AutoEncoder):
     def __init__(self, input_dim=28*28, dropout_p=0.2, **kwargs):
         super().__init__()
