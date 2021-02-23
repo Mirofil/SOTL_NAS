@@ -1,4 +1,4 @@
-# python linear/train.py --model_type=AE --dataset=FashionMNISTsmall --arch_train_data sotl --grad_outer_loop_order=None --mode=bilevel --device=cuda --initial_degree 1 --hvp=finite_diff --epochs=13 --w_lr=0.0001 --T=10 --a_lr=0.01 --hessian_tracking False --w_optim=Adam --a_optim=Adam --w_warm_start 10 --train_arch=True --a_weight_decay=0.001 --smoke_test False --dry_run=False --w_weight_decay=0.00001 --rand_seed 1
+# python linear/train.py --model_type=AE --dataset=MNISTsmall --arch_train_data sotl --grad_outer_loop_order=None --mode=bilevel --device=cuda --initial_degree 1 --hvp=finite_diff --epochs=13 --w_lr=0.0001 --T=10 --a_lr=0.01 --hessian_tracking False --w_optim=Adam --a_optim=Adam --w_warm_start 10 --train_arch=True --a_weight_decay=0.001 --smoke_test False --dry_run=False --w_weight_decay=0.00001 --rand_seed 1
 # python linear/train.py --model_type=max_deg --dataset=fourier --dry_run=False --T=2 --grad_outer_loop_order=1 --grad_inner_loop_order=1 --mode=bilevel --device=cpu
 # python linear/train.py --model_type=MNIST --dataset=MNIST --dry_run=False --T=1 --w_warm_start=0 --grad_outer_loop_order=-1 --grad_inner_loop_order=-1 --mode=bilevel --device=cuda --extra_weight_decay=0.0001 --w_weight_decay=0 --arch_train_data=val
 
@@ -536,7 +536,7 @@ def main(epochs = 5,
 
             for k in tqdm(range(1,100 if not smoke_test else 5, 1), desc='Computing reconstructions for MNIST-like datasets'):
                 for key, clf_model in models.items():
-                    mse, acc = reconstruction_error(model=clf_model, k=k, raw_x=raw_x, raw_y=raw_y, test_x=test_x, test_y=test_y)
+                    mse, acc = reconstruction_error(model=clf_model, k=k, raw_x=raw_x, raw_y=raw_y, test_x=test_x, test_y=test_y, mode=key)
                     metrics["mse"][key].append(mse)
                     metrics["acc"][key].append(acc)
 

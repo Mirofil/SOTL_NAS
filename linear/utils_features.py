@@ -35,6 +35,7 @@ def choose_features(model, x_train=None, y_train=None, x_test=None, top_k=20, mo
         indices, x_train, x_test = univariate_test(x_train=x_train, x_test=x_test, 
             y_train=y_train, k=top_k, mode=mode)
     else:
+        print(f"Gonna crash with {mode}")
         raise NotImplementedError
 
     return indices, x_train, x_test
