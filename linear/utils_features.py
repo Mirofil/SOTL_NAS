@@ -96,16 +96,16 @@ def pca(train, test, K, model=None):
         pca = PCA(n_components = K)
         pca.fit(train)
     else:
-        pca = model[0]
+        pca = model
 
-    x_train = pca.transform(train)
-    test_x = pca.transform(test)
+    x_train = pca.transform(train)[:, :K]
+    test_x = pca.transform(test)[:, :K]
 
     return pca, x_train, test_x
 
 def lap_ours(train, test, K, model=None):
     if model is not None:
-        indices = model[0][:K]
+        indices = model[:K]
     else:
         train, test = np.array(train), np.array(test)
 
@@ -115,7 +115,7 @@ def lap_ours(train, test, K, model=None):
 
 def mcfs_ours(train, test, K, debug = False, model=None):
     if model is not None:
-        indices = model[0][:K]
+        indices = model[:K]
     else:
         train, test = np.array(train), np.array(test)
         W = mcfs(train, n_selected_features = K, verbose = debug)
@@ -163,7 +163,7 @@ def pfa_selector(A, k, debug = False):
 
 def pfa_transform(train, test, k, debug = False, model=None):
     if model is not None:
-        indices = model[0][:k]
+        indices = model[:k]
     else:
         indices = pfa_selector(train, k, debug)
     return indices, train[:, indices], test[:, indices]

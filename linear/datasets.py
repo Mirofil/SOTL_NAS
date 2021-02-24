@@ -132,7 +132,7 @@ def get_datasets(name, path=None, test_split=0.85, normalize=True, **kwargs):
         test_data_url = 'http://archive.ics.uci.edu/ml/machine-learning-databases/madelon/MADELON/madelon_test.data'
         x_train = torch.tensor(np.loadtxt(urlopen(train_data_url)))
         y_train = torch.tensor(np.loadtxt(urlopen(train_resp_url)), dtype=torch.long)
-        x_test =  torch.tensor(p.loadtxt(urlopen(val_data_url)))
+        x_test =  torch.tensor(np.loadtxt(urlopen(val_data_url)))
         y_test =  torch.tensor(np.loadtxt(urlopen(val_resp_url)), dtype=torch.long)
         scaler = preprocessing.StandardScaler().fit(X_train)
         x_train = scaler.transform(x_train)
@@ -155,8 +155,8 @@ def get_datasets(name, path=None, test_split=0.85, normalize=True, **kwargs):
         
         l = data.shape[0] * 4 // 5
 
-        x_train, y_train = torch.tensor(data[:l]), torch.tensor(targets[:l], dtype=torch.long)
-        x_test, y_test = torch.tensor(data[l:]), torch.tensor(targets[l:], dtype=torch.long)
+        x_train, y_train = torch.tensor(data[:l], dtype=torch.float), torch.tensor(targets[:l], dtype=torch.long)
+        x_test, y_test = torch.tensor(data[l:], dtype=torch.float), torch.tensor(targets[l:], dtype=torch.long)
         dset_train = torch.utils.data.TensorDataset(x_train, y_train)
         dset_test = torch.utils.data.TensorDataset(x_test, y_test)
 

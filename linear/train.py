@@ -1,4 +1,4 @@
-# python linear/train.py --model_type=AE --dataset=fashionMNISTsmall --arch_train_data sotl --grad_outer_loop_order=None --mode=bilevel --device=cuda --initial_degree 1 --hvp=finite_diff --epochs=20 --w_lr=0.0001 --T=10 --a_lr=0.01 --hessian_tracking False --w_optim=Adam --a_optim=Adam --w_warm_start 3 --train_arch=True --a_weight_decay=0.001 --smoke_test False --dry_run=False --w_weight_decay=0.00001 --rand_seed 1
+# python linear/train.py --model_type=AE --dataset=CIFAR --arch_train_data sotl --grad_outer_loop_order=None --mode=bilevel --device=cuda --initial_degree 1 --hvp=finite_diff --epochs=15 --w_lr=0.0001 --T=10 --a_lr=0.01 --hessian_tracking False --w_optim=Adam --a_optim=Adam --w_warm_start 3 --train_arch=True --a_weight_decay=0.001 --smoke_test False --dry_run=False --w_weight_decay=0.00001 --rand_seed 1
 # python linear/train.py --model_type=max_deg --dataset=fourier --dry_run=False --T=2 --grad_outer_loop_order=1 --grad_inner_loop_order=1 --mode=bilevel --device=cpu
 # python linear/train.py --model_type=MNIST --dataset=MNIST --dry_run=False --T=1 --w_warm_start=0 --grad_outer_loop_order=-1 --grad_inner_loop_order=-1 --mode=bilevel --device=cuda --extra_weight_decay=0.0001 --w_weight_decay=0 --arch_train_data=val
 
@@ -315,7 +315,7 @@ def train_bptt(
         if a_scheduler is not None:
             a_scheduler.step()
 
-    print(f"Best found metrics over validation: AUC {best['auc']['value']}")
+    # print(f"Best found metrics over validation: AUC {best['auc']['value']}")
 
     # if dataset in ['gisette']:
     #     # Early stopping essentially. Put back the best performing alphas for checking the top-k performances in post-train stage
@@ -514,15 +514,21 @@ def main(epochs = 5,
 
         for model_name in tqdm(models_to_train.keys(), desc="Either loading or training SKLearn models"):
             fname = Path(f"./checkpoints/{model_name}_{dataset}.pkl")
-            if os.path.exists(fname):
+            try:
                 with open(fname, 'rb') as f:
                     models_to_train[model_name] = pickle.load(f)
+                print(f"Loaded model {models_to_train[model_name]}")
             
-            else:
+            except:
+                print(f"Failed to load {model_name} at {str(fname)}, training instead")
                 models_to_train[model_name].fit(raw_x, raw_y)
-                if not smoke_test:
-                    with open(fname, 'wb') as f:
-                        pickle.dump(model_name, f)
+                try:
+                    Path("./checkpoints").mkdir(parents=True, exist_ok=True)
+                    if not smoke_test:
+                        with open(fname, 'wb') as f:
+                            pickle.dump(models_to_train[model_name], f)
+                except:
+                    print("Model saving failed")
 
         fit_once = {k:choose_features(model=None, x_train=raw_x, x_test=test_x, y_train=raw_y, top_k=100, mode = k) for k in tqdm(fit_once_keys, desc= "Fitting baseline SKFeature models")}
         
@@ -547,6 +553,8 @@ def main(epochs = 5,
 
             for k in tqdm(range(1,100 if not smoke_test else 5, 1), desc='Computing reconstructions for MNIST-like datasets'):
                 for key, clf_model in models.items():
+                    if isinstance(clf_model, (tuple, list)):
+                        clf_model = clf_model[0]
                     mse, acc = reconstruction_error(model=clf_model, k=k, raw_x=raw_x, raw_y=raw_y, test_x=test_x, test_y=test_y, mode=key)
                     metrics["mse"][key].append(mse)
                     metrics["acc"][key].append(acc)
@@ -655,7 +663,7 @@ grad_inner_loop_order=-1
 grad_outer_loop_order=-1
 arch_train_data="sotl"
 model_type="AE"
-dataset="MNISTsmall"
+dataset="FashionMNISTsmall"
 device = 'cuda'
 train_arch=True
 dry_run=True
