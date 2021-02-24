@@ -194,7 +194,7 @@ class LinearAE(RegressionNet, FeatureSelectableTrait, AutoEncoder):
     def feature_normalizers(self):
         return self.feature_selection.weight
 class AE(RegressionNet, FeatureSelectableTrait, AutoEncoder):
-    def __init__(self, input_dim=28*28, dropout_p=0.2, **kwargs):
+    def __init__(self, input_dim=28*28, dropout_p=0.1, **kwargs):
         super().__init__()
         self._input_dim = input_dim
         self.dropout_p = dropout_p

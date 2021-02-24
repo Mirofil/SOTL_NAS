@@ -130,12 +130,12 @@ def hinge_loss(x,y, threshold):
 
 def get_optimizers(model, config):
     if config["w_optim"] == 'SGD':
-        w_optimizer = SGD(model.weight_params(), lr=config["w_lr"], momentum=config["w_momentum"], weight_decay=config["w_weight_decay"])
+        w_optimizer = SGD(model.weight_params(), lr=config["w_lr"], momentum=config["w_momentum"])
     elif config ['w_optim'] =='Adam':
-        w_optimizer = Adam(model.weight_params(), lr=config["w_lr"], weight_decay=config["w_weight_decay"])
+        w_optimizer = Adam(model.weight_params(), lr=config["w_lr"])
 
     if config['w_scheduler'] == "step":
-        w_scheduler = torch.optim.lr_scheduler.StepLR(w_optimizer, max(round(config["epochs"]/2), 1), gamma=0.5, verbose=False)
+        w_scheduler = torch.optim.lr_scheduler.StepLR(w_optimizer, max(round(config["epochs"]/2), 1), gamma=0.1, verbose=False)
     elif config["w_scheduler"] is None:
         w_scheduler = None
     else:
@@ -143,12 +143,12 @@ def get_optimizers(model, config):
 
     if config["train_arch"]:
         if config['a_optim'] == 'SGD':
-            a_optimizer = SGD(model.arch_params(), lr=config["a_lr"], momentum=config["a_momentum"], weight_decay=config["a_weight_decay"])
+            a_optimizer = SGD(model.arch_params(), lr=config["a_lr"], momentum=config["a_momentum"])
         elif config['a_optim'] == 'Adam':
-            a_optimizer = Adam(model.arch_params(), lr=config["a_lr"], weight_decay=config["a_weight_decay"])
+            a_optimizer = Adam(model.arch_params(), lr=config["a_lr"])
         
         if config["a_scheduler"] == 'step':
-            a_scheduler = torch.optim.lr_scheduler.StepLR(a_optimizer, max(round(config["epochs"]/5), 1), gamma=5, verbose=False)
+            a_scheduler = torch.optim.lr_scheduler.StepLR(a_optimizer, max(round(config["epochs"]/2), 1), gamma=0.1, verbose=False)
         elif config["a_scheduler"] is None:
             a_scheduler = None
         else:

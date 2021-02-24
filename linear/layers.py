@@ -45,7 +45,7 @@ class FeatureSelection(torch.nn.Module):
         self.register_buffer('weight', torch.ones((1, in_features)))
         self.feature_indices = {i for i in range(in_features)}
 
-        self.alphas = torch.nn.Parameter(torch.zeros(1, in_features))
+        self.alphas = torch.nn.Parameter(torch.ones(1, in_features))
         self.squash_type = squash_type
 
     def forward(self, x: Tensor, feature_indices=None) -> Tensor:
