@@ -37,12 +37,13 @@ class RegressionNet(torch.nn.Module):
 
 class SoTLNet(RegressionNet):
     def __init__(self, num_features = 2, task='reg', model_type = "softmax_mult",
-     weight_decay=0, n_classes=1, **kwargs):
+     weight_decay=0, n_classes=1, config=None, **kwargs):
         super().__init__(**kwargs)
         self.model_type = model_type
         self.task = task
         self.num_features = num_features
         self.n_classes = n_classes
+        self.config = config
 
         if model_type == "softmax_mult":
             self.fc1 = LinearSquash(num_features, n_classes, bias=False, squash_type="softmax", **kwargs)
@@ -60,6 +61,12 @@ class SoTLNet(RegressionNet):
             self.model = self.fc1
         elif model_type == "MNIST" or model_type == "MLP":
             self.model = MLP(input_dim=num_features,hidden_dim=1000,output_dim=n_classes, weight_decay=weight_decay)
+        elif model_type == "pt_logistic_l1":
+            self.model = LogReg(input_dim=num_features, output_dim=n_classes)
+            print("Setting (overriding?) default decay values for logistic L1")
+            self.config["w_decay_order"] = 1
+            self.config["w_weight_decay"] = 1
+            self.config["a_decay_order"] = 0
         elif model_type == "log_regression":
             self.model = LogReg(input_dim=num_features, output_dim=n_classes)
         elif model_type == "AE":
@@ -85,8 +92,12 @@ class SoTLNet(RegressionNet):
         elif self.feature_indices is not None:
             for to_delete in range(x.shape[1]):
                 if to_delete not in self.feature_indices:
-                    x[:, to_delete] = 0 
-        return self.model(x, weight, alphas).reshape(orig_shape)
+                    x[:, to_delete] = 0
+
+        if 'AE' in self.model_type:
+            return self.model(x, weight, alphas).reshape(orig_shape)
+        else:
+            return self.model(x, weight, alphas)
 
     def adaptive_weight_decay(self):
         return torch.sum(torch.abs(self.fc1.weight*self.fc1.compute_deg_constants()))
@@ -102,7 +113,7 @@ class SoTLNet(RegressionNet):
         return self.model.feature_normalizers()
 
         
-class LogReg(nn.Module):
+class LogReg(nn.Module, FeatureSelectableTrait):
     def __init__(self, input_dim=28*28, output_dim=10):
         super(LogReg, self).__init__()
         self._input_dim = input_dim
@@ -112,7 +123,16 @@ class LogReg(nn.Module):
         x = x.view(-1, self._input_dim)
         x = self.lin1(x)
         return x
+    def alpha_feature_selectors(self):
+        return torch.abs(self.lin1.weight).data.mean(dim=0)
+    
+    def feature_normalizers(self):
+        return torch.abs(self.lin1.weight).data.mean(dim=0)
+    
+    def squash(self, x, **wargs):
+        return x
 
+    
 class MLP(RegressionNet, FeatureSelectableTrait):
     def __init__(self, input_dim=28*28, hidden_dim=1000, output_dim=10, weight_decay=0, **kwargs):
         super(MLP, self).__init__()
@@ -174,7 +194,7 @@ class LinearAE(RegressionNet, FeatureSelectableTrait, AutoEncoder):
     def feature_normalizers(self):
         return self.feature_selection.weight
 class AE(RegressionNet, FeatureSelectableTrait, AutoEncoder):
-    def __init__(self, input_dim=28*28, dropout_p=0.85, **kwargs):
+    def __init__(self, input_dim=28*28, dropout_p=0.2, **kwargs):
         super().__init__()
         self._input_dim = input_dim
         self.dropout_p = dropout_p
@@ -198,7 +218,7 @@ class AE(RegressionNet, FeatureSelectableTrait, AutoEncoder):
     def forward(self, x, *args, **kwargs):
         orig_shape = x.shape
         x = x.view(-1, self._input_dim)
-        # x = F.dropout(x, p=self.dropout_p, training=self.training)
+        x = F.dropout(x, p=self.dropout_p, training=self.training)
         # x = x*torch.bernoulli(self.squash(self.alpha_feature_selectors())).to(x.device)
         # x = self.input_dropout(x) #TODO use dropout on the input or not ??
         x = self.feature_selection(x, feature_indices=self.feature_indices)

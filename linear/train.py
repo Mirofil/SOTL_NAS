@@ -1,52 +1,50 @@
-# python linear/train.py --model_type=AE --dataset=MNISTsmall --arch_train_data sotl --grad_outer_loop_order=None --mode=bilevel --device=cuda --initial_degree 1 --hvp=finite_diff --epochs=50 --w_lr=0.0001 --T=1 --a_lr=0.001 --hessian_tracking False --w_optim=Adam --a_optim=Adam --w_warm_start 0 --train_arch=True --a_weight_decay=0.0000001 --smoke_test False --dry_run=True --w_weight_decay=1 --batch_size=64
+# python linear/train.py --model_type=AE --dataset=gisette --arch_train_data sotl --grad_outer_loop_order=None --mode=bilevel --device=cuda --initial_degree 1 --hvp=finite_diff --epochs=20 --w_lr=0.001 --T=1 --a_lr=0.001 --hessian_tracking False --w_optim=Adam --a_optim=Adam --w_warm_start 3 --train_arch=True --a_weight_decay=0.000000001 --smoke_test False --dry_run=True --w_weight_decay=0.1 --batch_size=64 --decay_scheduler linear
+# python linear/train.py --model_type=MLP --dataset=MNISTsmall --arch_train_data sotl --grad_outer_loop_order=None --mode=bilevel --device=cuda --initial_degree 1 --hvp=finite_diff --epochs=100 --w_lr=0.001 --T=1 --a_lr=0.01 --hessian_tracking False --w_optim=Adam --a_optim=Adam --w_warm_start 3 --train_arch=True --a_weight_decay=0.001 --smoke_test False --dry_run=True --w_weight_decay=0.001 --batch_size=64 --decay_scheduler None
+# python linear/train.py --model_type=sigmoid --dataset=gisette --arch_train_data sotl --grad_outer_loop_order=None --mode=bilevel --device=cuda --initial_degree 1 --hvp=finite_diff --epochs=100 --w_lr=0.001 --T=1 --a_lr=0.01 --hessian_tracking False --w_optim=Adam --a_optim=Adam --w_warm_start 3 --train_arch=True --a_weight_decay=0.001 --smoke_test False --dry_run=True --w_weight_decay=0.001 --batch_size=64 --decay_scheduler None
+
 # python linear/train.py --model_type=max_deg --dataset=fourier --dry_run=False --T=2 --grad_outer_loop_order=1 --grad_inner_loop_order=1 --mode=bilevel --device=cpu
 # python linear/train.py --model_type=MNIST --dataset=MNIST --dry_run=False --T=1 --w_warm_start=0 --grad_outer_loop_order=-1 --grad_inner_loop_order=-1 --mode=bilevel --device=cuda --extra_weight_decay=0.0001 --w_weight_decay=0 --arch_train_data=val
 
 #pip install --force git+https://github.com/Mirofil/pytorch-hessian-eigenthings.git
 
-import os
 import itertools
 import math
-from pathlib import Path
+import os
+import pickle
+import time
 from copy import deepcopy
+from pathlib import Path
+from typing import *
 
+import fire
 import numpy
 import numpy as np
+import scipy.linalg
+import sklearn.feature_selection
+import sklearn.metrics
 import torch
 import torch.nn as nn
+from hessian_eigenthings import compute_hessian_eigenthings
+from sklearn.ensemble import ExtraTreesClassifier
+from sklearn.linear_model import Lasso, LogisticRegression
 from torch import Tensor
 from torch.nn import Linear, MSELoss
 from torch.nn import functional as F
 from torch.optim import SGD, Adam
+from tqdm import tqdm
 
 import wandb
 from datasets import get_datasets
 from log_utils import AverageMeter, wandb_auth
-from utils import (
-    data_generator,
-    eval_features,
-    featurize,
-    hessian,
-    jacobian,
-    prepare_seed
-)
 from models import SoTLNet
-from sotl_gradient import sotl_gradient, WeightBuffer
-import scipy.linalg
-import time
-import fire
-from utils_train import (get_criterion, hinge_loss, get_optimizers, switch_weights, 
-    compute_train_loss, calculate_weight_decay, compute_auc, 
-    reconstruction_error)
+from sotl_gradient import WeightBuffer, sotl_gradient
+from utils import (data_generator, eval_features, featurize, hessian, jacobian,
+                   prepare_seed)
 from utils_features import choose_features
-from tqdm import tqdm
-from typing import *
-from sklearn.linear_model import LogisticRegression, Lasso
-import sklearn.metrics
-import sklearn.feature_selection
-from sklearn.ensemble import ExtraTreesClassifier
-from hessian_eigenthings import compute_hessian_eigenthings
-import pickle
+from utils_train import (calculate_weight_decay, compute_auc,
+                         compute_train_loss, get_criterion, get_optimizers,
+                         hinge_loss, reconstruction_error, switch_weights)
+
 
 def train_bptt(
     epochs: int,
@@ -83,7 +81,8 @@ def train_bptt(
     mode:str="joint",
     hessian_tracking:bool=True,
     log_suffix:str="",
-    features:Sequence=None
+    features:Sequence=None,
+    decay_scheduler:str = 'linear',
 ):
     orig_model_cfg = deepcopy(model.config)
     train_loader = torch.utils.data.DataLoader(
@@ -106,11 +105,13 @@ def train_bptt(
         
         val_iter = iter(val_loader)
 
-        model.config["a_decay_order"] = None if (epoch < w_warm_start) else orig_model_cfg['a_decay_order']
-        model.config["w_decay_order"] = None if (epoch < w_warm_start) else orig_model_cfg['w_decay_order']
-        model.config['a_weight_decay'] = orig_model_cfg['a_weight_decay']*(epoch/epochs)
-        model.config['w_weight_decay'] = orig_model_cfg['w_weight_decay']*(epoch/epochs)
-
+        if decay_scheduler == 'linear':
+            model.config["a_decay_order"] = None if (epoch < w_warm_start) else orig_model_cfg['a_decay_order']
+            model.config["w_decay_order"] = None if (epoch < w_warm_start) else orig_model_cfg['w_decay_order']
+            model.config['a_weight_decay'] = orig_model_cfg['a_weight_decay']*(epoch/epochs)
+            model.config['w_weight_decay'] = orig_model_cfg['w_weight_decay']*(epoch/epochs)
+        elif decay_schedule is None or decay_schedule == "None":
+            pass
 
         for batch_idx, batch in enumerate(train_loader):
             if steps_per_epoch is not None and batch_idx > steps_per_epoch:
@@ -265,13 +266,16 @@ def train_bptt(
                             "Epoch": epoch,
                             "Batch": true_batch_index,
                         })
-
-        print(
+        try:
+            best_alphas = torch.sort([x.data for x in model.arch_params()][0].view(-1), descending=True).values[0:10]
+        except:
+            best_alphas = "No arch params"
+        tqdm.write(
             "Epoch: {}, Batch: {}, Loss: {}, Alphas: {}, Weights: {}".format(
                 epoch,
                 true_batch_index,
                 epoch_loss.avg,
-                [x.data for x in model.arch_params()] if len(str([x.data for x in model.arch_params()])) < 20 else torch.sort([x.data for x in model.arch_params()][0].view(-1), descending=True).values[0:10],
+                [x.data for x in model.arch_params()] if len(str([x.data for x in model.arch_params()])) < 20 else best_alphas,
                 [x.data for x in model.weight_params()] if len(str([x.data for x in model.arch_params()])) < 20 else f'Too long'
             )
         )
@@ -287,39 +291,40 @@ def train_bptt(
 
         auc, acc, mse, hessian_eigenvalue = None, None, None, None
         best = {"auc":{"value":0, "alphas":None}, "acc":{"value":0, "alphas":None}} # TODO this needs to be outside of the for loop to be persisent. BUt I think Ill drop it for now regardless
-        if model.model_type in ['sigmoid', "MLP", "AE", "linearAE"]:
+        if model.model_type in ['sigmoid', "MLP", "AE", "linearAE", "pt_logistic_l1", "log_regression"]:
             raw_x = np.array([pair[0].view(-1).numpy() for pair in dset_train])
             raw_y = np.array([pair[1].numpy() if type(pair[1]) != int else pair[1] for pair in dset_train])
 
             val_x = np.array([pair[0].view(-1).numpy() for pair in dset_val])
             val_y = np.array([pair[1].numpy() if type(pair[1]) != int else pair[1] for pair in dset_val])
 
-            if dataset in ['gisette']:
+            if dataset_cfg['n_classes'] == 2:
             # We need binary classification task for this to make sense
                 auc, acc = compute_auc(model=model, raw_x=raw_x, raw_y=raw_y, test_x=val_x, test_y=val_y, k=25, mode="DFS-NAS alphas")
                 # if auc > best["auc"]["value"]:
                 #     best["auc"]["value"] = auc
                 #     best["auc"]["alphas"] = model.alpha_feature_selectors
-            if 'MNIST' in dataset or dataset in ['isolet', 'activity']:
+            else:
                 mse, acc = reconstruction_error(model=model, k=50, raw_x=raw_x, raw_y=raw_y, test_x=val_x, test_y=val_y, mode="alphas")
 
         if hessian_tracking:
             eigenvals, eigenvecs = compute_hessian_eigenthings(model, train_loader,
-                                                    criterion, 1, full_dataset=True)
+                                                    criterion, num_eigenthings=1, full_dataset=True)
             hessian_eigenvalue = eigenvals[0]              
 
 
 
-        print("Epoch: {}, Val Loss: {}, Test Loss: {}, Discretized AUC: {}, MSE: {}, Reconstruction Acc: {}, Hess: {}".format(epoch, val_results.avg, test_results.avg, auc, mse, acc, hessian_eigenvalue))
+        tqdm.write("Epoch: {}, Val Loss: {}, Test Loss: {}, Discretized AUC: {}, MSE: {}, Reconstruction Acc: {}, Hess: {}".format(epoch, val_results.avg, test_results.avg, auc, mse, acc, hessian_eigenvalue))
         to_log = {**to_log, "Val loss": val_results.avg, "Val acc": val_acc_results.avg, "Test loss": test_results.avg, "Test acc": test_acc_results.avg, "AUC_training": auc, "MSE training":mse, 
             "RecAcc training":acc, "Arch. Hessian domin. eigenvalue": hessian_eigenvalue, "Epoch": epoch}
         wandb.log({model.model_type:{dataset:{**to_log}}})
         wandb.run.summary["Grad compute speed"] = grad_compute_speed.avg
 
-        print(f"Grad compute speed: {grad_compute_speed.avg}s")
+        tqdm.write(f"Grad compute speed: {grad_compute_speed.avg}s")
 
         #NOTE this is end of epoch
-        w_scheduler.step()
+        if w_scheduler is not None:
+            w_scheduler.step()
         if a_scheduler is not None:
             a_scheduler.step()
 
@@ -404,15 +409,21 @@ def main(epochs = 5,
     hinge_loss=0.25,
     mode = "bilevel",
     hessian_tracking=True,
-    auc_features_mode="normalized",
-    smoke_test=False,
-    rand_seed=None,
+    smoke_test:bool = False,
+    rand_seed:int = None,
+    a_scheduler:str = 'step',
+    w_scheduler:str = 'step',
+    decay_scheduler:str='linear',
+    loss:str = None
     ):
 
     config = locals()
     if dry_run:
         os.environ['WANDB_MODE'] = 'dryrun'
     wandb_auth()
+
+    import warnings
+    warnings.filterwarnings("ignore", category=UserWarning)
 
     try:
         __IPYTHON__
@@ -423,23 +434,23 @@ def main(epochs = 5,
     if rand_seed is not None:
         prepare_seed(rand_seed)
 
-    dataset_info = get_datasets(name=dataset, data_size=N, max_order_generated=D,
+    dataset_cfg = get_datasets(name=dataset, data_size=N, max_order_generated=D,
         max_order_y=max_order_y,
         noise_var=noise_var,
         featurize_type=featurize_type)
-    dset_train = dataset_info["dset_train"]
-    dset_val = dataset_info["dset_val"]
-    dset_test = dataset_info["dset_test"]
-    task = dataset_info["task"]
-    n_classes = dataset_info["n_classes"]
-    n_features = dataset_info["n_features"]
+    dset_train = dataset_cfg["dset_train"]
+    dset_val = dataset_cfg["dset_val"]
+    dset_test = dataset_cfg["dset_test"]
+    task = dataset_cfg["task"]
+    n_classes = dataset_cfg["n_classes"]
+    n_features = dataset_cfg["n_features"]
 
     model = SoTLNet(num_features=int(len(dset_train[0][0])) if n_features is None else n_features, model_type=model_type, 
-        degree=initial_degree, weight_decay=extra_weight_decay, task=task, n_classes=n_classes)
-    model.config = config
+        degree=initial_degree, weight_decay=extra_weight_decay, 
+        task=task, n_classes=n_classes, config=config)
     model = model.to(device)
 
-    criterion = get_criterion(model_type, task)
+    criterion = get_criterion(model_type, dataset_cfg, loss)
 
     w_optimizer, a_optimizer, w_scheduler, a_scheduler = get_optimizers(model, config)
 
@@ -453,7 +464,8 @@ def main(epochs = 5,
         a_optimizer=a_optimizer,
         w_scheduler=w_scheduler,
         a_scheduler=a_scheduler,
-        dataset_cfg=dataset_info,
+        decay_scheduler=decay_scheduler,
+        dataset_cfg=dataset_cfg,
         dataset=dataset,
         dset_train=dset_train,
         dset_val=dset_val,
@@ -477,8 +489,8 @@ def main(epochs = 5,
         train_arch=train_arch,
         config=config,
         mode=mode,
-        hessian_tracking=hessian_tracking
-    )
+        hessian_tracking=hessian_tracking,
+        )
     if model_type in ["max_deg", "softmax_mult", "linear"]:
         lapack_solution, res, eff_rank, sing_values = scipy.linalg.lstsq(dset_train[:][0], dset_train[:][1])
         print(f"Cond number:{abs(sing_values.max()/sing_values.min())}")
@@ -648,7 +660,7 @@ w_decay_order=2
 w_lr = 1e-3
 w_momentum=0.0
 w_weight_decay=0.0001
-a_optim='Adam'
+a_optim="Adam"
 a_decay_order=1
 a_lr = 3e-2
 a_momentum = 0.0
@@ -671,7 +683,7 @@ grad_inner_loop_order=-1
 grad_outer_loop_order=-1
 arch_train_data="sotl"
 model_type="AE"
-dataset="FashionMNISTsmall"
+dataset="MNISTsmall"
 device = 'cuda'
 train_arch=True
 dry_run=True
@@ -679,4 +691,9 @@ mode="bilevel"
 hessian_tracking=False
 smoke_test=True
 rand_seed = None
+decay_scheduler=None
+w_scheduler=None
+a_scheduler=None
+features=None
+loss=None
 config=locals()

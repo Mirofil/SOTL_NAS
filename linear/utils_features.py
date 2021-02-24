@@ -31,6 +31,7 @@ def choose_features(model, x_train=None, y_train=None, x_test=None, top_k=20, mo
         indices, x_train, x_test = lap_ours(x_train, x_test, K=top_k, model=model)
     elif mode == "lasso" or mode == "logistic_l1" or mode == "tree":
         indices, x_train, x_test = sklearn_model(model=model, x_train=x_train, x_test=x_test, k=top_k)
+
     elif mode in ['F', 'chi2', 'MI']:
         indices, x_train, x_test = univariate_test(x_train=x_train, x_test=x_test, 
             y_train=y_train, k=top_k, mode=mode)

@@ -79,6 +79,8 @@ def calculate_weight_decay(model, alpha_w_order=None, w_order=1, adaptive_decay=
             param_norm_w = param_norm_w + w_coef * torch.pow(torch.norm(w_param, w_order), w_order)
             D_w = D_w + torch.numel(w_param)
     param_norm = param_norm_a/max(D_a, 1) + param_norm_w/max(D_w, 1)
+    # param_norm = param_norm_a + param_norm_w
+
     return param_norm
 
 
@@ -106,7 +108,6 @@ def compute_train_loss(x, y, criterion, model, weight_decay=True,
     elif type(criterion) is torch.nn.CrossEntropyLoss:
         loss = criterion(y_pred, y.long()) + param_norm
 
-
     return loss
 
 def switch_weights(model, weight_buffer_elem):
@@ -133,14 +134,25 @@ def get_optimizers(model, config):
     elif config ['w_optim'] =='Adam':
         w_optimizer = Adam(model.weight_params(), lr=config["w_lr"], weight_decay=config["w_weight_decay"])
 
-    w_scheduler = torch.optim.lr_scheduler.StepLR(w_optimizer, max(round(config["epochs"]/2), 1), gamma=0.5, verbose=False)
+    if config['w_scheduler'] == "step":
+        w_scheduler = torch.optim.lr_scheduler.StepLR(w_optimizer, max(round(config["epochs"]/2), 1), gamma=0.5, verbose=False)
+    elif config["w_scheduler"] is None:
+        w_scheduler = None
+    else:
+        raise NotImplementedError
+
     if config["train_arch"]:
         if config['a_optim'] == 'SGD':
             a_optimizer = SGD(model.arch_params(), lr=config["a_lr"], momentum=config["a_momentum"], weight_decay=config["a_weight_decay"])
         elif config['a_optim'] == 'Adam':
             a_optimizer = Adam(model.arch_params(), lr=config["a_lr"], weight_decay=config["a_weight_decay"])
-        a_scheduler = torch.optim.lr_scheduler.StepLR(a_optimizer, max(round(config["epochs"]/5), 1), gamma=0.5, verbose=False)
-
+        
+        if config["a_scheduler"] == 'step':
+            a_scheduler = torch.optim.lr_scheduler.StepLR(a_optimizer, max(round(config["epochs"]/5), 1), gamma=5, verbose=False)
+        elif config["a_scheduler"] is None:
+            a_scheduler = None
+        else:
+            raise NotImplementedError
     else:
         # Placeholder optimizer that won't do anything - but the parameter list cannot be empty
         a_optimizer = None
@@ -154,14 +166,25 @@ def vae_loss(recon_x, x, mu, log_var):
     KLD = -0.5 * torch.sum(1 + log_var - mu.pow(2) - log_var.exp())
     return BCE + KLD
 
-def get_criterion(model_type, task):
+def get_criterion(model_type, dataset_cfg, preferred_loss=None):
     criterion=None
-    if model_type in ["MNIST", "log_regression", "MLP"]:
-        criterion = torch.nn.CrossEntropyLoss()
-    elif model_type in ["max_deg", "softmax_mult", "linear", "fourier", "polynomial", "sigmoid", "AE", "linearAE"]:
+    if preferred_loss == "mse":
         criterion = torch.nn.MSELoss()
-
+    elif preferred_loss == "ce":
+        criterion = torch.nn.CrossEntropyLoss()
     
+    else:
+        print("Trying to guess proper loss from model name")
+        if model_type in ["MNIST", "log_regression", "MLP", "pt_logistic_l1"]:
+            criterion = torch.nn.CrossEntropyLoss()
+        elif model_type in ["max_deg", "softmax_mult", "linear", "fourier", "polynomial", "sigmoid", "AE", "linearAE"]:
+            criterion = torch.nn.MSELoss()
+
+    print(f"Using loss {criterion} for training")
+
+    assert (not ('AE' in model_type and isinstance(criterion, torch.nn.CrossEntropyLoss)))
+    assert (not (dataset_cfg['n_classes'] > 1 and isinstance(criterion, torch.nn.MSELoss) and not 'AE' in model_type) or preferred_loss=='mse')
+
     return criterion
 
 def train_normal(

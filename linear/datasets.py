@@ -169,32 +169,55 @@ def get_datasets(name, path=None, val_split=0.1, test_split=0.2, normalize=True,
         n_classes = 10
         n_features=28*28
 
-    elif name == 'RELATHE':
+    elif name.lower() == 'relathe':
         mat = scipy.io.loadmat(data_path / "RELATHE.mat")
-        x_train, x_test, y_train, y_test = train_test_split(mat['X'], mat['Y'], test_size=test_split, random_state=40)
-    elif name == "BASEHOCK":
+        x_train, x_test, y_train, y_test = train_test_split(mat['X'], mat['Y'], test_size=test_split)
+        mat['Y'] = mat['Y'].flatten()
+
+        n_classes = 2
+    elif name.lower() == "basehock":
         mat = scipy.io.loadmat(data_path / "BASEHOCK.mat")
-        x_train, x_test, y_train, y_test = train_test_split(mat['X'], mat['Y'], test_size=test_split, random_state=40)
-
-    elif name == "PCMAC":
+        mat['Y'] = mat['Y'].flatten()
+        x_train, x_test, y_train, y_test = train_test_split(mat['X'], mat['Y'], test_size=test_split)
+        
+        n_classes = 2
+    elif name.lower() == "pcmac":
         mat = scipy.io.loadmat(data_path / "PCMAC.mat")
-        x_train, x_test, y_train, y_test = train_test_split(mat['X'], mat['Y'], test_size=test_split, random_state=40)
-    elif name == "prostate_ge":
-        mat = scipy.io.loadmat(data_path / "Prostate_GE.mat")
-        x_train, x_test, y_train, y_test = train_test_split(mat['X'], mat['Y'], test_size=test_split, random_state=40)
-    elif name == "ALLAML":
-        mat = scipy.io.loadmat(data_path / "ALLAML.mat")
-        x_train, x_test, y_train, y_test = train_test_split(mat['X'], mat['Y'], test_size=test_split, random_state=40)
-    elif name == "CLL_SUB":
-        mat = scipy.io.loadmat(data_path / "CLL_SUB_111.mat")
-        x_train, x_test, y_train, y_test = train_test_split(mat['X'], mat['Y'], test_size=test_split, random_state=40)
-    elif name == "GLIOMA":
-        mat = scipy.io.loadmat(data_path / "GLIOMA.mat")
-        x_train, x_test, y_train, y_test = train_test_split(mat['X'], mat['Y'], test_size=test_split, random_state=40)
-    elif name == "SMK_CAN":
-        mat = scipy.io.loadmat(data_path / "SMK_CAN_187.mat")
-        x_train, x_test, y_train, y_test = train_test_split(mat['X'], mat['Y'], test_size=test_split, random_state=40)
+        mat['Y'] = mat['Y'].flatten()
 
+        x_train, x_test, y_train, y_test = train_test_split(mat['X'], mat['Y'], test_size=test_split)
+        
+        n_classes = 2
+    elif name.lower() == "prostate_ge":
+        mat = scipy.io.loadmat(data_path / "Prostate_GE.mat")
+        mat['Y'] = mat['Y'].flatten()
+        x_train, x_test, y_train, y_test = train_test_split(mat['X'], mat['Y'], test_size=test_split)
+        
+        n_classes = 2
+    elif name.lower() == "allaml":
+        mat = scipy.io.loadmat(data_path / "ALLAML.mat")
+        mat['Y'] = mat['Y'].flatten()
+        x_train, x_test, y_train, y_test = train_test_split(mat['X'], mat['Y'], test_size=test_split)
+
+        n_classes = 2
+    elif name.lower() == "cll_sub":
+        mat = scipy.io.loadmat(data_path / "CLL_SUB_111.mat")
+        mat['Y'] = mat['Y'].flatten()
+        x_train, x_test, y_train, y_test = train_test_split(mat['X'], mat['Y'], test_size=test_split)
+
+        n_classes = 3
+    elif name.lower() == "glioma":
+        mat = scipy.io.loadmat(data_path / "GLIOMA.mat")
+        mat['Y'] = mat['Y'].flatten()
+        x_train, x_test, y_train, y_test = train_test_split(mat['X'], mat['Y'], test_size=test_split)
+    
+        n_classes = 4
+    elif name.lower() == "smk_can":
+        mat = scipy.io.loadmat(data_path / "SMK_CAN_187.mat")
+        mat['Y'] = mat['Y'].flatten()
+        x_train, x_test, y_train, y_test = train_test_split(mat['X'], mat['Y'], test_size=test_split)
+
+        n_classes=2
 
     elif name == 'MNIST35':
         
@@ -254,7 +277,8 @@ def get_datasets(name, path=None, val_split=0.1, test_split=0.2, normalize=True,
             scaler = preprocessing.StandardScaler().fit(x_train)
             x_train = torch.tensor(scaler.transform(x_train), dtype=torch.float32)
             x_test= torch.tensor(scaler.transform(x_test), dtype=torch.float32)
-
+            y_train = torch.tensor(y_train, dtype=torch.long)
+            y_test = torch.tensor(y_test, dtype=torch.long)
         
         dset_train = torch.utils.data.TensorDataset(x_train, y_train)
         dset_test = torch.utils.data.TensorDataset(x_test, y_test)
