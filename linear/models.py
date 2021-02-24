@@ -191,7 +191,6 @@ class AE(RegressionNet, FeatureSelectableTrait, AutoEncoder):
             nn.ReLU(True),
             nn.Dropout(dropout_p),
             nn.Linear(in_features=128, out_features=input_dim),
-            nn.ReLU(True)
         )
 
     def forward(self, x, *args, **kwargs):

@@ -10,8 +10,10 @@ from sklearn.datasets import load_svmlight_file
 from sklearn import preprocessing
 from PIL import Image
 from urllib.request import urlopen
+import scipy.io
+from sklearn.model_selection import train_test_split
 
-def get_datasets(name, path=None, test_split=0.85, normalize=True, **kwargs):
+def get_datasets(name, path=None, val_split=0.1, test_split=0.2, normalize=True, **kwargs):
     n_classes = None
     n_features=None
     if os.name == 'nt':
@@ -70,13 +72,6 @@ def get_datasets(name, path=None, test_split=0.85, normalize=True, **kwargs):
         test_classes= torch.tensor(np.array(test_classes).astype(int)[:,0], dtype=torch.long)
         test_classes[test_classes == -1] = 0
 
-        if normalize:
-            train_data = torch.tensor(preprocessing.StandardScaler().fit_transform(train_data), dtype=torch.float32)
-            test_data= torch.tensor(preprocessing.StandardScaler().fit_transform(test_data), dtype=torch.float32)
-
-        dset_train = torch.utils.data.TensorDataset(train_data, train_classes)
-        dset_test = torch.utils.data.TensorDataset(test_data, test_classes)
-
         n_classes = 2
         n_features=5000
 
@@ -106,8 +101,6 @@ def get_datasets(name, path=None, test_split=0.85, normalize=True, **kwargs):
         y_train = torch.tensor(y_train, dtype=torch.long)
         y_test = torch.tensor(y_test, dtype=torch.long)
 
-        dset_train = torch.utils.data.TensorDataset(x_train, y_train)
-        dset_test = torch.utils.data.TensorDataset(x_test, y_test)
     
     elif name == 'activity':
         x_train = np.loadtxt(data_path / 'har/train/X_train.txt')
@@ -122,8 +115,6 @@ def get_datasets(name, path=None, test_split=0.85, normalize=True, **kwargs):
         y_train = torch.tensor(y_train, dtype=torch.long)
         y_test = torch.tensor(y_test, dtype=torch.long)
 
-        dset_train = torch.utils.data.TensorDataset(x_train, y_train)
-        dset_test = torch.utils.data.TensorDataset(x_test, y_test)
     elif name=="madelon":
         train_data_url = 'https://archive.ics.uci.edu/ml/machine-learning-databases/madelon/MADELON/madelon_train.data'
         val_data_url = 'https://archive.ics.uci.edu/ml/machine-learning-databases/madelon/MADELON/madelon_valid.data'
@@ -134,10 +125,9 @@ def get_datasets(name, path=None, test_split=0.85, normalize=True, **kwargs):
         y_train = torch.tensor(np.loadtxt(urlopen(train_resp_url)), dtype=torch.long)
         x_test =  torch.tensor(np.loadtxt(urlopen(val_data_url)))
         y_test =  torch.tensor(np.loadtxt(urlopen(val_resp_url)), dtype=torch.long)
-        scaler = preprocessing.StandardScaler().fit(X_train)
-        x_train = scaler.transform(x_train)
-        x_test = scaler.transform(x_test)   
+
         # TODO finish
+    
     elif name == "coil":
         samples = []
         for i in range(1, 21):
@@ -157,8 +147,6 @@ def get_datasets(name, path=None, test_split=0.85, normalize=True, **kwargs):
 
         x_train, y_train = torch.tensor(data[:l], dtype=torch.float), torch.tensor(targets[:l], dtype=torch.long)
         x_test, y_test = torch.tensor(data[l:], dtype=torch.float), torch.tensor(targets[l:], dtype=torch.long)
-        dset_train = torch.utils.data.TensorDataset(x_train, y_train)
-        dset_test = torch.utils.data.TensorDataset(x_test, y_test)
 
     elif name == "MNIST" or name == "MNISTsmall":
         dset_train = datasets.MNIST('./data', train=True, download=True,
@@ -177,7 +165,34 @@ def get_datasets(name, path=None, test_split=0.85, normalize=True, **kwargs):
         
         n_classes = 10
         n_features=28*28
-    
+
+    elif name == 'RELATHE':
+        mat = scipy.io.loadmat(data_path / "RELATHE.mat")
+        x_train, x_test, y_train, y_test = train_test_split(mat['X'], mat['Y'], test_size=test_split, random_state=40)
+    elif name == "BASEHOCK":
+        mat = scipy.io.loadmat(data_path / "BASEHOCK.mat")
+        x_train, x_test, y_train, y_test = train_test_split(mat['X'], mat['Y'], test_size=test_split, random_state=40)
+
+    elif name == "PCMAC":
+        mat = scipy.io.loadmat(data_path / "PCMAC.mat")
+        x_train, x_test, y_train, y_test = train_test_split(mat['X'], mat['Y'], test_size=test_split, random_state=40)
+    elif name == "prostate_ge":
+        mat = scipy.io.loadmat(data_path / "Prostate_GE.mat")
+        x_train, x_test, y_train, y_test = train_test_split(mat['X'], mat['Y'], test_size=test_split, random_state=40)
+    elif name == "ALLAML":
+        mat = scipy.io.loadmat(data_path / "ALLAML.mat")
+        x_train, x_test, y_train, y_test = train_test_split(mat['X'], mat['Y'], test_size=test_split, random_state=40)
+    elif name == "CLL_SUB":
+        mat = scipy.io.loadmat(data_path / "CLL_SUB_111.mat")
+        x_train, x_test, y_train, y_test = train_test_split(mat['X'], mat['Y'], test_size=test_split, random_state=40)
+    elif name == "GLIOMA":
+        mat = scipy.io.loadmat(data_path / "GLIOMA.mat")
+        x_train, x_test, y_train, y_test = train_test_split(mat['X'], mat['Y'], test_size=test_split, random_state=40)
+    elif name == "SMK_CAN":
+        mat = scipy.io.loadmat(data_path / "SMK_CAN_187.mat")
+        x_train, x_test, y_train, y_test = train_test_split(mat['X'], mat['Y'], test_size=test_split, random_state=40)
+
+
     elif name == 'MNIST35':
         
         x_train, y_train = load_svmlight_file(str(data_path / 'mnist-35-noisy-binary.train.svm'))
@@ -190,9 +205,6 @@ def get_datasets(name, path=None, test_split=0.85, normalize=True, **kwargs):
         x_test = torch.tensor([np.array(elem.todense()) for elem in x_test], dtype=torch.float)
         y_test = torch.tensor(y_test, dtype=torch.long)
         y_test[y_test==-1]=0
-
-        dset_train = torch.utils.data.TensorDataset(x_train, y_train)
-        dset_test = torch.utils.data.TensorDataset(x_test, y_test)
 
         n_classes = 2
         n_features=28*28
@@ -231,11 +243,23 @@ def get_datasets(name, path=None, test_split=0.85, normalize=True, **kwargs):
                 normalize,
             ]))
         n_classes = 10
-    
-    dset_train, dset_val = torch.utils.data.random_split(
-            dset_train, [int(len(dset_train) * test_split), len(dset_train) - int(len(dset_train) * test_split)]
-        )
 
+    if name not in ['CIFAR', 'MNIST', 'FashionMNIST', 'MNISTsmall', 'FashionMNISTsmall']:
+        # The datasets from Torchvision have different Classes and they come already well split
+       
+        if normalize:
+            scaler = preprocessing.StandardScaler().fit(x_train)
+            x_train = torch.tensor(scaler.transform(x_train), dtype=torch.float32)
+            x_test= torch.tensor(scaler.transform(x_test), dtype=torch.float32)
+
+        
+        dset_train = torch.utils.data.TensorDataset(x_train, y_train)
+        dset_test = torch.utils.data.TensorDataset(x_test, y_test)
+
+
+    dset_train, dset_val = torch.utils.data.random_split(
+            dset_train, [int(len(dset_train) * (1-val_split)), len(dset_train) - int(len(dset_train) * (1-val_split))]
+        )
     if name in ['MNIST', 'CIFAR', "FashionMNIST", 'isolet', 'madelon', 'activity', 'coil']:
         task = 'multiclass'
     elif name in ['gisette', 'MNIST35']:
