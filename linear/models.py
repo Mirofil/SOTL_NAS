@@ -199,7 +199,7 @@ class AE(RegressionNet, FeatureSelectableTrait, AutoEncoder):
         orig_shape = x.shape
         x = x.view(-1, self._input_dim)
         # x = F.dropout(x, p=self.dropout_p, training=self.training)
-        x = x*torch.bernoulli(self.squash(self.alpha_feature_selectors())).to(x.device)
+        # x = x*torch.bernoulli(self.squash(self.alpha_feature_selectors())).to(x.device)
         # x = self.input_dropout(x) #TODO use dropout on the input or not ??
         x = self.feature_selection(x, feature_indices=self.feature_indices)
         x = self.encoder(x)

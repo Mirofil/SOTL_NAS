@@ -42,7 +42,8 @@ def compute_auc(model, k, raw_x, raw_y, test_x, test_y, mode ="F", verbose=True)
 
     return auc_score, acc
 
-def calculate_weight_decay(model, alpha_w_order=None, w_order=1, adaptive_decay=None, a_order=1, a_coef=1, w_coef=0.001):
+def calculate_weight_decay(model, alpha_w_order=None, w_order=1, adaptive_decay=None, 
+    a_order=1, a_coef=1, w_coef=0.001):
     param_norm=0
     param_norm_a = 0
     param_norm_w = 0
@@ -65,9 +66,14 @@ def calculate_weight_decay(model, alpha_w_order=None, w_order=1, adaptive_decay=
                 D_a = D_a + torch.numel(arch_param)
 
         else:
+            # if hasattr(model.model, "squash"):
             for arch_param in model.arch_params():
-                param_norm_a = param_norm_a + a_coef * torch.sum(torch.abs(arch_param))
+                param_norm_a = param_norm_a + a_coef * torch.sum(model.model.squash(arch_param))
                 D_a = D_a + torch.numel(arch_param)
+            # else:
+            #     for arch_param in model.arch_params():
+            #         param_norm_a = param_norm_a + a_coef * torch.sum(torch.abs(arch_param))
+            #         D_a = D_a + torch.numel(arch_param)
     if w_order is not None:
         for w_param in model.weight_params():
             param_norm_w = param_norm_w + w_coef * torch.pow(torch.norm(w_param, w_order), w_order)

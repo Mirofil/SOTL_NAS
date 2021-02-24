@@ -1,4 +1,4 @@
-# python linear/train.py --model_type=AE --dataset=FashionMNISTsmall --arch_train_data sotl --grad_outer_loop_order=None --mode=bilevel --device=cuda --initial_degree 1 --hvp=finite_diff --epochs=100 --w_lr=0.0001 --T=1 --a_lr=0.0001 --hessian_tracking False --w_optim=Adam --a_optim=Adam --w_warm_start 10 --train_arch=True --a_weight_decay=0.01 --smoke_test False --dry_run=True --w_weight_decay=0.00001 --batch_size=128
+# python linear/train.py --model_type=AE --dataset=FashionMNISTsmall --arch_train_data sotl --grad_outer_loop_order=None --mode=bilevel --device=cuda --initial_degree 1 --hvp=finite_diff --epochs=50 --w_lr=0.0001 --T=1 --a_lr=0.0001 --hessian_tracking False --w_optim=Adam --a_optim=Adam --w_warm_start 0 --train_arch=True --a_weight_decay=0.000001 --smoke_test False --dry_run=True --w_weight_decay=1 --batch_size=128
 # python linear/train.py --model_type=max_deg --dataset=fourier --dry_run=False --T=2 --grad_outer_loop_order=1 --grad_inner_loop_order=1 --mode=bilevel --device=cpu
 # python linear/train.py --model_type=MNIST --dataset=MNIST --dry_run=False --T=1 --w_warm_start=0 --grad_outer_loop_order=-1 --grad_inner_loop_order=-1 --mode=bilevel --device=cuda --extra_weight_decay=0.0001 --w_weight_decay=0 --arch_train_data=val
 
@@ -108,6 +108,9 @@ def train_bptt(
 
         model.config["a_decay_order"] = None if (epoch < w_warm_start) else orig_model_cfg['a_decay_order']
         model.config["w_decay_order"] = None if (epoch < w_warm_start) else orig_model_cfg['w_decay_order']
+        model.config['a_weight_decay'] = orig_model_cfg['a_weight_decay']*(epoch/epochs)
+        model.config['w_weight_decay'] = orig_model_cfg['w_weight_decay']*(epoch/epochs)
+
 
         for batch_idx, batch in enumerate(train_loader):
             if steps_per_epoch is not None and batch_idx > steps_per_epoch:
@@ -268,7 +271,7 @@ def train_bptt(
                 epoch,
                 true_batch_index,
                 epoch_loss.avg,
-                [x.data for x in model.arch_params()] if len(str([x.data for x in model.arch_params()])) < 20 else f'Too long',
+                [x.data for x in model.arch_params()] if len(str([x.data for x in model.arch_params()])) < 20 else torch.sort([x.data for x in model.arch_params()][0].view(-1), descending=True).values[0:10],
                 [x.data for x in model.weight_params()] if len(str([x.data for x in model.arch_params()])) < 20 else f'Too long'
             )
         )
