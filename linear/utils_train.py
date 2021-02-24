@@ -31,7 +31,7 @@ def reconstruction_error(model, k, raw_x, raw_y, test_x,
     return mse, acc
 
 
-def compute_auc(model, k, raw_x, raw_y, test_x, test_y, mode ="F", choose_features_mode=None, verbose=True):
+def compute_auc(model, k, raw_x, raw_y, test_x, test_y, mode ="F", verbose=True):
 
     indices, x, test_x = choose_features(model=model, x_train=raw_x, y_train=raw_y, x_test=test_x, mode=mode, top_k=k)
     
@@ -72,11 +72,13 @@ def calculate_weight_decay(model, alpha_w_order=None, w_order=1, adaptive_decay=
         for w_param in model.weight_params():
             param_norm_w = param_norm_w + w_coef * torch.pow(torch.norm(w_param, w_order), w_order)
             D_w = D_w + torch.numel(w_param)
-    param_norm = param_norm_a/D_a + param_norm_w/D_w
+    param_norm = param_norm_a/max(D_a, 1) + param_norm_w/max(D_w, 1)
     return param_norm
 
 
-def compute_train_loss(x, y, criterion, model, weight_decay=True, y_pred=None, alpha_w_order=None, w_order=None, adaptive_decay=False, a_order=None, a_coef=None, w_coef=None):
+def compute_train_loss(x, y, criterion, model, weight_decay=True, 
+    y_pred=None, alpha_w_order=None, w_order=None, adaptive_decay=False, 
+    a_order=None, a_coef=None, w_coef=None):
     assert model is not None or y_pred is not None
 
     if y_pred is None:
@@ -86,7 +88,8 @@ def compute_train_loss(x, y, criterion, model, weight_decay=True, y_pred=None, a
         assert y_pred.shape == x.shape
 
     if weight_decay:
-        param_norm = calculate_weight_decay(model, alpha_w_order=alpha_w_order, w_order=model.config["w_decay_order"],adaptive_decay=adaptive_decay, a_order=model.config["a_decay_order"], 
+        param_norm = calculate_weight_decay(model, alpha_w_order=alpha_w_order, w_order=model.config["w_decay_order"],
+            adaptive_decay=adaptive_decay, a_order=model.config["a_decay_order"], 
             a_coef=model.config["a_weight_decay"], w_coef=model.config["w_weight_decay"])
     else:
         param_norm = 0
@@ -130,7 +133,7 @@ def get_optimizers(model, config):
             a_optimizer = SGD(model.arch_params(), lr=config["a_lr"], momentum=config["a_momentum"], weight_decay=config["a_weight_decay"])
         elif config['a_optim'] == 'Adam':
             a_optimizer = Adam(model.arch_params(), lr=config["a_lr"], weight_decay=config["a_weight_decay"])
-        a_scheduler = torch.optim.lr_scheduler.StepLR(a_optimizer, max(round(config["epochs"]/2), 1), gamma=0.5, verbose=False)
+        a_scheduler = torch.optim.lr_scheduler.StepLR(a_optimizer, max(round(config["epochs"]/5), 1), gamma=0.5, verbose=False)
 
     else:
         # Placeholder optimizer that won't do anything - but the parameter list cannot be empty

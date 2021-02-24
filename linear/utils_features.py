@@ -59,9 +59,7 @@ def dfs_transform(model, x_train, x_test, k, mode, verbose=True, features_mode =
     elif features_mode == 'weights':
         scores = torch.mean(torch.abs(model.feature_normalizers()), dim=0)
         indices = torch.topk(scores, k=k)
-    # x = [elem[indices.indices.cpu()] for elem in x_train]
     x = x_train[:, indices.indices.cpu().numpy()]
-    # test_x = [elem[indices.indices.cpu()] for elem in x_test]
     test_x = x_test[:, indices.indices.cpu().numpy()]
 
     if verbose and k % 10 == 0 and features_mode == 'alphas':

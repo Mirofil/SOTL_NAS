@@ -1,4 +1,4 @@
-# python linear/train.py --model_type=AE --dataset=isolet --arch_train_data sotl --grad_outer_loop_order=None --mode=bilevel --device=cuda --initial_degree 1 --hvp=finite_diff --epochs=25 --w_lr=0.0001 --T=10 --a_lr=0.01 --hessian_tracking False --w_optim=Adam --a_optim=Adam --w_warm_start 0 --train_arch=True --a_weight_decay=0.001 --smoke_test False --dry_run=False --w_weight_decay=0.00001 --rand_seed 1
+# python linear/train.py --model_type=AE --dataset=FashionMNISTsmall --arch_train_data sotl --grad_outer_loop_order=None --mode=bilevel --device=cuda --initial_degree 1 --hvp=finite_diff --epochs=100 --w_lr=0.0001 --T=1 --a_lr=0.0001 --hessian_tracking False --w_optim=Adam --a_optim=Adam --w_warm_start 10 --train_arch=True --a_weight_decay=0.01 --smoke_test False --dry_run=True --w_weight_decay=0.00001 --batch_size=128
 # python linear/train.py --model_type=max_deg --dataset=fourier --dry_run=False --T=2 --grad_outer_loop_order=1 --grad_inner_loop_order=1 --mode=bilevel --device=cpu
 # python linear/train.py --model_type=MNIST --dataset=MNIST --dry_run=False --T=1 --w_warm_start=0 --grad_outer_loop_order=-1 --grad_inner_loop_order=-1 --mode=bilevel --device=cuda --extra_weight_decay=0.0001 --w_weight_decay=0 --arch_train_data=val
 
@@ -8,6 +8,7 @@ import os
 import itertools
 import math
 from pathlib import Path
+from copy import deepcopy
 
 import numpy
 import numpy as np
@@ -84,7 +85,7 @@ def train_bptt(
     log_suffix:str="",
     features:Sequence=None
 ):
-    
+    orig_model_cfg = deepcopy(model.config)
     train_loader = torch.utils.data.DataLoader(
         dset_train, batch_size=batch_size * T, shuffle=True
     )
@@ -104,6 +105,10 @@ def train_bptt(
         true_batch_index = 0
         
         val_iter = iter(val_loader)
+
+        model.config["a_decay_order"] = None if (epoch < w_warm_start) else orig_model_cfg['a_decay_order']
+        model.config["w_decay_order"] = None if (epoch < w_warm_start) else orig_model_cfg['w_decay_order']
+
         for batch_idx, batch in enumerate(train_loader):
             if steps_per_epoch is not None and batch_idx > steps_per_epoch:
                 break
@@ -288,12 +293,12 @@ def train_bptt(
 
             if dataset in ['gisette']:
             # We need binary classification task for this to make sense
-                auc, acc = compute_auc(model=model, raw_x=raw_x, raw_y=raw_y, test_x=val_x, test_y=val_y, k=25, mode="DFS-NAS")
+                auc, acc = compute_auc(model=model, raw_x=raw_x, raw_y=raw_y, test_x=val_x, test_y=val_y, k=25, mode="DFS-NAS alphas")
                 # if auc > best["auc"]["value"]:
                 #     best["auc"]["value"] = auc
                 #     best["auc"]["alphas"] = model.alpha_feature_selectors
             if 'MNIST' in dataset or dataset in ['isolet', 'activity']:
-                mse, acc = reconstruction_error(model=model, k=50, raw_x=raw_x, raw_y=raw_y, test_x=val_x, test_y=val_y)
+                mse, acc = reconstruction_error(model=model, k=50, raw_x=raw_x, raw_y=raw_y, test_x=val_x, test_y=val_y, mode="alphas")
 
         if hessian_tracking:
             eigenvals, eigenvecs = compute_hessian_eigenthings(model, train_loader,
@@ -353,6 +358,8 @@ def valid_func(model, dset_val, criterion, device = 'cuda' if torch.cuda.is_avai
             val_meter.update(val_loss.item())
     if print_results:
         print("Val loss: {}, Val acc: {}".format(val_meter.avg, val_acc_meter.avg if val_acc_meter.avg > 0 else "Not applicable"))
+
+    model.train()
     return val_meter, val_acc_meter
 
 
@@ -396,7 +403,7 @@ def main(epochs = 5,
     hessian_tracking=True,
     auc_features_mode="normalized",
     smoke_test=False,
-    rand_seed=None
+    rand_seed=None,
     ):
 
     config = locals()
@@ -536,8 +543,6 @@ def main(epochs = 5,
             "F":None, "DFS-NAS":model, "DFS-NAS alphas":model, "DFS-NAS weights":model, 
             **fit_once}
         if dataset == 'gisette':
-
-
             for k in tqdm(range(1, 100 if not smoke_test else 3), desc="Computing AUCs for different top-k features"):
 
                 for key, clf_model in models.items():

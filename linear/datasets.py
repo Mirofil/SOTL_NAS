@@ -72,6 +72,9 @@ def get_datasets(name, path=None, val_split=0.1, test_split=0.2, normalize=True,
         test_classes= torch.tensor(np.array(test_classes).astype(int)[:,0], dtype=torch.long)
         test_classes[test_classes == -1] = 0
 
+        x_train, x_test = train_data, test_data
+        y_train, y_test = train_classes, test_classes
+        
         n_classes = 2
         n_features=5000
 

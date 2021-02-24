@@ -174,28 +174,32 @@ class LinearAE(RegressionNet, FeatureSelectableTrait, AutoEncoder):
     def feature_normalizers(self):
         return self.feature_selection.weight
 class AE(RegressionNet, FeatureSelectableTrait, AutoEncoder):
-    def __init__(self, input_dim=28*28, dropout_p=0.2, **kwargs):
+    def __init__(self, input_dim=28*28, dropout_p=0.85, **kwargs):
         super().__init__()
         self._input_dim = input_dim
-        # self.input_dropout = nn.Dropout(dropout_p)
+        self.dropout_p = dropout_p
+        self.input_dropout = nn.Dropout(dropout_p)
         self.feature_selection = FeatureSelection(input_dim)
         self.encoder = nn.Sequential(
             nn.Linear(in_features=input_dim, out_features=128), 
             nn.ReLU(True),
-            nn.Dropout(dropout_p),
+            # nn.Dropout(dropout_p),
             nn.Linear(in_features=128, out_features=128),
             nn.ReLU(True),
-            nn.Dropout(dropout_p))
+            # nn.Dropout(dropout_p)
+        )
         self.decoder = nn.Sequential(
             nn.Linear(in_features=128, out_features=128),
             nn.ReLU(True),
-            nn.Dropout(dropout_p),
+            # nn.Dropout(dropout_p),
             nn.Linear(in_features=128, out_features=input_dim),
         )
 
     def forward(self, x, *args, **kwargs):
         orig_shape = x.shape
         x = x.view(-1, self._input_dim)
+        # x = F.dropout(x, p=self.dropout_p, training=self.training)
+        x = x*torch.bernoulli(self.squash(self.alpha_feature_selectors())).to(x.device)
         # x = self.input_dropout(x) #TODO use dropout on the input or not ??
         x = self.feature_selection(x, feature_indices=self.feature_indices)
         x = self.encoder(x)
@@ -210,4 +214,4 @@ class AE(RegressionNet, FeatureSelectableTrait, AutoEncoder):
         return self.feature_selection.alphas
     
     def feature_normalizers(self):
-        return self.feature_selection.weight
+        return self.encoder[0].weight.data.mean(dim=0)
