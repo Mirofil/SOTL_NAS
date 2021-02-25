@@ -166,7 +166,7 @@ class MLP(RegressionNet, FeatureSelectableTrait):
         return self.feature_selection.alphas
     
     def feature_normalizers(self):
-        return self.feature_selection.weight
+        return self.feature_selection.weight.mean(dim=0)
 
 class LinearAE(RegressionNet, FeatureSelectableTrait, AutoEncoder):
     def __init__(self, input_dim=28*28, dropout_p=0.2, **kwargs):

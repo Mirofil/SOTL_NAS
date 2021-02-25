@@ -58,7 +58,7 @@ def dfs_transform(model, x_train, x_test, k, mode, verbose=True, features_mode =
         scores = (model.model.squash(model.alpha_feature_selectors())*torch.abs(model.feature_normalizers())).squeeze()
         indices = torch.topk(scores, k=k)
     elif features_mode == 'weights':
-        scores = torch.abs(model.feature_normalizers())
+        scores = torch.abs(model.feature_normalizers()).squeeze()
         indices = torch.topk(scores, k=k)
     x = x_train[:, indices.indices.cpu().numpy()]
     test_x = x_test[:, indices.indices.cpu().numpy()]
