@@ -566,7 +566,7 @@ def main(epochs = 5,
         fit_once = {k:choose_features(model=None, x_train=x_train, x_test=x_test, y_train=y_train, top_k=100, mode = k) for k in tqdm(fit_once_keys, desc= "Fitting baseline SKFeature models")}
         
         models = {**models_to_train,
-            "F":None, "DFS-NAS":model, "DFS-NAS alphas":model, 
+            "F":None, "DFS-NAS":model, "DFS-NAS alphas":model, "DFS-NAS weights": model, 
             **fit_once}
 
         to_log = {}
@@ -575,6 +575,8 @@ def main(epochs = 5,
             for k in tqdm(range(1, 100 if not smoke_test else 3), desc="Computing AUCs for different top-k features"):
 
                 for key, clf_model in models.items():
+                    if type(clf_model) is tuple:
+                        clf_model = clf_model[0]
                     auc, acc = compute_auc(clf_model, k, x_train, y_train, x_test, y_test, mode = key)
                     metrics["auc"][key].append(auc)
                     metrics["acc"][key].append(auc)

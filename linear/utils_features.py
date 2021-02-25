@@ -46,17 +46,17 @@ def dfs_transform(model, x_train, x_test, k, mode, verbose=True):
     if mode == 'alphas' or mode == "DFS-NAS alphas":
         scores = model.alpha_feature_selectors().squeeze()
         indices = torch.topk(scores, k=k)
-    elif mode == 'normalized' or mode == "DFS-NAS normalized":
+    elif mode == 'normalized' or mode == "DFS-NAS":
         # NOTE IMPORTANT THOUGHT - doing abs, then mean will give different effect than doing it the other way. If a feature has different signs based on the class predicted, 
         # is it good to drop it because it is conflicting? Or keep it when it has high magnitude and thus high discriminative power?
-        scores = model.model.squash(model.alpha_feature_selectors())*torch.abs(model.feature_normalizers())
+        scores = (model.model.squash(model.alpha_feature_selectors())*torch.abs(model.feature_normalizers())).squeeze()
         indices = torch.topk(scores, k=k)
     elif mode == 'weights' or mode == "DFS-NAS weights":
         scores = torch.abs(model.feature_normalizers()).squeeze()
         indices = torch.topk(scores, k=k)
 
-    x = x_train[:, indices.indices.cpu().numpy()]
-    test_x = x_test[:, indices.indices.cpu().numpy()]
+    x = x_train[:, indices.indices.view(-1).cpu().numpy()]
+    test_x = x_test[:, indices.indices.view(-1).cpu().numpy()]
 
     if verbose and k % 10 == 0 and features_mode == 'alphas':
         print(f"{mode} selected weights: {model.feature_normalizers().view(-1)[indices.indices]}")

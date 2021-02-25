@@ -32,11 +32,9 @@ def reconstruction_error(model, k, x_train, y_train, x_test,
 
 
 def compute_auc(model, k, raw_x, raw_y, test_x, test_y, mode ="F", verbose=True):
-    # print(raw_x.shape)
     indices, x, test_x = choose_features(model=model, x_train=raw_x, y_train=raw_y, 
         x_test=test_x, mode=mode, top_k=k)
-    # print(x)
-    # print(x.shape)
+
     clf = LogisticRegression(max_iter=1000).fit(x,raw_y)
     preds = clf.predict_proba(test_x)
     auc_score = sklearn.metrics.roc_auc_score(test_y, preds[:, 1])
