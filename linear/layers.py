@@ -36,7 +36,7 @@ class LinearSquash(torch.nn.Linear, FeatureSelectableTrait):
         return self.alphas
     
     def feature_normalizers(self):
-        return self.weight
+        return self.weight.mean(dim=0)
 
 class FeatureSelection(torch.nn.Module):
     def __init__(self, in_features, squash_type="sigmoid", **kwargs) -> None:
