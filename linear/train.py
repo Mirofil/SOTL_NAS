@@ -566,7 +566,7 @@ def main(epochs = 5,
         fit_once = {k:choose_features(model=None, x_train=x_train, x_test=x_test, y_train=y_train, top_k=100, mode = k) for k in tqdm(fit_once_keys, desc= "Fitting baseline SKFeature models")}
         
         models = {**models_to_train,
-            "F":None, "DFS-NAS":model, "DFS-NAS alphas":model, "DFS-NAS weights":model, 
+            "F":None, "DFS-NAS":model, "DFS-NAS alphas":model, 
             **fit_once}
 
         to_log = {}
@@ -591,63 +591,63 @@ def main(epochs = 5,
                     metrics["mse"][key].append(mse)
                     metrics["acc"][key].append(acc)
 
-                    # We also want to examine the model perforamnce if it was retrained using only the selected features and without architecture training
-                    if k in [25, 50, 75] or (smoke_test and k == 1):
-                        features, _, _  = choose_features(model, x_train=x_train, y_train=y_train, x_test=x_test, top_k=k, mode='normalized')
-                        retrained_model = SoTLNet(num_features=k, model_type=model_type, 
-                            degree=initial_degree, weight_decay=extra_weight_decay, task=task, n_classes=n_classes)
-                        retrained_model.config = config
-                        retrained_model = retrained_model.to(device)
-                        # retrained_model.set_features(features.indices)
+                    # # We also want to examine the model perforamnce if it was retrained using only the selected features and without architecture training
+                    # if k in [25, 50, 75] or (smoke_test and k == 1):
+                    #     features, _, _  = choose_features(model, x_train=x_train, y_train=y_train, x_test=x_test, top_k=k, mode='normalized')
+                    #     retrained_model = SoTLNet(num_features=k, model_type=model_type, 
+                    #         degree=initial_degree, weight_decay=extra_weight_decay, task=task, n_classes=n_classes)
+                    #     retrained_model.config = config
+                    #     retrained_model = retrained_model.to(device)
+                    #     # retrained_model.set_features(features.indices)
 
                         
-                        criterion = get_criterion(model_type, dataset_cfg, task).to(device)
+                    #     criterion = get_criterion(model_type, dataset_cfg, task).to(device)
 
-                        w_optimizer, a_optimizer, w_scheduler, a_scheduler = get_optimizers(retrained_model, config)
+                    #     w_optimizer, a_optimizer, w_scheduler, a_scheduler = get_optimizers(retrained_model, config)
 
-                        # Retrain as before BUT must set train_arch=False and change the model=retrained_model at least!
-                        train_bptt(
-                            epochs=20 if not smoke_test else 1,
-                            steps_per_epoch=steps_per_epoch,
-                            model=retrained_model,
-                            criterion=criterion,
-                            w_optimizer=w_optimizer,
-                            a_optimizer=a_optimizer,
-                            decay_scheduler=decay_scheduler,
-                            w_scheduler=w_scheduler,
-                            a_scheduler=a_scheduler,
-                            dataset_cfg=dataset_cfg,
-                            dataset=dataset,
-                            dset_train=dset_train,
-                            dset_val=dset_val,
-                            dset_test=dset_test,
-                            logging_freq=logging_freq,
-                            batch_size=batch_size,
-                            T=T,
-                            grad_clip=grad_clip,
-                            w_lr=w_lr,
-                            w_checkpoint_freq=w_checkpoint_freq,
-                            grad_inner_loop_order=grad_inner_loop_order,
-                            grad_outer_loop_order=grad_outer_loop_order,
-                            hvp=hvp,
-                            arch_train_data=arch_train_data,
-                            normalize_a_lr=normalize_a_lr,
-                            log_grad_norm=True,
-                            log_alphas=True,
-                            w_warm_start=w_warm_start,
-                            extra_weight_decay=extra_weight_decay,
-                            device=device,
-                            train_arch=False,
-                            config=config,
-                            mode=mode,
-                            hessian_tracking=False,
-                            log_suffix=f"_retrainedK={k}",
-                            features=features.indices.cpu().numpy()
-                        )
+                    #     # Retrain as before BUT must set train_arch=False and change the model=retrained_model at least!
+                    #     train_bptt(
+                    #         epochs=20 if not smoke_test else 1,
+                    #         steps_per_epoch=steps_per_epoch,
+                    #         model=retrained_model,
+                    #         criterion=criterion,
+                    #         w_optimizer=w_optimizer,
+                    #         a_optimizer=a_optimizer,
+                    #         decay_scheduler=decay_scheduler,
+                    #         w_scheduler=w_scheduler,
+                    #         a_scheduler=a_scheduler,
+                    #         dataset_cfg=dataset_cfg,
+                    #         dataset=dataset,
+                    #         dset_train=dset_train,
+                    #         dset_val=dset_val,
+                    #         dset_test=dset_test,
+                    #         logging_freq=logging_freq,
+                    #         batch_size=batch_size,
+                    #         T=T,
+                    #         grad_clip=grad_clip,
+                    #         w_lr=w_lr,
+                    #         w_checkpoint_freq=w_checkpoint_freq,
+                    #         grad_inner_loop_order=grad_inner_loop_order,
+                    #         grad_outer_loop_order=grad_outer_loop_order,
+                    #         hvp=hvp,
+                    #         arch_train_data=arch_train_data,
+                    #         normalize_a_lr=normalize_a_lr,
+                    #         log_grad_norm=True,
+                    #         log_alphas=True,
+                    #         w_warm_start=w_warm_start,
+                    #         extra_weight_decay=extra_weight_decay,
+                    #         device=device,
+                    #         train_arch=False,
+                    #         config=config,
+                    #         mode=mode,
+                    #         hessian_tracking=False,
+                    #         log_suffix=f"_retrainedK={k}",
+                    #         features=features.indices.cpu().numpy()
+                    #     )
 
-                        val_loss, val_acc = valid_func(retrained_model, dset_test, criterion)
-                        to_log["retrained_loss"] = val_loss.avg
-                        to_log["retrained_acc"] = val_acc.avg
+                    #     val_loss, val_acc = valid_func(retrained_model, dset_test, criterion)
+                    #     to_log["retrained_loss"] = val_loss.avg
+                    #     to_log["retrained_acc"] = val_acc.avg
 
                 wandb.log({model_type:{dataset:{**{key+"_mse":metrics["mse"][key][k-1] for key in [*keys, *fit_once_keys]},
                     **{key+"_acc":metrics["acc"][key][k-1] for key in [*keys, *fit_once_keys]}, **to_log}}, "k":k})
