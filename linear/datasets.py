@@ -103,6 +103,11 @@ def get_datasets(name, path=None, val_split=0.1, test_split=0.2, normalize=True,
 
         y_train = torch.tensor(y_train, dtype=torch.long)
         y_test = torch.tensor(y_test, dtype=torch.long)
+        for i in range(1, 27):
+            y_test[y_test == i] = i-1
+            y_train[y_train == i] = i-1
+
+        n_classes = 26
 
     
     elif name == 'activity':
@@ -128,7 +133,9 @@ def get_datasets(name, path=None, val_split=0.1, test_split=0.2, normalize=True,
         y_train = torch.tensor(np.loadtxt(urlopen(train_resp_url)), dtype=torch.long)
         x_test =  torch.tensor(np.loadtxt(urlopen(val_data_url)))
         y_test =  torch.tensor(np.loadtxt(urlopen(val_resp_url)), dtype=torch.long)
-
+        y_train[y_train == -1] = 0
+        y_test[y_test == -1] = 0
+        n_classes = 2
         # TODO finish
     
     elif name == "coil":
@@ -151,6 +158,7 @@ def get_datasets(name, path=None, val_split=0.1, test_split=0.2, normalize=True,
         x_train, y_train = torch.tensor(data[:l], dtype=torch.float), torch.tensor(targets[:l], dtype=torch.long)
         x_test, y_test = torch.tensor(data[l:], dtype=torch.float), torch.tensor(targets[l:], dtype=torch.long)
 
+        n_classes = 20
     elif name == "MNIST" or name == "MNISTsmall":
         dset_train = datasets.MNIST('./data', train=True, download=True,
                 transform=transforms.Compose([
@@ -171,19 +179,27 @@ def get_datasets(name, path=None, val_split=0.1, test_split=0.2, normalize=True,
 
     elif name.lower() == 'relathe':
         mat = scipy.io.loadmat(data_path / "RELATHE.mat")
-        x_train, x_test, y_train, y_test = train_test_split(mat['X'], mat['Y'], test_size=test_split)
         mat['Y'] = mat['Y'].flatten()
+        for i in range(2):
+            mat['Y'][mat['Y'] == i+1] = i
+
+        x_train, x_test, y_train, y_test = train_test_split(mat['X'], mat['Y'], test_size=test_split)
 
         n_classes = 2
     elif name.lower() == "basehock":
         mat = scipy.io.loadmat(data_path / "BASEHOCK.mat")
         mat['Y'] = mat['Y'].flatten()
+        for i in range(2):
+            mat['Y'][mat['Y'] == i+1] = i
+
         x_train, x_test, y_train, y_test = train_test_split(mat['X'], mat['Y'], test_size=test_split)
         
         n_classes = 2
     elif name.lower() == "pcmac":
         mat = scipy.io.loadmat(data_path / "PCMAC.mat")
         mat['Y'] = mat['Y'].flatten()
+        for i in range(2):
+            mat['Y'][mat['Y'] == i+1] = i
 
         x_train, x_test, y_train, y_test = train_test_split(mat['X'], mat['Y'], test_size=test_split)
         
@@ -191,24 +207,37 @@ def get_datasets(name, path=None, val_split=0.1, test_split=0.2, normalize=True,
     elif name.lower() == "prostate_ge":
         mat = scipy.io.loadmat(data_path / "Prostate_GE.mat")
         mat['Y'] = mat['Y'].flatten()
+        for i in range(2):
+            mat['Y'][mat['Y'] == i+1] = i
+
         x_train, x_test, y_train, y_test = train_test_split(mat['X'], mat['Y'], test_size=test_split)
         
         n_classes = 2
     elif name.lower() == "allaml":
         mat = scipy.io.loadmat(data_path / "ALLAML.mat")
         mat['Y'] = mat['Y'].flatten()
+        for i in range(2):
+            mat['Y'][mat['Y'] == i+1] = i
+
+
         x_train, x_test, y_train, y_test = train_test_split(mat['X'], mat['Y'], test_size=test_split)
 
         n_classes = 2
     elif name.lower() == "cll_sub":
         mat = scipy.io.loadmat(data_path / "CLL_SUB_111.mat")
         mat['Y'] = mat['Y'].flatten()
+        for i in range(3):
+            mat['Y'][mat['Y'] == i+1] = i
+
         x_train, x_test, y_train, y_test = train_test_split(mat['X'], mat['Y'], test_size=test_split)
 
         n_classes = 3
     elif name.lower() == "glioma":
         mat = scipy.io.loadmat(data_path / "GLIOMA.mat")
         mat['Y'] = mat['Y'].flatten()
+        for i in range(4):
+            mat['Y'][mat['Y'] == i+1] = i
+
         x_train, x_test, y_train, y_test = train_test_split(mat['X'], mat['Y'], test_size=test_split)
     
         n_classes = 4
@@ -269,6 +298,9 @@ def get_datasets(name, path=None, val_split=0.1, test_split=0.2, normalize=True,
                 normalize,
             ]))
         n_classes = 10
+    
+    else:
+        raise NotImplementedError
 
     if name not in ['CIFAR', 'MNIST', 'FashionMNIST', 'MNISTsmall', 'FashionMNISTsmall']:
         # The datasets from Torchvision have different Classes and they come already well split
@@ -294,11 +326,11 @@ def get_datasets(name, path=None, val_split=0.1, test_split=0.2, normalize=True,
     else:
         task = 'reg'
 
-    if n_classes is None:
-        if len(dset_train[0][1].size()) == 0:
-            n_classes = 1
-        else:
-            n_classes = dset_train[0][1].size()[1]
+    # if n_classes is None:
+    #     if len(dset_train[0][1].size()) == 0:
+    #         n_classes = 1
+    #     else:
+    #         n_classes = dset_train[0][1].size()[1]
 
     if n_features is None:
         n_features = dset_train[0][0].view(1, -1).shape[1]

@@ -14,19 +14,19 @@ from sklearn.decomposition import PCA
 from utils_features import mcfs_ours, pfa_transform, lap_ours, pca, univariate_test, sklearn_model, choose_features
 
 
-def reconstruction_error(model, k, raw_x, raw_y, test_x, 
-    test_y, mode = "normalized"):
+def reconstruction_error(model, k, x_train, y_train, x_test, 
+    y_test, mode = "normalized"):
     # Used to compute reconstruction errors from Concrete Autoencoder paper
-    indices, x, test_x = choose_features(model=model, x_train=raw_x, 
-        x_test=test_x, y_train=raw_y, top_k=k, mode=mode)
+    indices, x, x_test = choose_features(model=model, x_train=x_train, 
+        x_test=x_test, y_train=y_train, top_k=k, mode=mode)
     
-    clf = LinearRegression().fit(x, raw_y)
-    preds = clf.predict(test_x)
-    mse = ((preds-test_y)**2).mean()
+    clf = LinearRegression().fit(x, y_train)
+    preds = clf.predict(x_test)
+    mse = ((preds-y_test)**2).mean()
 
     #NOTE the Concrete Autoencoder appendix says there should be 50 trees
-    tree = ExtraTreesClassifier(n_estimators=50).fit(x, raw_y)
-    acc = tree.score(test_x, test_y)
+    tree = ExtraTreesClassifier(n_estimators=50).fit(x, y_train)
+    acc = tree.score(x_test, y_test)
 
     return mse, acc
 
@@ -59,7 +59,7 @@ def calculate_weight_decay(model, alpha_w_order=None, w_order=1, adaptive_decay=
     if adaptive_decay != None and adaptive_decay != False and hasattr(model, "adaptive_weight_decay"):
         param_norm = param_norm + model.adaptive_weight_decay()
     
-    if a_order is not None:
+    if a_order is not None and model.config["train_arch"]:
         if model.model_type in ['sigmoid', 'MLP']:
             for arch_param in model.arch_params():
                 param_norm_a = param_norm_a + a_coef * torch.sum(torch.abs(torch.sigmoid(arch_param)))
@@ -135,7 +135,7 @@ def get_optimizers(model, config):
         w_optimizer = Adam(model.weight_params(), lr=config["w_lr"])
 
     if config['w_scheduler'] == "step":
-        w_scheduler = torch.optim.lr_scheduler.StepLR(w_optimizer, max(round(config["epochs"]/2), 1), gamma=0.1, verbose=False)
+        w_scheduler = torch.optim.lr_scheduler.StepLR(w_optimizer, max(round(config["epochs"]/3), 1), gamma=0.1, verbose=False)
     elif config["w_scheduler"] is None:
         w_scheduler = None
     else:
@@ -148,7 +148,7 @@ def get_optimizers(model, config):
             a_optimizer = Adam(model.arch_params(), lr=config["a_lr"])
         
         if config["a_scheduler"] == 'step':
-            a_scheduler = torch.optim.lr_scheduler.StepLR(a_optimizer, max(round(config["epochs"]/2), 1), gamma=0.1, verbose=False)
+            a_scheduler = torch.optim.lr_scheduler.StepLR(a_optimizer, max(round(config["epochs"]/3), 1), gamma=0.1, verbose=False)
         elif config["a_scheduler"] is None:
             a_scheduler = None
         else:

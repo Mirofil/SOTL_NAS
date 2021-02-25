@@ -55,10 +55,10 @@ def dfs_transform(model, x_train, x_test, k, mode, verbose=True, features_mode =
     elif features_mode == 'normalized':
         # NOTE IMPORTANT THOUGHT - doing abs, then mean will give different effect than doing it the other way. If a feature has different signs based on the class predicted, 
         # is it good to drop it because it is conflicting? Or keep it when it has high magnitude and thus high discriminative power?
-        scores = (model.model.squash(model.alpha_feature_selectors())*torch.mean(torch.abs(model.feature_normalizers()), dim=0)).squeeze()
+        scores = (model.model.squash(model.alpha_feature_selectors())*torch.abs(model.feature_normalizers())).squeeze()
         indices = torch.topk(scores, k=k)
     elif features_mode == 'weights':
-        scores = torch.mean(torch.abs(model.feature_normalizers()), dim=0)
+        scores = torch.abs(model.feature_normalizers())
         indices = torch.topk(scores, k=k)
     x = x_train[:, indices.indices.cpu().numpy()]
     test_x = x_test[:, indices.indices.cpu().numpy()]

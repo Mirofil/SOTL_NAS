@@ -134,21 +134,28 @@ class LogReg(nn.Module, FeatureSelectableTrait):
 
     
 class MLP(RegressionNet, FeatureSelectableTrait):
-    def __init__(self, input_dim=28*28, hidden_dim=1000, output_dim=10, weight_decay=0, **kwargs):
+    def __init__(self, input_dim=28*28, hidden_dim=1000, output_dim=10, weight_decay=0, dropout_p=0.2, **kwargs):
         super(MLP, self).__init__()
         self._input_dim = input_dim
         self.feature_selection = FeatureSelection(input_dim)
-        self.lin1 = nn.Linear(input_dim, hidden_dim)
-        self.lin2 = nn.Linear(hidden_dim, hidden_dim)
-        self.lin3 = nn.Linear(hidden_dim, output_dim)
+        self.mlp = nn.Sequential(
+            nn.Linear(input_dim, hidden_dim),
+            nn.ReLU(),
+            nn.Dropout(dropout_p),
+            nn.Linear(hidden_dim, hidden_dim),
+            nn.ReLU(),
+            nn.Dropout(dropout_p),
+            nn.Linear(hidden_dim, output_dim)
+        )
+        # self.lin1 = nn.Linear(input_dim, hidden_dim)
+        # self.lin2 = nn.Linear(hidden_dim, hidden_dim)
+        # self.lin3 = nn.Linear(hidden_dim, output_dim)
 
     def forward(self, x, weights=None, alphas=None):
 
         x = x.view(-1, self._input_dim)
         x = self.feature_selection(x, feature_indices=self.feature_indices)
-        x = F.relu(self.lin1(x))
-        x = F.relu(self.lin2(x))
-        x = self.lin3(x)
+        x = self.mlp(x)
 
         return x
     

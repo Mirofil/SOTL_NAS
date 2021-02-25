@@ -1,5 +1,5 @@
-# python linear/train.py --model_type=AE --dataset=FashionMNISTsmall --arch_train_data sotl --grad_outer_loop_order=None --mode=bilevel --device=cuda --initial_degree 1 --hvp=finite_diff --epochs=50 --w_lr=0.1 --T=1 --a_lr=0.1 --hessian_tracking False --w_optim=SGD --a_optim=Adam --w_warm_start 0 --train_arch=True --a_weight_decay=0.01 --smoke_test False --dry_run=True --w_weight_decay=0.1 --batch_size=2048 --decay_scheduler None --w_scheduler None
-# python linear/train.py --model_type=MLP --dataset=MNISTsmall --arch_train_data sotl --grad_outer_loop_order=None --mode=bilevel --device=cuda --initial_degree 1 --hvp=finite_diff --epochs=100 --w_lr=0.001 --T=1 --a_lr=0.01 --hessian_tracking False --w_optim=Adam --a_optim=Adam --w_warm_start 3 --train_arch=True --a_weight_decay=0.001 --smoke_test False --dry_run=True --w_weight_decay=0.001 --batch_size=64 --decay_scheduler None
+# python linear/train.py --model_type=AE --dataset=isolet --arch_train_data sotl --grad_outer_loop_order=None --mode=bilevel --device=cuda --initial_degree 1 --hvp=finite_diff --epochs=150 --w_lr=0.1 --T=1 --a_lr=0.1 --hessian_tracking True --w_optim=SGD --a_optim=Adam --w_warm_start 0 --train_arch=True --a_weight_decay=0.01 --smoke_test True --dry_run=True --w_weight_decay=0.01 --batch_size=64 --decay_scheduler None --w_scheduler None
+# python linear/train.py --model_type=MLP --dataset=madelon --arch_train_data sotl --grad_outer_loop_order=None --mode=bilevel --device=cuda --initial_degree 1 --hvp=finite_diff --epochs=100 --w_lr=0.001 --T=1 --a_lr=0.01 --hessian_tracking False --w_optim=Adam --a_optim=Adam --w_warm_start 0 --train_arch=True --a_weight_decay=0.001 --smoke_test True --dry_run=True --w_weight_decay=0.001 --batch_size=64 --decay_scheduler None
 # python linear/train.py --model_type=sigmoid --dataset=gisette --arch_train_data sotl --grad_outer_loop_order=None --mode=bilevel --device=cuda --initial_degree 1 --hvp=finite_diff --epochs=100 --w_lr=0.001 --T=1 --a_lr=0.01 --hessian_tracking False --w_optim=Adam --a_optim=Adam --w_warm_start 3 --train_arch=True --a_weight_decay=0.00000001--smoke_test False --dry_run=True --w_weight_decay=0.001 --batch_size=64 --decay_scheduler None
 
 # python linear/train.py --model_type=max_deg --dataset=fourier --dry_run=False --T=2 --grad_outer_loop_order=1 --grad_inner_loop_order=1 --mode=bilevel --device=cpu
@@ -271,7 +271,7 @@ def train_bptt(
         except:
             best_alphas = "No arch params"
         tqdm.write(
-            "Epoch: {}, Batch: {}, Loss: {}, Alphas: {}, Weights: {}".format(
+            "Epoch: {}, Batch: {}, Train loss: {}, Alphas: {}, Weights: {}".format(
                 epoch,
                 true_batch_index,
                 epoch_loss.avg,
@@ -282,30 +282,32 @@ def train_bptt(
 
 
         val_results, val_acc_results = valid_func(
-            model=model, dset_val=dset_val, criterion=criterion, device=device, print_results=False
+            model=model, dset_val=dset_val, criterion=criterion, device=device, 
+            print_results=False, features=features
         )
 
         test_results, test_acc_results = valid_func(
-            model=model, dset_val=dset_test, criterion=criterion, device=device, print_results=False
+            model=model, dset_val=dset_test, criterion=criterion, device=device, 
+            print_results=False, features=features
         )
 
         auc, acc, mse, hessian_eigenvalue = None, None, None, None
         best = {"auc":{"value":0, "alphas":None}, "acc":{"value":0, "alphas":None}} # TODO this needs to be outside of the for loop to be persisent. BUt I think Ill drop it for now regardless
         if model.model_type in ['sigmoid', "MLP", "AE", "linearAE", "pt_logistic_l1", "log_regression"]:
-            raw_x = np.array([pair[0].view(-1).numpy() for pair in dset_train])
-            raw_y = np.array([pair[1].numpy() if type(pair[1]) != int else pair[1] for pair in dset_train])
+            x_train = np.array([pair[0].view(-1).numpy() for pair in dset_train])
+            y_train = np.array([pair[1].numpy() if type(pair[1]) != int else pair[1] for pair in dset_train])
 
-            val_x = np.array([pair[0].view(-1).numpy() for pair in dset_val])
-            val_y = np.array([pair[1].numpy() if type(pair[1]) != int else pair[1] for pair in dset_val])
+            x_val = np.array([pair[0].view(-1).numpy() for pair in dset_val])
+            y_val = np.array([pair[1].numpy() if type(pair[1]) != int else pair[1] for pair in dset_val])
 
             if dataset_cfg['n_classes'] == 2:
             # We need binary classification task for this to make sense
-                auc, acc = compute_auc(model=model, raw_x=raw_x, raw_y=raw_y, test_x=val_x, test_y=val_y, k=25, mode="DFS-NAS alphas")
+                auc, acc = compute_auc(model=model, raw_x=x_train, raw_y=y_train, test_x=x_val, test_y=y_val, k=25, mode="DFS-NAS alphas")
                 # if auc > best["auc"]["value"]:
                 #     best["auc"]["value"] = auc
                 #     best["auc"]["alphas"] = model.alpha_feature_selectors
             else:
-                mse, acc = reconstruction_error(model=model, k=50, raw_x=raw_x, raw_y=raw_y, test_x=val_x, test_y=val_y, mode="alphas")
+                mse, acc = reconstruction_error(model=model, k=50, x_train=x_train, y_train=y_train, x_test=x_val, y_test=y_val, mode="alphas")
 
         if hessian_tracking:
             eigenvals, eigenvecs = compute_hessian_eigenthings(model, train_loader,
@@ -317,7 +319,8 @@ def train_bptt(
         tqdm.write("Epoch: {}, Val Loss: {}, Test Loss: {}, Discretized AUC: {}, MSE: {}, Reconstruction Acc: {}, Hess: {}".format(epoch, val_results.avg, test_results.avg, auc, mse, acc, hessian_eigenvalue))
         to_log = {**to_log, "Val loss": val_results.avg, "Val acc": val_acc_results.avg, "Test loss": test_results.avg, "Test acc": test_acc_results.avg, "AUC_training": auc, "MSE training":mse, 
             "RecAcc training":acc, "Arch. Hessian domin. eigenvalue": hessian_eigenvalue, "Epoch": epoch}
-        wandb.log({model.model_type:{dataset:{**to_log}}})
+        suffixed_name = model.model_type + log_suffix
+        wandb.log({suffixed_name:{dataset:{**to_log}}})
         wandb.run.summary["Grad compute speed"] = grad_compute_speed.avg
 
         tqdm.write(f"Grad compute speed: {grad_compute_speed.avg}s")
@@ -328,6 +331,7 @@ def train_bptt(
         if a_scheduler is not None:
             a_scheduler.step()
 
+
     # print(f"Best found metrics over validation: AUC {best['auc']['value']}")
 
     # if dataset in ['gisette']:
@@ -335,7 +339,9 @@ def train_bptt(
     #     model.fc1.alphas = best["auc"]["alphas"]
 
 
-def valid_func(model, dset_val, criterion, device = 'cuda' if torch.cuda.is_available() else 'cpu', print_results=True):
+def valid_func(model, dset_val, criterion, 
+    device = 'cuda' if torch.cuda.is_available() else 'cpu', print_results=True,
+    features=None):
     model.eval()
     val_loader = torch.utils.data.DataLoader(dset_val, batch_size=32)
     val_meter = AverageMeter()
@@ -344,6 +350,8 @@ def valid_func(model, dset_val, criterion, device = 'cuda' if torch.cuda.is_avai
     with torch.no_grad():
         for batch in val_loader:
             x, y = batch
+            if features is not None:
+                x = x[:, features]
             x = x.to(device)
             y = y.to(device)
             y_pred = model(x)
@@ -424,6 +432,7 @@ def main(epochs = 5,
 
     import warnings
     warnings.filterwarnings("ignore", category=UserWarning)
+    warnings.filterwarnings("ignore", category=FutureWarning)
 
     try:
         __IPYTHON__
@@ -514,14 +523,15 @@ def main(epochs = 5,
             print("No model degree info; probably a different model_type was chosen")
     
     else:
-        raw_x = np.array([pair[0].view(-1).numpy() for pair in dset_train])
-        raw_y = np.array([pair[1].numpy() if type(pair[1]) != int else pair[1] for pair in dset_train])
+        x_train = np.array([pair[0].view(-1).numpy() for pair in dset_train])
+        y_train = np.array([pair[1].numpy() if type(pair[1]) != int else pair[1] for pair in dset_train])
 
-        test_x = np.array([pair[0].view(-1).numpy() for pair in dset_test])
-        test_y = np.array([pair[1].numpy() if type(pair[1]) != int else pair[1] for pair in dset_test])
+        x_test = np.array([pair[0].view(-1).numpy() for pair in dset_test])
+        y_test = np.array([pair[1].numpy() if type(pair[1]) != int else pair[1] for pair in dset_test])
 
         fit_once_keys = ["MCFS", "PFA", "Lap", "PCA"]
-        keys = ["F", "DFS-NAS", "DFS-NAS alphas", "DFS-NAS weights", "lasso", "logistic_l1", "tree"]
+        keys = ["F", "DFS-NAS", "DFS-NAS alphas", 
+            "DFS-NAS weights", "lasso", "logistic_l1", "tree"]
         metrics = {"auc":{k:[] for k in [*keys, *fit_once_keys]}, "acc": {k:[] for k in [*keys, *fit_once_keys]}, "mse": {k:[] for k in [*keys, *fit_once_keys]}}
         AUCs = {k:[] for k in [*keys, *fit_once_keys]}
         accs = {k:[] for k in [*keys, *fit_once_keys]}
@@ -529,9 +539,9 @@ def main(epochs = 5,
 
 
 
-        models_to_train = {"logistic_l1":LogisticRegression(penalty='l1', solver='saga', C=1, max_iter=700 if (not smoke_test or dry_run) else 5),
-        "tree":ExtraTreesClassifier(n_estimators = 100), 
-        "lasso":sklearn.linear_model.Lasso()}
+        models_to_train = {"logistic_l1":LogisticRegression(penalty='l1', solver='saga', C=1, max_iter=350 if (not smoke_test or dry_run) else 5),
+            "tree":ExtraTreesClassifier(n_estimators = 100), 
+            "lasso":sklearn.linear_model.Lasso()}
 
 
         for model_name in tqdm(models_to_train.keys(), desc="Either loading or training SKLearn models"):
@@ -543,100 +553,104 @@ def main(epochs = 5,
             
             except:
                 print(f"Failed to load {model_name} at {str(fname)}, training instead")
-                models_to_train[model_name].fit(raw_x, raw_y)
+                models_to_train[model_name].fit(x_train, y_train)
                 try:
                     Path("./checkpoints").mkdir(parents=True, exist_ok=True)
-                    if not smoke_test:
+                    if not (smoke_test or dry_run):
                         with open(fname, 'wb') as f:
+                            print(f"Saving {model_name} to {str(fname)}")
                             pickle.dump(models_to_train[model_name], f)
                 except:
                     print("Model saving failed")
 
-        fit_once = {k:choose_features(model=None, x_train=raw_x, x_test=test_x, y_train=raw_y, top_k=100, mode = k) for k in tqdm(fit_once_keys, desc= "Fitting baseline SKFeature models")}
+        fit_once = {k:choose_features(model=None, x_train=x_train, x_test=x_test, y_train=y_train, top_k=100, mode = k) for k in tqdm(fit_once_keys, desc= "Fitting baseline SKFeature models")}
         
         models = {**models_to_train,
             "F":None, "DFS-NAS":model, "DFS-NAS alphas":model, "DFS-NAS weights":model, 
             **fit_once}
-        if dataset == 'gisette':
+
+        to_log = {}
+        
+        if dataset_cfg['n_classes'] == 2:
             for k in tqdm(range(1, 100 if not smoke_test else 3), desc="Computing AUCs for different top-k features"):
 
                 for key, clf_model in models.items():
-                    auc, acc = compute_auc(clf_model, k, raw_x, raw_y, test_x, test_y, mode = key)
+                    auc, acc = compute_auc(clf_model, k, x_train, y_train, x_test, y_test, mode = key)
                     metrics["auc"][key].append(auc)
                     metrics["acc"][key].append(auc)
                     AUCs[key].append(auc)
                     accs[key].append(acc)
                 wandb.log({model_type:{dataset:{**{key+"_auc":AUCs[key][k-1] for key in [*keys, *fit_once_keys]},
                     **{key+"_acc":accs[key][k-1] for key in [*keys, *fit_once_keys]}, "k":k}}})
-        
         else:
-
             for k in tqdm(range(1,100 if not smoke_test else 5, 1), desc='Computing reconstructions for MNIST-like datasets'):
                 for key, clf_model in models.items():
                     if isinstance(clf_model, (tuple, list)):
                         clf_model = clf_model[0]
-                    mse, acc = reconstruction_error(model=clf_model, k=k, raw_x=raw_x, raw_y=raw_y, test_x=test_x, test_y=test_y, mode=key)
+                    mse, acc = reconstruction_error(model=clf_model, k=k, x_train=x_train, y_train=y_train, x_test=x_test, y_test=y_test, mode=key)
                     metrics["mse"][key].append(mse)
                     metrics["acc"][key].append(acc)
 
                     # We also want to examine the model perforamnce if it was retrained using only the selected features and without architecture training
-                    # if k in [9, 39, 69] or (smoke_test and k == 1):
-                    #     features, _, _  = choose_features(model, top_k=k, mode='normalized')
-                    #     retrained_model = SoTLNet(num_features=k, model_type=model_type, 
-                    #         degree=initial_degree, weight_decay=extra_weight_decay, task=task, n_classes=n_classes)
-                    #     retrained_model.config = config
-                    #     retrained_model = retrained_model.to(device)
-                    #     # retrained_model.set_features(features.indices)
+                    if k in [25, 50, 75] or (smoke_test and k == 1):
+                        features, _, _  = choose_features(model, x_train=x_train, y_train=y_train, x_test=x_test, top_k=k, mode='normalized')
+                        retrained_model = SoTLNet(num_features=k, model_type=model_type, 
+                            degree=initial_degree, weight_decay=extra_weight_decay, task=task, n_classes=n_classes)
+                        retrained_model.config = config
+                        retrained_model = retrained_model.to(device)
+                        # retrained_model.set_features(features.indices)
 
                         
-                    #     criterion = get_criterion(model_type, task).to(device)
+                        criterion = get_criterion(model_type, dataset_cfg, task).to(device)
 
-                    #     w_optimizer, a_optimizer, w_scheduler, a_scheduler = get_optimizers(retrained_model, config)
+                        w_optimizer, a_optimizer, w_scheduler, a_scheduler = get_optimizers(retrained_model, config)
 
-                    #     # Retrain as before BUT must set train_arch=False and change the model=retrained_model at least!
-                    #     train_bptt(
-                    #         epochs=20,
-                    #         steps_per_epoch=steps_per_epoch,
-                    #         model=retrained_model,
-                    #         criterion=criterion,
-                    #         w_optimizer=w_optimizer,
-                    #         a_optimizer=a_optimizer,
-                    #         w_scheduler=w_scheduler,
-                    #         a_scheduler=a_scheduler,
-                    #         dataset=dataset,
-                    #         dset_train=dset_train,
-                    #         dset_val=dset_val,
-                    #         dset_test=dset_test,
-                    #         logging_freq=logging_freq,
-                    #         batch_size=batch_size,
-                    #         T=T,
-                    #         grad_clip=grad_clip,
-                    #         w_lr=w_lr,
-                    #         w_checkpoint_freq=w_checkpoint_freq,
-                    #         grad_inner_loop_order=grad_inner_loop_order,
-                    #         grad_outer_loop_order=grad_outer_loop_order,
-                    #         hvp=hvp,
-                    #         arch_train_data=arch_train_data,
-                    #         normalize_a_lr=normalize_a_lr,
-                    #         log_grad_norm=True,
-                    #         log_alphas=True,
-                    #         w_warm_start=w_warm_start,
-                    #         extra_weight_decay=extra_weight_decay,
-                    #         device=device,
-                    #         train_arch=False,
-                    #         config=config,
-                    #         mode='bilevel',
-                    #         hessian_tracking=False,
-                    #         log_suffix=f"_retrainedK={k}",
-                    #         features=features.indices
-                    #     )
+                        # Retrain as before BUT must set train_arch=False and change the model=retrained_model at least!
+                        train_bptt(
+                            epochs=20 if not smoke_test else 1,
+                            steps_per_epoch=steps_per_epoch,
+                            model=retrained_model,
+                            criterion=criterion,
+                            w_optimizer=w_optimizer,
+                            a_optimizer=a_optimizer,
+                            decay_scheduler=decay_scheduler,
+                            w_scheduler=w_scheduler,
+                            a_scheduler=a_scheduler,
+                            dataset_cfg=dataset_cfg,
+                            dataset=dataset,
+                            dset_train=dset_train,
+                            dset_val=dset_val,
+                            dset_test=dset_test,
+                            logging_freq=logging_freq,
+                            batch_size=batch_size,
+                            T=T,
+                            grad_clip=grad_clip,
+                            w_lr=w_lr,
+                            w_checkpoint_freq=w_checkpoint_freq,
+                            grad_inner_loop_order=grad_inner_loop_order,
+                            grad_outer_loop_order=grad_outer_loop_order,
+                            hvp=hvp,
+                            arch_train_data=arch_train_data,
+                            normalize_a_lr=normalize_a_lr,
+                            log_grad_norm=True,
+                            log_alphas=True,
+                            w_warm_start=w_warm_start,
+                            extra_weight_decay=extra_weight_decay,
+                            device=device,
+                            train_arch=False,
+                            config=config,
+                            mode=mode,
+                            hessian_tracking=False,
+                            log_suffix=f"_retrainedK={k}",
+                            features=features.indices.cpu().numpy()
+                        )
 
-                    #     val_loss, val_acc = valid_func(model, dset_test, criterion)
-                    #     to_log["retrained_loss"] = val_loss.avg
-                    #     to_log["retrained_acc"] = val_acc.avg
+                        val_loss, val_acc = valid_func(retrained_model, dset_test, criterion)
+                        to_log["retrained_loss"] = val_loss.avg
+                        to_log["retrained_acc"] = val_acc.avg
 
                 wandb.log({model_type:{dataset:{**{key+"_mse":metrics["mse"][key][k-1] for key in [*keys, *fit_once_keys]},
-                    **{key+"_acc":metrics["acc"][key][k-1] for key in [*keys, *fit_once_keys]}, "k":k}}})
+                    **{key+"_acc":metrics["acc"][key][k-1] for key in [*keys, *fit_once_keys]}, **to_log}}, "k":k})
 
 
 if __name__ == "__main__":
@@ -682,8 +696,8 @@ extra_weight_decay=0.0000
 grad_inner_loop_order=-1
 grad_outer_loop_order=-1
 arch_train_data="sotl"
-model_type="AE"
-dataset="MNISTsmall"
+model_type="MLP"
+dataset="isolet"
 device = 'cuda'
 train_arch=True
 dry_run=True
