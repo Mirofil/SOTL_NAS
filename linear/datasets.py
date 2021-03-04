@@ -79,12 +79,12 @@ def get_datasets(name, path=None, val_split=0.1, test_split=0.2, normalize=True,
         n_features=5000
 
     elif name == "fourier":
-        x, y = data_generator(
+        x_train, y_train = data_generator(
             **kwargs
         )
-        x = torch.tensor(x, dtype=torch.float32)
-        y = torch.tensor(y, dtype=torch.float32)
-        dset = torch.utils.data.TensorDataset(x, y)
+        x_train = torch.tensor(x_train, dtype=torch.float32)
+        y_train = torch.tensor(y_train, dtype=torch.float32)
+        dset = torch.utils.data.TensorDataset(x_train, y_train)
 
         dset_train, dset_test = torch.utils.data.random_split(
             dset, [int(len(dset) * test_split), len(dset) - int(len(dset) * test_split)]
@@ -302,7 +302,7 @@ def get_datasets(name, path=None, val_split=0.1, test_split=0.2, normalize=True,
     else:
         raise NotImplementedError
 
-    if name not in ['CIFAR', 'MNIST', 'FashionMNIST', 'MNISTsmall', 'FashionMNISTsmall']:
+    if name not in ['CIFAR', 'MNIST', 'FashionMNIST', 'MNISTsmall', 'FashionMNISTsmall', 'fourier']:
         # The datasets from Torchvision have different Classes and they come already well split
        
         if normalize:

@@ -102,6 +102,9 @@ class LinearMaxDeg(torch.nn.Linear):
             plt.plot(xs,ys)
 
         return (F.tanh(x)+torch.tensor(1))/2
+    
+    def squash(self, *args, **kwargs):
+        return self.squished_tanh(*args, **kwargs)
 
 class FlexibleLinear(torch.nn.Linear):
     def __init__(self, in_features, out_features, bias=True, **kwargs):

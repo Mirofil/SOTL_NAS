@@ -1,5 +1,5 @@
 # python linear/train.py --model_type=AE --dataset=isolet --arch_train_data sotl --grad_outer_loop_order=None --mode=bilevel --device=cuda --initial_degree 1 --hvp=finite_diff --epochs=100 --w_lr=0.1 --T=1 --a_lr=0.1 --hessian_tracking False --w_optim=SGD --a_optim=Adam --w_warm_start 0 --train_arch=True --a_weight_decay=0.01 --smoke_test False --dry_run=True --w_weight_decay=0.01 --batch_size=2048 --decay_scheduler None --w_scheduler None
-# python linear/train.py --model_type=sigmoid --dataset=isolet --arch_train_data sotl --grad_outer_loop_order=None --mode=bilevel --device=cuda --initial_degree 1 --hvp=finite_diff --epochs=100 --w_lr=0.001 --T=1 --a_lr=0.01 --hessian_tracking False --w_optim=Adam --a_optim=Adam --w_warm_start 0 --train_arch=True --a_weight_decay=0.001 --smoke_test False --dry_run=True --w_weight_decay=0.001 --batch_size=64 --decay_scheduler None --loss ce
+# python linear/train.py --model_type=sigmoid --dataset=gisette --arch_train_data sotl --grad_outer_loop_order=None --mode=bilevel --device=cuda --initial_degree 1 --hvp=finite_diff --epochs=100 --w_lr=0.001 --T=1 --a_lr=0.01 --hessian_tracking False --w_optim=Adam --a_optim=Adam --w_warm_start 0 --train_arch=True --a_weight_decay=0.001 --a_decay_order 2 --smoke_test False --dry_run=True --w_weight_decay=0.001 --batch_size=64 --decay_scheduler None --loss ce
 # python linear/train.py --model_type=sigmoid --dataset=gisette --arch_train_data sotl --grad_outer_loop_order=None --mode=bilevel --device=cuda --initial_degree 1 --hvp=finite_diff --epochs=100 --w_lr=0.001 --T=1 --a_lr=0.01 --hessian_tracking False --w_optim=Adam --a_optim=Adam --w_warm_start 3 --train_arch=True --a_weight_decay=0.00000001--smoke_test False --dry_run=True --w_weight_decay=0.001 --batch_size=64 --decay_scheduler None
 
 # python linear/train.py --model_type=max_deg --dataset=fourier --dry_run=False --T=2 --grad_outer_loop_order=1 --grad_inner_loop_order=1 --mode=bilevel --device=cpu
@@ -139,7 +139,7 @@ def train_bptt(
                 x = x.to(device)
 
                 y = y.to(device)
-                loss = compute_train_loss(x=x,y=y,criterion=criterion, model=model)
+                loss = compute_train_loss(x=x, y=y, criterion=criterion, model=model)
   
                 epoch_loss.update(loss.item())
 
@@ -380,7 +380,7 @@ def valid_func(model, dset_val, criterion,
 
 
 def main(epochs = 5,
-    steps_per_epoch=5,
+    steps_per_epoch=None,
     batch_size = 64,
     D = 18,
     N = 50000,
@@ -390,7 +390,7 @@ def main(epochs = 5,
     w_lr = 1e-2,
     w_momentum=0.0,
     w_weight_decay=0.0001,
-    a_decay_order=1,
+    a_decay_order=2,
     a_lr = 1e-2,
     a_momentum = 0.0,
     a_weight_decay = 1,
@@ -401,7 +401,7 @@ def main(epochs = 5,
     max_order_y=7,
     noise_var=0.25,
     featurize_type="fourier",
-    initial_degree=15,
+    initial_degree=1,
     hvp="finite_diff",
     arch_train_data="sotl",
     normalize_a_lr=True,
@@ -416,12 +416,12 @@ def main(epochs = 5,
     dry_run=False,
     hinge_loss=0.25,
     mode = "bilevel",
-    hessian_tracking=True,
+    hessian_tracking=False,
     smoke_test:bool = False,
     rand_seed:int = None,
     a_scheduler:str = 'step',
     w_scheduler:str = 'step',
-    decay_scheduler:str='linear',
+    decay_scheduler:str=None,
     loss:str = None
     ):
 
@@ -501,19 +501,19 @@ def main(epochs = 5,
         hessian_tracking=hessian_tracking,
         )
     if model_type in ["max_deg", "softmax_mult", "linear"]:
-        lapack_solution, res, eff_rank, sing_values = scipy.linalg.lstsq(dset_train[:][0], dset_train[:][1])
-        print(f"Cond number:{abs(sing_values.max()/sing_values.min())}")
+        # lapack_solution, res, eff_rank, sing_values = scipy.linalg.lstsq(dset_train[:][0], dset_train[:][1])
+        # print(f"Cond number:{abs(sing_values.max()/sing_values.min())}")
 
-        val_meter, val_acc_meter = valid_func(model=model, dset_val=dset_val, criterion=criterion, device=device, print_results=False)
+        val_meter, val_acc_meter = valid_func(model=model, dset_val=dset_val, criterion=criterion, device=device, print_results=True)
 
-        model.fc1.weight = torch.nn.Parameter(torch.tensor(lapack_solution).to(device))
-        model.fc1.to(device)
+        # model.fc1.weight = torch.nn.Parameter(torch.tensor(lapack_solution).to(device))
+        # model.fc1.to(device)
 
-        val_meter2, val_acc_meter2 = valid_func(model=model, dset_val=dset_val, criterion=criterion, device=device, print_results=False)
+        # val_meter2, val_acc_meter2 = valid_func(model=model, dset_val=dset_val, criterion=criterion, device=device, print_results=False)
 
-        print(
-            f"Trained val loss: {val_meter.avg}, SciPy solver val loss: {val_meter2.avg}, difference: {val_meter.avg - val_meter2.avg} (ie. {(val_meter.avg/val_meter2.avg-1)*100}% more)"
-        )
+        # print(
+        #     f"Trained val loss: {val_meter.avg}, SciPy solver val loss: {val_meter2.avg}, difference: {val_meter.avg - val_meter2.avg} (ie. {(val_meter.avg/val_meter2.avg-1)*100}% more)"
+        # )
         try:
             true_degree = max_order_y/2 
             trained_degree = model.fc1.alphas.item()
@@ -539,7 +539,7 @@ def main(epochs = 5,
 
 
 
-        models_to_train = {"logistic_l1":LogisticRegression(penalty='l1', solver='saga', C=1, max_iter=350 if (not smoke_test or dry_run) else 5),
+        models_to_train = {"logistic_l1":LogisticRegression(penalty='l1', solver='saga', C=1, max_iter=700 if (not smoke_test or dry_run) else 5),
             "tree":ExtraTreesClassifier(n_estimators = 100), 
             "lasso":sklearn.linear_model.Lasso()}
 
@@ -677,7 +677,7 @@ w_lr = 1e-3
 w_momentum=0.0
 w_weight_decay=0.0001
 a_optim="Adam"
-a_decay_order=1
+a_decay_order=2
 a_lr = 3e-2
 a_momentum = 0.0
 a_weight_decay = 0.1
@@ -688,21 +688,21 @@ w_checkpoint_freq = 1
 max_order_y=7
 noise_var=0.25
 featurize_type="fourier"
-initial_degree=2
+initial_degree=15
 hvp="finite_diff"
 normalize_a_lr=True
 w_warm_start=0
 log_grad_norm=True
 log_alphas=False
-extra_weight_decay=0.0000
+extra_weight_decay=0
 grad_inner_loop_order=-1
 grad_outer_loop_order=-1
 arch_train_data="sotl"
-model_type="sigmoid"
-dataset="isolet"
+model_type="max_deg"
+dataset="fourier"
 device = 'cuda'
 train_arch=True
-dry_run=True
+dry_run=False
 mode="bilevel"
 hessian_tracking=False
 smoke_test=True
@@ -711,5 +711,6 @@ decay_scheduler=None
 w_scheduler=None
 a_scheduler=None
 features=None
-loss='ce'
+loss='mse'
+from copy import deepcopy
 config=locals()

@@ -60,15 +60,19 @@ def calculate_weight_decay(model, alpha_w_order=None, w_order=1, adaptive_decay=
         param_norm = param_norm + model.adaptive_weight_decay()
     
     if a_order is not None and model.config["train_arch"]:
-        if model.model_type in ['sigmoid', 'MLP']:
+        if model.model_type in ['sigmoid']:
             for arch_param in model.arch_params():
-                param_norm_a = param_norm_a + a_coef * torch.sum(torch.abs(torch.sigmoid(arch_param)))
+                param_norm_a = param_norm_a + a_coef * torch.sum(torch.norm(torch.sigmoid(arch_param), a_order))
                 D_a = D_a + torch.numel(arch_param)
-
+        
+        elif model.model_type in ['max_deg']:
+            for arch_param in model.arch_params():
+                param_norm_a = param_norm_a + a_coef * torch.sum(torch.norm(arch_param, a_order))
+                D_a = D_a + torch.numel(arch_param)
         else:
             # if hasattr(model.model, "squash"):
             for arch_param in model.arch_params():
-                param_norm_a = param_norm_a + a_coef * torch.sum(model.model.squash(arch_param))
+                param_norm_a = param_norm_a + a_coef * torch.sum(torch.norm(model.model.squash(arch_param), a_order))
                 D_a = D_a + torch.numel(arch_param)
             # else:
             #     for arch_param in model.arch_params():
