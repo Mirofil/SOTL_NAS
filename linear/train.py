@@ -91,6 +91,7 @@ def train_bptt(
     val_loader = torch.utils.data.DataLoader(dset_val, batch_size=batch_size)
     grad_compute_speed = AverageMeter()
 
+    suffixed_name = model.model_type + log_suffix
     if log_alphas:
         running_degree_mismatch = 0
 
@@ -141,7 +142,6 @@ def train_bptt(
                 y = y.to(device)
                 loss = compute_train_loss(x=x, y=y, criterion=criterion, model=model)
   
-                epoch_loss.update(loss.item())
 
                 grads = torch.autograd.grad(
                     loss,
@@ -158,11 +158,13 @@ def train_bptt(
                 weight_buffer.add(model, intra_batch_idx)
 
                 true_batch_index += 1
-                to_log.update({
-                        "Train loss": epoch_loss.avg,
-                        "Epoch": epoch,
-                        "Batch": true_batch_index,
-                    })
+                if mode == "joint":
+                    epoch_loss.update(loss.item())
+                    to_log.update({
+                            "Train loss": epoch_loss.avg,
+                            "Epoch": epoch,
+                            "Batch": true_batch_index,
+                        })
 
             if train_arch:
                 val_xs = None
@@ -216,7 +218,9 @@ def train_bptt(
                         to_log.update({"Arch grad norm": norm})
 
                     if log_alphas and batch_idx % 100 == 0:
+                        print(batch_idx)
                         if hasattr(model, "fc1") and hasattr(model.fc1, "degree"):
+                            print("Hehe")
                             running_degree_mismatch = running_degree_mismatch + hinge_loss(model.fc1.degree.item(), config["max_order_y"]/2, config["hinge_loss"])
 
                             to_log.update({"Degree":model.fc1.degree.item(), "Sum of degree mismatch":running_degree_mismatch})
@@ -266,6 +270,8 @@ def train_bptt(
                             "Epoch": epoch,
                             "Batch": true_batch_index,
                         })
+            # print(to_log)
+            wandb.log({suffixed_name:{dataset:{**to_log}}})
         try:
             best_alphas = torch.sort([x.data for x in model.arch_params()][0].view(-1), descending=True).values[0:10]
         except:
@@ -315,11 +321,9 @@ def train_bptt(
             hessian_eigenvalue = eigenvals[0]              
 
 
-
         tqdm.write("Epoch: {}, Val Loss: {}, Test Loss: {}, Discretized AUC: {}, MSE: {}, Reconstruction Acc: {}, Hess: {}".format(epoch, val_results.avg, test_results.avg, auc, mse, acc, hessian_eigenvalue))
         to_log = {**to_log, "Val loss": val_results.avg, "Val acc": val_acc_results.avg, "Test loss": test_results.avg, "Test acc": test_acc_results.avg, "AUC_training": auc, "MSE training":mse, 
             "RecAcc training":acc, "Arch. Hessian domin. eigenvalue": hessian_eigenvalue, "Epoch": epoch}
-        suffixed_name = model.model_type + log_suffix
         wandb.log({suffixed_name:{dataset:{**to_log}}})
         wandb.run.summary["Grad compute speed"] = grad_compute_speed.avg
 
@@ -330,13 +334,6 @@ def train_bptt(
             w_scheduler.step()
         if a_scheduler is not None:
             a_scheduler.step()
-
-
-    # print(f"Best found metrics over validation: AUC {best['auc']['value']}")
-
-    # if dataset in ['gisette']:
-    #     # Early stopping essentially. Put back the best performing alphas for checking the top-k performances in post-train stage
-    #     model.fc1.alphas = best["auc"]["alphas"]
 
 
 def valid_func(model, dset_val, criterion, 
