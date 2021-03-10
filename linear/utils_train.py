@@ -12,7 +12,7 @@ from traits import FeatureSelectableTrait, AutoEncoder
 import torch.nn.functional as F
 from sklearn.decomposition import PCA
 from utils_features import mcfs_ours, pfa_transform, lap_ours, pca, univariate_test, sklearn_model, choose_features
-
+from utils_metrics import obtain_accuracy
 
 def reconstruction_error(model, k, x_train, y_train, x_test, 
     y_test, mode = "normalized"):
@@ -90,7 +90,7 @@ def calculate_weight_decay(model, alpha_w_order=None, w_order=1, adaptive_decay=
 
 def compute_train_loss(x, y, criterion, model, weight_decay=True, 
     y_pred=None, alpha_w_order=None, w_order=None, adaptive_decay=False, 
-    a_order=None, a_coef=None, w_coef=None):
+    a_order=None, a_coef=None, w_coef=None, return_acc=False):
     assert model is not None or y_pred is not None
 
     if y_pred is None:
@@ -112,7 +112,14 @@ def compute_train_loss(x, y, criterion, model, weight_decay=True,
     elif type(criterion) is torch.nn.CrossEntropyLoss:
         loss = criterion(y_pred, y.long()) + param_norm
 
-    return loss
+    if return_acc:
+        if y_pred.shape[1] != 1: # Must be regression task
+            acc_top1, acc_top5 = obtain_accuracy(y_pred.cpu().data, y.data, topk=(1, 5))
+        else:
+            acc_top1 = None
+        return loss, acc_top1
+    else:
+        return loss
 
 def switch_weights(model, weight_buffer_elem):
     with torch.no_grad():
@@ -133,6 +140,7 @@ def hinge_loss(x,y, threshold):
 
 
 def get_optimizers(model, config):
+    # Weight decay is realized only manually through compute_train_loss
     if config["w_optim"] == 'SGD':
         w_optimizer = SGD(model.weight_params(), lr=config["w_lr"], momentum=config["w_momentum"])
     elif config ['w_optim'] =='Adam':
