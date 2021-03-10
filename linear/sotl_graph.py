@@ -176,6 +176,8 @@ def main(epochs = 5,
 
     for metric in ["train_lossEinf", "val_lossEinf"]:
         ts = [all_metrics[degree][metric][-1][-1] for degree in all_degrees]
+        for i in range(len(ts)):
+            wandb.log({metric:ts[i], "degree": all_degrees[i]})
 
         plt.plot(all_degrees, ts, label=metric)
     plt.legend()
