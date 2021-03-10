@@ -50,7 +50,7 @@ from utils_metrics import (ValidAccEvaluator, obtain_accuracy, SumOfWhatever)
 from train_loop import valid_func, train_bptt
 
 
-def main(epochs = 5,
+def main(epochs = 50,
     steps_per_epoch=None,
     batch_size = 64,
     D = 18,
