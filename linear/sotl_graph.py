@@ -54,7 +54,7 @@ def main(epochs = 50,
     steps_per_epoch=None,
     batch_size = 64,
     D = 18,
-    N = 50000,
+    num_samples = 50000,
     w_optim='SGD',
     a_optim='SGD',
     w_decay_order=2,
@@ -116,7 +116,7 @@ def main(epochs = 50,
     all_degrees = [-4, -2, 0 , 1 , 3 , 5 , 7 , 9 , 13, 17, 21] if not smoke_test else [0,2,4]
     all_metrics = {}
     for degree in tqdm(all_degrees, desc = "Iterating over degrees"):
-        dataset_cfg = get_datasets(name=dataset, data_size=N, max_order_generated=D,
+        dataset_cfg = get_datasets(name=dataset, data_size=num_samples, max_order_generated=D,
             max_order_y=max_order_y,
             noise_var=noise_var,
             featurize_type=featurize_type)
