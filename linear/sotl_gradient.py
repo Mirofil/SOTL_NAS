@@ -11,13 +11,19 @@ class WeightBuffer:
         self.checkpoint_freq = checkpoint_freq
         self.T = T
 
-    def add(self, model, intra_batch_idx):
+    def add(self, model, intra_batch_idx, clone=True):
         if intra_batch_idx % self.checkpoint_freq == 0:
-            self.weight_buffer.append([w.clone() for w in model.weight_params()])
+            if clone is True:
+                self.weight_buffer.append([w.clone() for w in model.weight_params()])
+            else:
+                self.weight_buffer.append(list(model.weight_params()))
         else:
             start = math.floor(intra_batch_idx / self.checkpoint_freq)
             end = min(start + self.checkpoint_freq, self.T - 1)
             self.weight_buffer.append((start, end))
+    
+    def direct_add(self, weights):
+        self.weight_buffer.append(weights)
 
     def __len__(self):
         return len(self.weight_buffer)

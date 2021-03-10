@@ -13,6 +13,7 @@ import torch.nn.functional as F
 from sklearn.decomposition import PCA
 from utils_features import mcfs_ours, pfa_transform, lap_ours, pca, univariate_test, sklearn_model, choose_features
 from utils_metrics import obtain_accuracy
+from sotl_optimizers import HyperSGD
 
 def reconstruction_error(model, k, x_train, y_train, x_test, 
     y_test, mode = "normalized"):
@@ -88,13 +89,17 @@ def calculate_weight_decay(model, alpha_w_order=None, w_order=1, adaptive_decay=
     return param_norm
 
 
-def compute_train_loss(x, y, criterion, model, weight_decay=True, 
+def compute_train_loss(x, y, criterion, model, weight_buffer=None, weight_decay=True, 
     y_pred=None, alpha_w_order=None, w_order=None, adaptive_decay=False, 
     a_order=None, a_coef=None, w_coef=None, return_acc=False):
     assert model is not None or y_pred is not None
 
     if y_pred is None:
-        y_pred = model(x)
+        if weight_buffer is None:
+            y_pred = model(x)
+        else:
+            y_pred = model(x, weight=weight_buffer[-1])
+        
     if issubclass(type(model.model), AutoEncoder) or 'AE' in model.model_type:
         y = x
         assert y_pred.shape == x.shape
@@ -139,12 +144,15 @@ def hinge_loss(x,y, threshold):
         return y - x + threshold
 
 
-def get_optimizers(model, config):
+def get_optimizers(model, config, grad = None):
     # Weight decay is realized only manually through compute_train_loss
     if config["w_optim"] == 'SGD':
         w_optimizer = SGD(model.weight_params(), lr=config["w_lr"], momentum=config["w_momentum"])
     elif config ['w_optim'] =='Adam':
         w_optimizer = Adam(model.weight_params(), lr=config["w_lr"])
+    elif config["w_optim"] == "HyperSGD":
+        w_optimizer = HyperSGD(model.weight_params(), lr=config["w_lr"], momentum=config["w_momentum"], grad=grad)
+
 
     if config['w_scheduler'] == "step":
         w_scheduler = torch.optim.lr_scheduler.StepLR(w_optimizer, max(round(config["epochs"]/3), 1), gamma=0.1, verbose=False)

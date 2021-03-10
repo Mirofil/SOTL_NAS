@@ -86,6 +86,7 @@ def train_bptt(
     log_suffix:str="",
     features:Sequence=None,
     decay_scheduler:str = 'linear',
+    optimizer_mode="manual"
 ):
     orig_model_cfg = deepcopy(model.config)
     train_loader = torch.utils.data.DataLoader(
@@ -141,27 +142,45 @@ def train_bptt(
 
             weight_buffer = WeightBuffer(T=T, checkpoint_freq=w_checkpoint_freq)
             weight_buffer.add(model, 0)
+            all_losses = 0
 
             for intra_batch_idx, (x, y) in enumerate(zip(xs, ys),1):
                 x = x.to(device)
 
                 y = y.to(device)
-                loss, train_acc_top1 = compute_train_loss(x=x, y=y, criterion=criterion, model=model, return_acc=True)
-  
 
-                grads = torch.autograd.grad(
-                    loss,
-                    model.weight_params()
-                )
+                if optimizer_mode == "manual":
+                    loss, train_acc_top1 = compute_train_loss(x=x, y=y, criterion=criterion, 
+                        model=model, return_acc=True)
+                    grads = torch.autograd.grad(
+                        loss,
+                        model.weight_params()
+                    )
+                    with torch.no_grad():
+                        for g, w in zip(grads, model.weight_params()):
+                            w.grad = g
+                    torch.nn.utils.clip_grad_norm_(model.weight_params(), grad_clip)
 
-                with torch.no_grad():
-                    for g, w in zip(grads, model.weight_params()):
-                        w.grad = g
-                torch.nn.utils.clip_grad_norm_(model.weight_params(), grad_clip)
+                    w_optimizer.step()
+                    w_optimizer.zero_grad()
+                    weight_buffer.add(model, intra_batch_idx)
 
-                w_optimizer.step()
-                w_optimizer.zero_grad()
-                weight_buffer.add(model, intra_batch_idx)
+                elif optimizer_mode == "autograd":
+                    loss, train_acc_top1 = compute_train_loss(x=x, y=y, criterion=criterion, 
+                        weight_buffer=weight_buffer, model=model, return_acc=True)
+                    grads = torch.autograd.grad(
+                        loss,
+                        weight_buffer[-1],
+                        retain_graph=True,
+                        create_graph=True
+                    )
+                    new_weights = []
+                    for w, dw in zip(weight_buffer[-1], grads):
+                        new_weights.append(w - 0.01*dw)
+
+                    weight_buffer.direct_add(new_weights)
+                    all_losses = all_losses + loss
+
 
                 true_batch_index += 1
                 if mode == "joint":
@@ -180,6 +199,10 @@ def train_bptt(
                             "Epoch": epoch,
                             "Batch": true_batch_index,
                         })
+
+            if optimizer_mode == "autograd":
+                weights_after_rollout = switch_weights(model, weight_buffer[-1])
+
 
             if train_arch:
                 val_xs = None
@@ -201,28 +224,32 @@ def train_bptt(
 
                 if epoch >= w_warm_start:
                     start_time = time.time()
-                    arch_gradients = sotl_gradient(
-                        model=model,
-                        criterion=criterion,
-                        xs=xs,
-                        ys=ys,
-                        weight_buffer=weight_buffer,
-                        w_lr=w_lr,
-                        hvp=hvp,
-                        grad_inner_loop_order=grad_inner_loop_order,
-                        grad_outer_loop_order=grad_outer_loop_order,
-                        T=T,
-                        normalize_a_lr=normalize_a_lr,
-                        weight_decay_term=None,
-                        val_xs=val_xs,
-                        val_ys=val_ys,
-                        device=device
-                    )
-                    total_arch_gradient = arch_gradients["total_arch_gradient"]
+                    if optimizer_mode == "manual":
+                        arch_gradients = sotl_gradient(
+                            model=model,
+                            criterion=criterion,
+                            xs=xs,
+                            ys=ys,
+                            weight_buffer=weight_buffer,
+                            w_lr=w_lr,
+                            hvp=hvp,
+                            grad_inner_loop_order=grad_inner_loop_order,
+                            grad_outer_loop_order=grad_outer_loop_order,
+                            T=T,
+                            normalize_a_lr=normalize_a_lr,
+                            weight_decay_term=None,
+                            val_xs=val_xs,
+                            val_ys=val_ys,
+                            device=device
+                        )
+                        total_arch_gradient = arch_gradients["total_arch_gradient"]
+                    elif optimizer_mode == "autograd":
+                        arch_gradients = {}
+                        total_arch_gradient = torch.autograd.grad(all_losses, model.arch_params())
                     grad_compute_speed.update(time.time() - start_time)
 
 
-                    if arch_gradients['dominant_eigenvalues'] is not None:
+                    if 'dominant_eigenvalues' in arch_gradients and arch_gradients['dominant_eigenvalues'] is not None:
                         # print()
                         to_log.update({"Dominant eigenvalue":arch_gradients['dominant_eigenvalues'].item()})
 

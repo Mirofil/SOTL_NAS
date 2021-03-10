@@ -2,7 +2,7 @@
 # python linear/train.py --model_type=sigmoid --dataset=gisette --arch_train_data sotl --grad_outer_loop_order=None --mode=bilevel --device=cuda --initial_degree 1 --hvp=finite_diff --epochs=100 --w_lr=0.001 --T=1 --a_lr=0.01 --hessian_tracking False --w_optim=Adam --a_optim=Adam --w_warm_start 0 --train_arch=True --a_weight_decay=0.001 --a_decay_order 2 --smoke_test False --dry_run=True --w_weight_decay=0.001 --batch_size=64 --decay_scheduler None --loss ce
 # python linear/train.py --model_type=sigmoid --dataset=gisette --arch_train_data sotl --grad_outer_loop_order=None --mode=bilevel --device=cuda --initial_degree 1 --hvp=finite_diff --epochs=100 --w_lr=0.001 --T=1 --a_lr=0.01 --hessian_tracking False --w_optim=Adam --a_optim=Adam --w_warm_start 3 --train_arch=True --a_weight_decay=0.00000001--smoke_test False --dry_run=True --w_weight_decay=0.001 --batch_size=64 --decay_scheduler None
 
-# python linear/train.py --model_type=max_deg --dataset=fourier --dry_run=False --T=2 --grad_outer_loop_order=1 --grad_inner_loop_order=1 --mode=bilevel --device=cpu
+# python linear/train.py --model_type=max_deg --dataset=fourier --dry_run=False --T=2 --grad_outer_loop_order=1 --grad_inner_loop_order=1 --mode=bilevel --device=cpu --optimizer_mode=autograd
 # python linear/train.py --model_type=MNIST --dataset=MNIST --dry_run=False --T=1 --w_warm_start=0 --grad_outer_loop_order=-1 --grad_inner_loop_order=-1 --mode=bilevel --device=cuda --extra_weight_decay=0.0001 --w_weight_decay=0 --arch_train_data=val
 
 #pip install --force git+https://github.com/Mirofil/pytorch-hessian-eigenthings.git
@@ -50,6 +50,74 @@ from utils_metrics import (ValidAccEvaluator, obtain_accuracy, SumOfWhatever)
 from train_loop import valid_func, train_bptt
 
 
+# lr = torch.tensor(0.1, dtype=torch.float32, requires_grad=True) # Learning rate is the architecture parameter
+
+# x = torch.tensor(8, requires_grad=True, dtype=torch.float32) # Weight parameter
+
+# y1 = 2*x # Loss function
+
+# grads_y1 = torch.autograd.grad(y1, x, create_graph=True, retain_graph=True)
+
+# x = x - lr*grads_y1[0]
+
+# y2 = 2*x
+
+# grads_y2 = torch.autograd.grad(y2, x, create_graph=True, retain_graph=True)
+
+# x = x - lr * grads_y2[0]
+
+# y3 = 2*x
+
+# grads_y3 = torch.autograd.grad(y3, lr, create_graph=True, retain_graph=True)
+
+# grads_sotl = torch.autograd.grad(y3+y2+y1, lr, create_graph=True, retain_graph=True)
+# print(grads_sotl)
+
+# # Symbolically, we want: d(2x + 2(x-2a) + 2(x-2a-2a))/da 
+# # In Wolfram, result is -12 (same as here)
+
+
+# ## More elaborate example with a linear layer
+
+# lr = torch.tensor(0.1, dtype=torch.float32, requires_grad=True) # Learning rate is the architecture parameter
+
+# # Our data points
+# x1 = torch.tensor([1., 2., 3., 4., 5.], requires_grad=False, dtype=torch.float32)
+# x2 = torch.tensor([2., 3., 4., 5., 6.], requires_grad=False, dtype=torch.float32)
+# x3 = torch.tensor([3., 4., 5., 6., 7.], requires_grad=False, dtype=torch.float32)
+
+# model = torch.nn.Linear(5, 1)
+# # We will keep copies of the model weights in a buffer as in the manual case. 
+# # TODO is there a way to replace the model parameters in place and only keep the weight copies implicitly in the computational graph?
+# weight1 = model.weight
+# print(f"Model weight: {model.weight}")
+
+# y1 = 2*F.linear(x1, weight1) # Loss function
+
+# grads_y1 = torch.autograd.grad(y1, weight1, create_graph=True, retain_graph=True)
+
+# for p, dp in zip(model.parameters(), grads_y1):
+#     weight2 = weight1 - lr * dp
+
+# print(f"Model weight after 1st update: {model.weight}")
+
+# y2 = 2*F.linear(x2, weight2)
+
+# grads_y2 = torch.autograd.grad(y2, weight2, create_graph=True, retain_graph=True)
+
+# for p, dp in zip(model.parameters(), grads_y2):
+#     weight3 = weight2 - lr * dp
+
+# print(f"Model weight after 2nd update: {model.weight}")
+
+# y3 = 2*F.linear(x3, weight3)
+
+# grads_y3 = torch.autograd.grad(y3, lr, create_graph=True, retain_graph=True)
+
+# grads_sotl = torch.autograd.grad(y3+y2+y1, lr, create_graph=True, retain_graph=True)
+# print(grads_sotl)
+
+
 def main(epochs = 5,
     steps_per_epoch=None,
     batch_size = 64,
@@ -93,7 +161,8 @@ def main(epochs = 5,
     a_scheduler:str = 'step',
     w_scheduler:str = 'step',
     decay_scheduler:str=None,
-    loss:str = None
+    loss:str = None,
+    optimizer_mode="manual"
     ):
 
     config = locals()
@@ -169,6 +238,7 @@ def main(epochs = 5,
         config=config,
         mode=mode,
         hessian_tracking=hessian_tracking,
+        optimizer_mode=optimizer_mode
         )
     
     if model_type in ["max_deg", "softmax_mult", "linear"]:
@@ -384,5 +454,6 @@ a_scheduler=None
 features=None
 loss='mse'
 log_suffix = ""
+optimizer_mode = "autograd"
 from copy import deepcopy
 config=locals()
