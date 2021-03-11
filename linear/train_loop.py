@@ -86,7 +86,8 @@ def train_bptt(
     log_suffix:str="",
     features:Sequence=None,
     decay_scheduler:str = 'linear',
-    optimizer_mode="manual"
+    optimizer_mode="manual",
+    bilevel_w_steps=None
 ):
     orig_model_cfg = deepcopy(model.config)
     train_loader = torch.utils.data.DataLoader(
@@ -283,8 +284,10 @@ def train_bptt(
                 w_optimizer.load_state_dict(prerollout_w_optim_state_dict)
 
                 #NOTE this train step should be identical to the loop above apart from WeightBuffer management! But it is difficult to abstract this in pure PyTorch, although it could be hacked with kwargs forwarding?
-                num_steps = T if epoch >= w_warm_start else T
-                for i in range(min(num_steps, len(xs))):
+                if bilevel_w_steps is None or bilevel_w_steps == "None":
+                    bilevel_w_steps = T
+
+                for i in range(min(bilevel_w_steps, len(xs))):
                     x,y = xs[i], ys[i]
                     x = x.to(device)
                     y = y.to(device)
