@@ -162,7 +162,8 @@ def main(epochs = 5,
     w_scheduler:str = 'step',
     decay_scheduler:str=None,
     loss:str = None,
-    optimizer_mode="manual"
+    optimizer_mode="manual",
+    bilevel_w_steps=None
     ):
 
     config = locals()
@@ -238,7 +239,8 @@ def main(epochs = 5,
         config=config,
         mode=mode,
         hessian_tracking=hessian_tracking,
-        optimizer_mode=optimizer_mode
+        optimizer_mode=optimizer_mode,
+        bilevel_w_steps=bilevel_w_steps
         )
     
     if model_type in ["max_deg", "softmax_mult", "linear"]:
