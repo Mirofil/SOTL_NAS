@@ -162,11 +162,11 @@ def sotl_gradient(
                     ) for arch_param in model.arch_params() for idx in range(len(weight_buffer[j]))]
 
 
-                    if hasattr(model, "fc1"):
-                        loss2 = compute_train_loss(x, y, criterion, y_pred=model(x, weight_buffer[j]), model=model)
-                        arch_hessian = hessian(loss2*1, model.fc1.alphas, model.fc1.alphas) # We are interested in the max_deg/sigmoid parameters.. how to make the arch_params handling more general here?
-                        eigenvalues = torch.symeig(arch_hessian)
-                        dominant_eigenvalues = eigenvalues.eigenvalues[-1]# Eigenvalues are returned in ascending order!
+                    # if hasattr(model, "fc1"):
+                    #     loss2 = compute_train_loss(x, y, criterion, y_pred=model(x, weight_buffer[j]), model=model)
+                    #     arch_hessian = hessian(loss2*1, model.fc1.alphas, model.fc1.alphas) # We are interested in the max_deg/sigmoid parameters.. how to make the arch_params handling more general here?
+                    #     eigenvalues = torch.symeig(arch_hessian)
+                    #     dominant_eigenvalues = eigenvalues.eigenvalues[-1]# Eigenvalues are returned in ascending order!
 
                     second_order_terms = []
                     for hess_dawdw in hessian_matrices_dadw:
