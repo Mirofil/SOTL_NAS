@@ -123,15 +123,28 @@ def sotl_gradient(
                     )) for idx in range(len(weight_buffer[j]))]
                 elif inv_hess == "exact":
                     prods = [torch.eye(w.shape[1]) for w in weight_buffer[j]]
-                    for k in range(j-1, 0, -1):
-                        loss3 = compute_train_loss(x=xs[j-k].to(device), y=ys[j-k].to(device), criterion=criterion, 
-                            y_pred=model(xs[j-k].to(device), weight_buffer[j-k]), model=model)
-                        hess_matrices_dwdw = [hessian(loss3*1, w, w) for w in weight_buffer[j-k]]
+                    for k in range(j-1, -1, -1):
+                        loss3 = compute_train_loss(x=xs[k].to(device), y=ys[k].to(device), criterion=criterion, 
+                            y_pred=model(xs[k].to(device), weight_buffer[k]), model=model)
+                        hess_matrices_dwdw = [hessian(loss3*1, w, w) for w in weight_buffer[k]]
 
                         for idx, (prod, hess) in enumerate(zip(prods, hess_matrices_dwdw)):
                             prods[idx] = prods[idx] @ (torch.eye(hess.shape[0]) - hess)
                     
                     inv_hess_matrices_dwdw = prods
+
+                    # for idx in range(0, j-1):
+                    #     prods = [torch.eye(w.shape[1]) for w in weight_buffer[j]]
+
+                    #     for k in range(0, j):
+                    #         loss3 = compute_train_loss(x=xs[j-1-k].to(device), y=ys[j-1-k].to(device), criterion=criterion, 
+                    #             y_pred=model(xs[j-1-k].to(device), weight_buffer[j-1-k]), model=model)
+                    #         hess_matrices_dwdw = [hessian(loss3*1, w, w) for w in weight_buffer[j-1-k]]
+
+                    #         for idx, (prod, hess) in enumerate(zip(prods, hess_matrices_dwdw)):
+                    #             prods[idx] = prods[idx] @ (torch.eye(hess.shape[0]) - hess)
+                        
+                    #     inv_hess_matrices_dwdw = prods
 
                 elif inv_hess == "id":
                     inv_hess_matrices_dwdw = [torch.eye(weight_buffer[j][idx].shape[0]) for idx in range(len(weight_buffer[j]))] # TODO THERE SHOULD BE A RANGE TO ACCOMMODATE ALL TIMESTEPS
@@ -220,7 +233,7 @@ def sotl_gradient(
                     raise NotImplementedError
 
                 total_arch_gradient_local = [
-                    -w_lr*da1 + da2 for (da1, da2) in zip(second_order_terms, da_direct)
+                    -w_lr*da1 for da1 in second_order_terms
                 ]
                 if total_arch_gradient is None:
                     total_arch_gradient = total_arch_gradient_local
@@ -228,6 +241,12 @@ def sotl_gradient(
                 else:
                     for g1, g2 in zip(total_arch_gradient, total_arch_gradient_local):
                         g1.add_(g2)
+
+            
+            for arch_grad, direct_grad in zip(total_arch_gradient, da_direct):
+                arch_grad.add_(direct_grad)
+
+                
 
 
     if normalize_a_lr:
