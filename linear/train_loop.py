@@ -357,7 +357,7 @@ def train_bptt(
             metrics[metric+"Einf"] = SumOfWhatever(measurements = metrics[metric], e=1000).get_time_series(chunked=True)
 
 
-    return metrics
+    return model, metrics
 
 def valid_func(model, dset_val, criterion, 
     device = 'cuda' if torch.cuda.is_available() else 'cpu', print_results=True,

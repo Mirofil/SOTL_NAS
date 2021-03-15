@@ -141,7 +141,7 @@ def main(epochs = 50,
 
     w_optimizer, a_optimizer, w_scheduler, a_scheduler = get_optimizers(model, config)
 
-    metrics = train_bptt(
+    model, metrics = train_bptt(
         epochs=epochs if not smoke_test else 4,
         steps_per_epoch=steps_per_epoch if not smoke_test else 5,
         model=model,
