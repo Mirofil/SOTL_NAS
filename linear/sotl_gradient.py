@@ -74,7 +74,6 @@ def sotl_gradient(
     if (
         len(weight_buffer) == 1
     ):  # the other branches won't work because we calculate gradients with weights at t-1 in them
-        print("tralalala")
         loss = criterion(model(xs[0], weight_buffer[0], model.fc1.alphas), ys[0])
         da_direct = [y if y is not None else torch.zeros(x.size()) for x,y in zip(model.arch_params(), torch.autograd.grad(loss, model.arch_params(), retain_graph=True, allow_unused=True))]
         total_arch_gradient = da_direct
@@ -125,10 +124,9 @@ def sotl_gradient(
                 elif inv_hess == "exact":
                     prods = [torch.eye(w.shape[1]) for w in weight_buffer[j]]
                     for k in range(j-1, 0, -1):
-                        print("Helooo")
-                        loss3 = compute_train_loss(x=xs[j].to(device), y=ys[j].to(device), criterion=criterion, 
-                            y_pred=model(xs[j].to(device), weight_buffer[k]), model=model)
-                        hess_matrices_dwdw = [hessian(loss3*1, w, w) for w in weight_buffer[k]]
+                        loss3 = compute_train_loss(x=xs[j-k].to(device), y=ys[j-k].to(device), criterion=criterion, 
+                            y_pred=model(xs[j-k].to(device), weight_buffer[j-k]), model=model)
+                        hess_matrices_dwdw = [hessian(loss3*1, w, w) for w in weight_buffer[j-k]]
 
                         for idx, (prod, hess) in enumerate(zip(prods, hess_matrices_dwdw)):
                             prods[idx] = prods[idx] @ (torch.eye(hess.shape[0]) - hess)
@@ -164,18 +162,17 @@ def sotl_gradient(
                     ) for arch_param in model.arch_params() for idx in range(len(weight_buffer[j]))]
 
 
-                    if hasattr(model, "fc1"):
-                        loss2 = compute_train_loss(x, y, criterion, y_pred=model(x, weight_buffer[j]), model=model)
-                        arch_hessian = hessian(loss2*1, model.fc1.alphas, model.fc1.alphas) # We are interested in the max_deg/sigmoid parameters.. how to make the arch_params handling more general here?
-                        eigenvalues = torch.symeig(arch_hessian)
-                        dominant_eigenvalues = eigenvalues.eigenvalues[-1]# Eigenvalues are returned in ascending order!
+                    # if hasattr(model, "fc1"):
+                    #     loss2 = compute_train_loss(x, y, criterion, y_pred=model(x, weight_buffer[j]), model=model)
+                    #     arch_hessian = hessian(loss2*1, model.fc1.alphas, model.fc1.alphas) # We are interested in the max_deg/sigmoid parameters.. how to make the arch_params handling more general here?
+                    #     eigenvalues = torch.symeig(arch_hessian)
+                    #     dominant_eigenvalues = eigenvalues.eigenvalues[-1]# Eigenvalues are returned in ascending order!
 
                     second_order_terms = []
                     for hess_dawdw in hessian_matrices_dadw:
                         for ihvp_vec, inverse_hess_dwdw in zip(ihvp_vecs, inv_hess_matrices_dwdw):
                             jvp = torch.matmul(ihvp_vec, hess_dawdw)
                             second_order_terms.append(jvp)
-                    # second_order_terms = [torch.matmul(grad_w, hessian_matrix) for grad_w, hessian_matrix in zip(dw, hessian_matrices_dadw)]
 
                 elif hvp == "finite_diff":
                     # INNER LOOP

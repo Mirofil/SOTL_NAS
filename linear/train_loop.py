@@ -223,7 +223,7 @@ def train_bptt(
                             optimizer_mode=optimizer_mode,
                             arch_train_data=arch_train_data,
                             sotl=sotl,
-                            debug=False)
+                            debug=debug)
                     total_arch_gradient = arch_gradients["total_arch_gradient"]
 
                     # #TODO DELETE THIS LINE LATER
