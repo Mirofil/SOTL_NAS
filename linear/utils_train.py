@@ -91,7 +91,7 @@ def calculate_weight_decay(model, alpha_w_order=None, w_order=1, adaptive_decay=
 
 def compute_train_loss(x, y, criterion, model, weight_buffer=None, weight_decay=True, 
     y_pred=None, alpha_w_order=None, w_order=None, adaptive_decay=False, 
-    a_order=None, a_coef=None, w_coef=None, return_acc=False):
+    a_order=None, a_coef=None, w_coef=None, return_acc=False, debug=False):
     assert model is not None or y_pred is not None
 
     if y_pred is None:
@@ -116,6 +116,9 @@ def compute_train_loss(x, y, criterion, model, weight_buffer=None, weight_decay=
 
     elif type(criterion) is torch.nn.CrossEntropyLoss:
         loss = criterion(y_pred, y.long()) + param_norm
+
+    if debug:
+        print(f"Train loss: {loss}, param_norm: {param_norm}")
 
     if return_acc:
         if y_pred.shape[1] != 1: # Must be regression task

@@ -6,7 +6,7 @@
 # python linear/train.py --model_type=max_deg --dataset=sklearn_friedman1 --dry_run=False --T=1 --a_weight_decay=0.1 --grad_outer_loop_order=1 --grad_inner_loop_order=1 --mode=bilevel --device=cpu --optimizer_mode=autograd --n_samples=50000  --epochs=1
 
 # python linear/train.py --model_type=MNIST --dataset=MNIST --dry_run=False --T=1 --w_warm_start=0 --grad_outer_loop_order=-1 --grad_inner_loop_order=-1 --mode=bilevel --device=cuda --extra_weight_decay=0.0001 --w_weight_decay=0 --arch_train_data=val
-
+#python linear/train.py --model_type=max_deg --dataset=fourier --dry_run=True --T=1 --grad_outer_loop_order=-1 --grad_inner_loop_order=-1 --mode=bilevel --device=cpu --optimizer_mode=manual --ihvp=exact --inv_hess=exact --hvp=exact --rand_seed 1 --arch_train_data val
 #pip install --force git+https://github.com/Mirofil/pytorch-hessian-eigenthings.git
 
 import itertools
@@ -99,7 +99,8 @@ def main(epochs = 50,
     decay_scheduler:str=None,
     loss:str = None,
     optimizer_mode="manual",
-    bilevel_w_steps=None
+    bilevel_w_steps=None,
+    debug=False
     ):
 
     config = locals()
@@ -178,7 +179,8 @@ def main(epochs = 50,
         mode=mode,
         hessian_tracking=hessian_tracking,
         optimizer_mode=optimizer_mode,
-        bilevel_w_steps=bilevel_w_steps
+        bilevel_w_steps=bilevel_w_steps,
+        debug=debug
         )
     
     if model_type in ["max_deg", "softmax_mult", "linear"]:
@@ -353,17 +355,17 @@ steps_per_epoch=5
 batch_size = 64
 n_features = 18
 n_samples = 5000
-w_optim='Adam'
+w_optim='SGD'
 w_decay_order=2
 w_lr = 1e-3
 w_momentum=0.0
-w_weight_decay=0.0001
-a_optim="Adam"
+w_weight_decay=0
+a_optim="SGD"
 a_decay_order=2
 a_lr = 3e-2
 a_momentum = 0.0
-a_weight_decay = 0.1
-T = 10
+a_weight_decay = 0
+T = 1
 grad_clip = 1
 logging_freq = 200
 w_checkpoint_freq = 1
@@ -400,5 +402,6 @@ log_suffix = ""
 optimizer_mode = "manual"
 bilevel_w_steps=None
 debug=False
+rand_seed=1
 from copy import deepcopy
 config=locals()

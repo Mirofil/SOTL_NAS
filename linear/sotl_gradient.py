@@ -74,6 +74,7 @@ def sotl_gradient(
     if (
         len(weight_buffer) == 1
     ):  # the other branches won't work because we calculate gradients with weights at t-1 in them
+        print("tralalala")
         loss = criterion(model(xs[0], weight_buffer[0], model.fc1.alphas), ys[0])
         da_direct = [y if y is not None else torch.zeros(x.size()) for x,y in zip(model.arch_params(), torch.autograd.grad(loss, model.arch_params(), retain_graph=True, allow_unused=True))]
         total_arch_gradient = da_direct
@@ -85,6 +86,7 @@ def sotl_gradient(
         for i in range(
             len(weight_buffer) - 1, max(0, len(weight_buffer)-1-grad_outer_loop_order), -1
         ):
+
             if (val_xs is not None) and (val_ys is not None):
                 top_level_x = val_xs[0]
                 top_level_y = val_ys[0]
@@ -96,12 +98,14 @@ def sotl_gradient(
             top_level_x = top_level_x.to(device)
             top_level_y = top_level_y.to(device)
 
+
             # (computing the first two terms in (2)) Gradients using the latest-in-time weights, ie. to compute dL(w_t, alpha)/da, we need dL(w_t,alpha)/dalpha, dL(w_t,alpha)/dw
-            old_weights = switch_weights(model, weight_buffer[i]) # TODO is this needed? Shouldnt the model have those weights right now?
-            top_level_loss = compute_train_loss(top_level_x, top_level_y, criterion, y_pred=model(top_level_x, weight_buffer[i]), model=model)
+            top_level_weights = weight_buffer[i]
+            old_weights = switch_weights(model, top_level_weights)
+            top_level_loss = compute_train_loss(top_level_x, top_level_y, criterion, y_pred=model(top_level_x, top_level_weights), model=model)
             # loss = criterion(model(top_level_x, weight_buffer[i]), top_level_y)
             da_direct = [y if y is not None else torch.zeros(x.size()).to(device) for x,y in zip(model.arch_params(), torch.autograd.grad(top_level_loss, model.arch_params(), retain_graph=True, allow_unused=True))]
-            dw = torch.autograd.grad(top_level_loss, model.weight_params(), retain_graph=True)
+            dw = torch.autograd.grad(top_level_loss, top_level_weights, retain_graph=True)
 
             no_longer_needed_weights = switch_weights(model, old_weights)
 
@@ -121,8 +125,9 @@ def sotl_gradient(
                 elif inv_hess == "exact":
                     prods = [torch.eye(w.shape[1]) for w in weight_buffer[j]]
                     for k in range(j-1, 0, -1):
-                        loss3 = compute_train_loss(x=xs[k].to(device), y=ys[k].to(device), criterion=criterion, 
-                            y_pred=model(x, weight_buffer[k]), model=model)
+                        print("Helooo")
+                        loss3 = compute_train_loss(x=xs[j].to(device), y=ys[j].to(device), criterion=criterion, 
+                            y_pred=model(xs[j].to(device), weight_buffer[k]), model=model)
                         hess_matrices_dwdw = [hessian(loss3*1, w, w) for w in weight_buffer[k]]
 
                         for idx, (prod, hess) in enumerate(zip(prods, hess_matrices_dwdw)):

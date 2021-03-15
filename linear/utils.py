@@ -209,7 +209,7 @@ def jacobian(y: Tensor, x: Tensor, create_graph:bool=False) -> Tensor:
 
     final_shape = (1, x.shape[1]) if len(y.shape) == 0 else (y.shape[1], min(x.shape[1], y.shape[1]))
     # print(final_shape)                 
-    # print(x)                               
+    # print(x)          
     return torch.stack(jac).reshape(final_shape)                                                
                                                                                                       
 def hessian(y:Tensor, x1:Tensor, x2:Tensor) -> Tensor:                                                                                    
