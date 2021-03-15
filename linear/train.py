@@ -2,7 +2,9 @@
 # python linear/train.py --model_type=sigmoid --dataset=gisette --arch_train_data sotl --grad_outer_loop_order=None --mode=bilevel --device=cuda --initial_degree 1 --hvp=finite_diff --epochs=100 --w_lr=0.001 --T=1 --a_lr=0.01 --hessian_tracking False --w_optim=Adam --a_optim=Adam --w_warm_start 0 --train_arch=True --a_weight_decay=0.001 --a_decay_order 2 --smoke_test False --dry_run=True --w_weight_decay=0.001 --batch_size=64 --decay_scheduler None --loss ce
 # python linear/train.py --model_type=sigmoid --dataset=gisette --arch_train_data sotl --grad_outer_loop_order=None --mode=bilevel --device=cuda --initial_degree 1 --hvp=finite_diff --epochs=100 --w_lr=0.001 --T=1 --a_lr=0.01 --hessian_tracking False --w_optim=Adam --a_optim=Adam --w_warm_start 3 --train_arch=True --a_weight_decay=0.00000001--smoke_test False --dry_run=True --w_weight_decay=0.001 --batch_size=64 --decay_scheduler None
 
-# python linear/train.py --model_type=max_deg --dataset=fourier --dry_run=False --T=2 --grad_outer_loop_order=1 --grad_inner_loop_order=1 --mode=bilevel --device=cpu --optimizer_mode=autograd
+# python linear/train.py --model_type=max_deg --dataset=fourier --dry_run=False --T=2 --grad_outer_loop_order=-1 --grad_inner_loop_order=-1 --mode=bilevel --device=cpu --optimizer_mode=manual --ihvp=exact --inv_hess=exact --hvp=exact
+# python linear/train.py --model_type=max_deg --dataset=sklearn_friedman1 --dry_run=False --T=1 --a_weight_decay=0.1 --grad_outer_loop_order=1 --grad_inner_loop_order=1 --mode=bilevel --device=cpu --optimizer_mode=autograd --n_samples=50000  --epochs=1
+
 # python linear/train.py --model_type=MNIST --dataset=MNIST --dry_run=False --T=1 --w_warm_start=0 --grad_outer_loop_order=-1 --grad_inner_loop_order=-1 --mode=bilevel --device=cuda --extra_weight_decay=0.0001 --w_weight_decay=0 --arch_train_data=val
 
 #pip install --force git+https://github.com/Mirofil/pytorch-hessian-eigenthings.git
@@ -50,79 +52,11 @@ from utils_metrics import (ValidAccEvaluator, obtain_accuracy, SumOfWhatever)
 from train_loop import valid_func, train_bptt
 
 
-# lr = torch.tensor(0.1, dtype=torch.float32, requires_grad=True) # Learning rate is the architecture parameter
-
-# x = torch.tensor(8, requires_grad=True, dtype=torch.float32) # Weight parameter
-
-# y1 = 2*x # Loss function
-
-# grads_y1 = torch.autograd.grad(y1, x, create_graph=True, retain_graph=True)
-
-# x = x - lr*grads_y1[0]
-
-# y2 = 2*x
-
-# grads_y2 = torch.autograd.grad(y2, x, create_graph=True, retain_graph=True)
-
-# x = x - lr * grads_y2[0]
-
-# y3 = 2*x
-
-# grads_y3 = torch.autograd.grad(y3, lr, create_graph=True, retain_graph=True)
-
-# grads_sotl = torch.autograd.grad(y3+y2+y1, lr, create_graph=True, retain_graph=True)
-# print(grads_sotl)
-
-# # Symbolically, we want: d(2x + 2(x-2a) + 2(x-2a-2a))/da 
-# # In Wolfram, result is -12 (same as here)
-
-
-# ## More elaborate example with a linear layer
-
-# lr = torch.tensor(0.1, dtype=torch.float32, requires_grad=True) # Learning rate is the architecture parameter
-
-# # Our data points
-# x1 = torch.tensor([1., 2., 3., 4., 5.], requires_grad=False, dtype=torch.float32)
-# x2 = torch.tensor([2., 3., 4., 5., 6.], requires_grad=False, dtype=torch.float32)
-# x3 = torch.tensor([3., 4., 5., 6., 7.], requires_grad=False, dtype=torch.float32)
-
-# model = torch.nn.Linear(5, 1)
-# # We will keep copies of the model weights in a buffer as in the manual case. 
-# # TODO is there a way to replace the model parameters in place and only keep the weight copies implicitly in the computational graph?
-# weight1 = model.weight
-# print(f"Model weight: {model.weight}")
-
-# y1 = 2*F.linear(x1, weight1) # Loss function
-
-# grads_y1 = torch.autograd.grad(y1, weight1, create_graph=True, retain_graph=True)
-
-# for p, dp in zip(model.parameters(), grads_y1):
-#     weight2 = weight1 - lr * dp
-
-# print(f"Model weight after 1st update: {model.weight}")
-
-# y2 = 2*F.linear(x2, weight2)
-
-# grads_y2 = torch.autograd.grad(y2, weight2, create_graph=True, retain_graph=True)
-
-# for p, dp in zip(model.parameters(), grads_y2):
-#     weight3 = weight2 - lr * dp
-
-# print(f"Model weight after 2nd update: {model.weight}")
-
-# y3 = 2*F.linear(x3, weight3)
-
-# grads_y3 = torch.autograd.grad(y3, lr, create_graph=True, retain_graph=True)
-
-# grads_sotl = torch.autograd.grad(y3+y2+y1, lr, create_graph=True, retain_graph=True)
-# print(grads_sotl)
-
-
-def main(epochs = 5,
+def main(epochs = 50,
     steps_per_epoch=None,
     batch_size = 64,
-    D = 18,
-    N = 50000,
+    n_features = 18,
+    n_samples = 5000,
     w_optim='SGD',
     a_optim='SGD',
     w_decay_order=2,
@@ -132,16 +66,18 @@ def main(epochs = 5,
     a_decay_order=2,
     a_lr = 1e-2,
     a_momentum = 0.0,
-    a_weight_decay = 1,
+    a_weight_decay = 0.01,
     T = 10,
     grad_clip = 1,
     logging_freq = 200,
     w_checkpoint_freq = 1,
-    max_order_y=7,
-    noise_var=0.25,
+    n_informative=7,
+    noise=0.25,
     featurize_type="fourier",
     initial_degree=1,
     hvp="finite_diff",
+    ihvp="exact",
+    inv_hess="full",
     arch_train_data="sotl",
     normalize_a_lr=True,
     w_warm_start=0,
@@ -184,9 +120,9 @@ def main(epochs = 5,
     if rand_seed is not None:
         prepare_seed(rand_seed)
 
-    dataset_cfg = get_datasets(name=dataset, data_size=N, max_order_generated=D,
-        max_order_y=max_order_y,
-        noise_var=noise_var,
+    dataset_cfg = get_datasets(name=dataset, n_samples=n_samples, n_features=n_features,
+        n_informative=n_informative,
+        noise=noise,
         featurize_type=featurize_type)
     dset_train = dataset_cfg["dset_train"]
     dset_val = dataset_cfg["dset_val"]
@@ -228,6 +164,8 @@ def main(epochs = 5,
         grad_inner_loop_order=grad_inner_loop_order,
         grad_outer_loop_order=grad_outer_loop_order,
         hvp=hvp,
+        ihvp=ihvp,
+        inv_hess=inv_hess,
         arch_train_data=arch_train_data,
         normalize_a_lr=normalize_a_lr,
         log_grad_norm=True,
@@ -258,9 +196,10 @@ def main(epochs = 5,
         #     f"Trained val loss: {val_meter.avg}, SciPy solver val loss: {val_meter2.avg}, difference: {val_meter.avg - val_meter2.avg} (ie. {(val_meter.avg/val_meter2.avg-1)*100}% more)"
         # )
         try:
-            true_degree = max_order_y/2 
+            true_degree = n_informative/2 
             trained_degree = model.fc1.alphas.item()
             print(f"True degree: {true_degree}, trained degree: {trained_degree}, difference: {abs(true_degree - trained_degree)}")
+            print(f"Model weights: {model.fc1.weight}")
             wandb.run.summary["degree_mismatch"] = abs(true_degree-trained_degree)
         except:
             print("No model degree info; probably a different model_type was chosen")
@@ -412,8 +351,8 @@ if __name__ == "__main__":
 epochs = 75
 steps_per_epoch=5
 batch_size = 64
-D = 18
-N = 50000
+n_features = 18
+n_samples = 5000
 w_optim='Adam'
 w_decay_order=2
 w_lr = 1e-3
@@ -428,11 +367,13 @@ T = 10
 grad_clip = 1
 logging_freq = 200
 w_checkpoint_freq = 1
-max_order_y=7
-noise_var=0.25
+n_informative=7
+noise=0.25
 featurize_type="fourier"
-initial_degree=15
-hvp="finite_diff"
+initial_degree=1
+hvp="exact"
+ihvp ="exact"
+inv_hess="exact"
 normalize_a_lr=True
 w_warm_start=0
 log_grad_norm=True
@@ -443,7 +384,7 @@ grad_outer_loop_order=-1
 arch_train_data="sotl"
 model_type="max_deg"
 dataset="fourier"
-device = 'cuda'
+device = 'cpu'
 train_arch=True
 dry_run=False
 mode="bilevel"
@@ -456,6 +397,8 @@ a_scheduler=None
 features=None
 loss='mse'
 log_suffix = ""
-optimizer_mode = "autograd"
+optimizer_mode = "manual"
+bilevel_w_steps=None
+debug=False
 from copy import deepcopy
 config=locals()

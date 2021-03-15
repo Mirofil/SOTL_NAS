@@ -1,13 +1,18 @@
-import torch
-from torch import Tensor
-from torch.nn import Linear, MSELoss, functional as F
-import torch.nn as nn
-import numpy as np
-import math
 import itertools
-from typing import *
-import matplotlib.pyplot as plt
+import math
 import random
+from typing import *
+
+import matplotlib.pyplot as plt
+import numpy as np
+import torch
+import torch.nn as nn
+from torch import Tensor
+from torch.nn import Linear, MSELoss
+from torch.nn import functional as F
+from tqdm import tqdm
+
+
 def prepare_seed(rand_seed):
   random.seed(rand_seed)
   np.random.seed(rand_seed)
@@ -89,7 +94,7 @@ def featurize(x: float, max_order:int =4, type:str ="fourier") -> Sequence:
         # max_order should be 2*D when doing sum_{i=1}^D (Fourier terms), ie. each sin/cos term counts separately!
         featurized_input = [1]
         assert max_order % 2 == 0
-        for order in range(0,max_order):
+        for order in range(1,max_order):
             featurized_input.append(np.cos(order*x))
             featurized_input.append(np.sin(order*x))
         featurized_input = featurized_input[0:max_order+1]
@@ -142,22 +147,25 @@ def eval_features(x:Sequence, max_order:int=2, type:str='fourier', noise_var:flo
 
     return {"features":[feature+noise], "weights": weights}
 
-def data_generator(data_size:int=1000, max_order_generated:int=5, max_order_y:int=None, max_order_x:int=None, 
-    noise_var:float=1, x_range:float=None, featurize_type:str='fourier', plot:bool=False, shuffle_features=False):
+def data_generator(n_samples:int=1000, n_features:int=5, n_informative:int=None, max_order_x:int=None, 
+    noise:float=1, x_range:float=None, featurize_type:str='fourier', plot:bool=False, shuffle_features=False):
     inputs = []
     labels = []
-    if max_order_y is None:
-        max_order_y = max_order_generated
+    if n_informative is None:
+        n_informative = n_features
     if max_order_x is None:
-        max_order_x = max_order_generated
+        max_order_x = n_features
     if x_range is None:
-        x_range = 10*math.pi
-    xs = np.linspace(-x_range,x_range,data_size)
+        if featurize_type == "fourier":
+            x_range = 10000*math.pi
+        else:
+            x_range = 10
+    xs = np.linspace(-x_range,x_range,n_samples)
 
-    for x in xs:
+    for x in tqdm(xs, desc = f"Generating {featurize_type} features"):
         final_features = None
-        features = featurize(x, max_order=max_order_generated, type=featurize_type)
-        evaled_features = eval_features(features, noise_var=noise_var, max_order=max_order_y, type=featurize_type)
+        features = featurize(x, max_order=n_features, type=featurize_type)
+        evaled_features = eval_features(features, noise_var=noise, max_order=n_informative, type=featurize_type)
         labels.append(evaled_features["features"])
         if isinstance(max_order_x, int):
             final_features = features[:max_order_x]

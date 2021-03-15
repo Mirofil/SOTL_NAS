@@ -12,7 +12,7 @@ from PIL import Image
 from urllib.request import urlopen
 import scipy.io
 from sklearn.model_selection import train_test_split
-
+import sklearn.datasets
 def get_datasets(name, path=None, val_split=0.1, test_split=0.2, normalize=True, **kwargs):
     n_classes = None
     n_features=None
@@ -84,11 +84,51 @@ def get_datasets(name, path=None, val_split=0.1, test_split=0.2, normalize=True,
         )
         x_train = torch.tensor(x_train, dtype=torch.float32)
         y_train = torch.tensor(y_train, dtype=torch.float32)
-        dset = torch.utils.data.TensorDataset(x_train, y_train)
 
-        dset_train, dset_test = torch.utils.data.random_split(
-            dset, [int(len(dset) * test_split), len(dset) - int(len(dset) * test_split)]
-        )
+        x_test, y_test = data_generator(**{**kwargs, "n_samples":7667, "noise":0})
+        x_test, y_test = torch.tensor(x_test, dtype=torch.float32), torch.tensor(y_test, dtype=torch.float32)
+
+        dset_train = torch.utils.data.TensorDataset(x_train, y_train)
+        dset_test = torch.utils.data.TensorDataset(x_test, y_test)
+
+        n_classes = 1
+
+    elif name == "sklearn_reg":
+        x_train, y_train = sklearn.datasets.make_regression(n_samples=kwargs["n_samples"], 
+            n_features=kwargs["n_features"], n_informative=kwargs["n_informative"], noise = kwargs["noise"])
+        x_train, y_train = torch.tensor(x_train, dtype=torch.float32), torch.tensor(y_train, dtype=torch.float32)
+        
+        x_test, y_test = sklearn.datasets.make_regression(n_samples=kwargs["n_samples"], 
+            n_features=kwargs["n_features"], n_informative=kwargs["n_informative"], noise=0)
+        x_test, y_test = torch.tensor(x_test, dtype=torch.float32), torch.tensor(y_test, dtype=torch.float32)
+        dset_train = torch.utils.data.TensorDataset(x_train, y_train)
+        dset_test = torch.utils.data.TensorDataset(x_test, y_test)
+
+        n_classes = 1            
+    
+    elif name == "sklearn_friedman1":
+        x_train, y_train = sklearn.datasets.make_friedman1(n_samples=kwargs["n_samples"], 
+            n_features=kwargs["n_features"], noise=kwargs["noise"])
+        x_train, y_train = torch.tensor(x_train, dtype=torch.float32), torch.tensor(y_train.astype(float), dtype=torch.float32)
+        x_test, y_test = sklearn.datasets.make_friedman1(n_samples=kwargs["n_samples"], 
+            n_features=kwargs["n_features"], noise=0)
+        x_test, y_test = torch.tensor(x_test, dtype=torch.float32), torch.tensor(y_test.astype(float), dtype=torch.float32)
+
+        dset_train = torch.utils.data.TensorDataset(x_train, y_train)
+        dset_test = torch.utils.data.TensorDataset(x_test, y_test)
+
+        n_classes = 1
+        
+    elif name == "sklearn_sparse":
+        x_train, y_train = sklearn.datasets.make_sparse_uncorrelated(n_samples=kwargs["n_samples"], 
+            n_features=kwargs["n_features"])
+        x_train, y_train = torch.tensor(x_train, dtype=torch.float32), torch.tensor(y_train.astype(float), dtype=torch.float32)
+        x_test, y_test = sklearn.datasets.make_sparse_uncorrelated(n_samples=kwargs["n_samples"], 
+            n_features=kwargs["n_features"])
+        x_test, y_test = torch.tensor(x_test, dtype=torch.float32), torch.tensor(y_test.astype(float), dtype=torch.float32)
+
+        dset_train = torch.utils.data.TensorDataset(x_train, y_train)
+        dset_test = torch.utils.data.TensorDataset(x_test, y_test)
 
         n_classes = 1
     elif name == 'isolet':
@@ -302,7 +342,7 @@ def get_datasets(name, path=None, val_split=0.1, test_split=0.2, normalize=True,
     else:
         raise NotImplementedError
 
-    if name not in ['CIFAR', 'MNIST', 'FashionMNIST', 'MNISTsmall', 'FashionMNISTsmall', 'fourier']:
+    if name not in ['CIFAR', 'MNIST', 'FashionMNIST', 'MNISTsmall', 'FashionMNISTsmall', 'fourier', 'sklearn_friedman1', 'sklearn_reg']:
         # The datasets from Torchvision have different Classes and they come already well split
        
         if normalize:
