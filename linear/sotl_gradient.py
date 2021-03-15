@@ -106,7 +106,7 @@ def sotl_gradient(
             da_direct = [y if y is not None else torch.zeros(x.size()).to(device) for x,y in zip(model.arch_params(), torch.autograd.grad(top_level_loss, model.arch_params(), retain_graph=True, allow_unused=True))]
             dw = torch.autograd.grad(top_level_loss, top_level_weights, retain_graph=True)
 
-            no_longer_needed_weights = switch_weights(model, old_weights)
+            # no_longer_needed_weights = switch_weights(model, old_weights)
 
             # (computing the sum of gradients in (1))
             for j in range(i-1, max(-1, i - grad_inner_loop_order-1), -1):
