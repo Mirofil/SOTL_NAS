@@ -61,7 +61,7 @@ def sotl_gradient(
     mode="joint", inv_hess = "exact", ihvp="exact"
 ) -> Sequence:
 
-    total_arch_gradient, loss, da, dw, dominant_eigenvalues = None, None, None, None, None
+    total_arch_gradient, loss, da_direct, dw, dominant_eigenvalues = None, None, None, None, None
     debug_info = {}
     
     if (grad_inner_loop_order is None) or (grad_inner_loop_order <= 0):
@@ -71,9 +71,12 @@ def sotl_gradient(
         if (val_xs is not None) and (val_ys is not None):
             grad_outer_loop_order = min([grad_outer_loop_order, len(val_xs), len(val_ys)])
 
+    if val_xs is None:
+        grad_inner_loop_order = grad_inner_loop_order - 1
+
     if (
-        len(weight_buffer) == 1
-    ):  # the other branches won't work because we calculate gradients with weights at t-1 in them
+        len(weight_buffer) == 1 and val_xs is None
+    ):  
         loss = criterion(model(xs[0], weight_buffer[0], model.fc1.alphas), ys[0])
         da_direct = [y if y is not None else torch.zeros(x.size()) for x,y in zip(model.arch_params(), torch.autograd.grad(loss, model.arch_params(), retain_graph=True, allow_unused=True))]
         total_arch_gradient = da_direct
@@ -82,8 +85,9 @@ def sotl_gradient(
         # (2) The inner loop equation is dL(w_t, alpha)da = dL(w_t,alpha)/da + dL(w_t,alpha)/dw * -eta sum_{i=t-inner_loop_order}^t d^2L(w_i, alpha)dadw
         
         # OUTER LOOP
+        outer_loop_boundary = len(weight_buffer)-1-grad_outer_loop_order 
         for i in range(
-            len(weight_buffer) - 1, max(0, len(weight_buffer)-1-grad_outer_loop_order), -1
+            len(weight_buffer) - 1, outer_loop_boundary, -1
         ):
 
             if (val_xs is not None) and (val_ys is not None):
@@ -229,9 +233,11 @@ def sotl_gradient(
                     for g1, g2 in zip(total_arch_gradient, total_arch_gradient_local):
                         g1.add_(g2)
 
-            
-            for arch_grad, direct_grad in zip(total_arch_gradient, da_direct):
-                arch_grad.add_(direct_grad)
+            if total_arch_gradient is None:
+                total_arch_gradient = da_direct
+            else:
+                for arch_grad, direct_grad in zip(total_arch_gradient, da_direct):
+                    arch_grad.add_(direct_grad)
 
 
     if normalize_a_lr:
