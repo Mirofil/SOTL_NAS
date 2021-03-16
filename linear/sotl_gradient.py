@@ -248,4 +248,3 @@ def sotl_gradient(
     "dominant_eigenvalues":dominant_eigenvalues, 
     "da_direct":da_direct,
     "dw_direct":dw}
-
