@@ -231,7 +231,6 @@ def train_bptt(
                     # dw_direct = arch_gradients["dw_direct"]
 
                     # weights_after_rollout = switch_weights(model, weight_buffer[0])
-                    # # model.fc1.alphas = torch.nn.Parameter(torch.tensor([1], dtype=torch.float32), requires_grad=True)
 
                     if debug:
                         print(f"Epoch: {epoch}, batch: {batch_idx} Arch grad: {total_arch_gradient}")
@@ -319,13 +318,14 @@ def train_bptt(
                 [x.data for x in model.weight_params()] if len(str([x.data for x in model.arch_params()])) < 75 else f'Too long'
             )
         )
-        tqdm.write(
-            "Epoch: {}, Arch direct_da: {}, Arch direct_dw: {}".format(
-                epoch,
-                arch_gradients["da_direct"],
-                arch_gradients["dw_direct"]
+        if debug:
+            tqdm.write(
+                "Epoch: {}, Arch direct_da: {}, Arch direct_dw: {}".format(
+                    epoch,
+                    arch_gradients["da_direct"],
+                    arch_gradients["dw_direct"]
+                )
             )
-        )
 
         # Check performance of model on val/test sets for logging only
         val_results, val_acc_results = valid_func(
