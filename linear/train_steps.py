@@ -48,7 +48,7 @@ def train_step(x, y, criterion, model, w_optimizer, weight_buffer, grad_clip, co
             model=model, weight_buffer=weight_buffer, return_acc=True)
         grads = torch.autograd.grad(
             loss,
-            model.weight_params()
+            weight_buffer[-1]
         )
         # with torch.no_grad():
         #     for g, w in zip(grads, model.weight_params()):
@@ -90,7 +90,7 @@ def train_step(x, y, criterion, model, w_optimizer, weight_buffer, grad_clip, co
 
             weight_buffer.direct_add(new_weights)
 
-            model_old_weights = switch_weights(model, weight_buffer[-1]) # This is useful for auxiliary tasks - but the actual grad evaluation happens by using the external WeightBuffer weights
+            # model_old_weights = switch_weights(model, weight_buffer[-1]) # This is useful for auxiliary tasks - but the actual grad evaluation happens by using the external WeightBuffer weights
         else:
             weight_buffer.direct_add(weight_buffer[-1])
     return loss, train_acc_top1
@@ -130,8 +130,21 @@ def arch_step(model, criterion, xs, ys, weight_buffer, w_lr, hvp, inv_hess, ihvp
             # weight_buffer[-1][0] = weight_buffer[-1][0].detach()
             arch_gradient_loss, _ = compute_train_loss(x=val_xs[0], y=val_ys[0], criterion=criterion, 
                 y_pred=model(val_xs[0], weight=weight_buffer[-1]), model=model, return_acc=True)
+            
         total_arch_gradient = torch.autograd.grad(arch_gradient_loss, model.arch_params(), retain_graph=True)
+        
+        # if debug:
+        weight_buffer[-1][0] = weight_buffer[-1][0].detach()
+        weight_buffer[-1][0].requires_grad = True
+        arch_gradient_loss2, _ = compute_train_loss(x=val_xs[0], y=val_ys[0], criterion=criterion, 
+            y_pred=model(val_xs[0], weight=weight_buffer[-1]), model=model, return_acc=True)
+        da_direct = torch.autograd.grad(arch_gradient_loss2, model.arch_params(), retain_graph=True)
+        dw_direct = torch.autograd.grad(arch_gradient_loss2, weight_buffer[-1])
+        arch_gradients["da_direct"] = da_direct
+        arch_gradients["dw_direct"] = dw_direct
+        
         arch_gradients["total_arch_gradient"] = total_arch_gradient
+
     a_optimizer.zero_grad()
 
     for g, w in zip(total_arch_gradient, model.arch_params()):

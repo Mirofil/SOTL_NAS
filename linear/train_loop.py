@@ -226,7 +226,10 @@ def train_bptt(
                             debug=debug)
                     total_arch_gradient = arch_gradients["total_arch_gradient"]
 
-                    # #TODO DELETE THIS LINE LATER
+                    # # #TODO DELETE THIS LINE LATER
+                    # da_direct = arch_gradients["da_direct"]
+                    # dw_direct = arch_gradients["dw_direct"]
+
                     # weights_after_rollout = switch_weights(model, weight_buffer[0])
                     # # model.fc1.alphas = torch.nn.Parameter(torch.tensor([1], dtype=torch.float32), requires_grad=True)
 
@@ -314,6 +317,13 @@ def train_bptt(
                 train_loss.avg,
                 [x.data for x in model.arch_params()] if len(str([x.data for x in model.arch_params()])) < 20 else best_alphas,
                 [x.data for x in model.weight_params()] if len(str([x.data for x in model.arch_params()])) < 75 else f'Too long'
+            )
+        )
+        tqdm.write(
+            "Epoch: {}, Arch direct_da: {}, Arch direct_dw: {}".format(
+                epoch,
+                arch_gradients["da_direct"],
+                arch_gradients["dw_direct"]
             )
         )
 

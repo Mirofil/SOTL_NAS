@@ -122,7 +122,7 @@ def sotl_gradient(
                     )) for idx in range(len(weight_buffer[j]))]
                 elif inv_hess == "exact":
                     prods = [torch.eye(w.shape[1]) for w in weight_buffer[j]]
-                    for k in range(i-2, j-1, -1):
+                    for k in range(min(i-2, j), j, -1):
                         loss3 = compute_train_loss(x=xs[k].to(device), y=ys[k].to(device), criterion=criterion, 
                             y_pred=model(xs[k].to(device), weight_buffer[k]), model=model)
                         hess_matrices_dwdw = [hessian(loss3*1, w, w) for w in weight_buffer[k]]
@@ -238,5 +238,8 @@ def sotl_gradient(
         for g in total_arch_gradient:
             g.multiply_(T/grad_inner_loop_order)
 
-    return {"total_arch_gradient":total_arch_gradient, "dominant_eigenvalues":dominant_eigenvalues}
+    return {"total_arch_gradient":total_arch_gradient, 
+    "dominant_eigenvalues":dominant_eigenvalues, 
+    "da_direct":da_direct,
+    "dw_direct":dw}
 

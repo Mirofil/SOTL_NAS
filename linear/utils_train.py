@@ -93,6 +93,7 @@ def compute_train_loss(x, y, criterion, model, weight_buffer=None, weight_decay=
     y_pred=None, alpha_w_order=None, w_order=None, adaptive_decay=False, 
     a_order=None, a_coef=None, w_coef=None, return_acc=False, debug=False):
     assert model is not None or y_pred is not None
+    assert y_pred is None or weight_buffer is None
 
     if y_pred is None:
         if weight_buffer is None:
