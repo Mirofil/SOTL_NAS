@@ -75,7 +75,7 @@ def sotl_gradient(
         grad_inner_loop_order = grad_inner_loop_order - 1
 
     if (
-        len(weight_buffer) == 1 and val_xs is None
+        len(weight_buffer) == 2 and val_xs is None
     ):  
         loss = criterion(model(xs[0], weight_buffer[0], model.fc1.alphas), ys[0])
         da_direct = [y if y is not None else torch.zeros(x.size()) for x,y in zip(model.arch_params(), torch.autograd.grad(loss, model.arch_params(), retain_graph=True, allow_unused=True))]
@@ -108,31 +108,35 @@ def sotl_gradient(
             top_level_loss = compute_train_loss(top_level_x, top_level_y, criterion, y_pred=model(top_level_x, top_level_weights), model=model)
             # loss = criterion(model(top_level_x, weight_buffer[i]), top_level_y)
             da_direct = [y if y is not None else torch.zeros(x.size()).to(device) for x,y in zip(model.arch_params(), torch.autograd.grad(top_level_loss, model.arch_params(), retain_graph=True, allow_unused=True))]
-            dw = torch.autograd.grad(top_level_loss, top_level_weights, retain_graph=True)
+            dw = torch.autograd.grad(top_level_loss, top_level_weights)
 
             # no_longer_needed_weights = switch_weights(model, old_weights)
 
             # (computing the sum of gradients in (1))
-            for j in range(i-1, max(-1, i - grad_inner_loop_order-1), -1):
+            for j in range(0, i, 1):
 
-                x = xs[j].to(device)
-                y = ys[j].to(device)
+                x = xs[i-j-1].to(device)
+                y = ys[i-j-1].to(device)
 
-                loss2 = compute_train_loss(x, y, criterion, y_pred=model(x, weight_buffer[j]), model=model)
+                loss2 = compute_train_loss(x, y, criterion, y_pred=model(x, weight_buffer[i-j-1]), model=model)
 
                 if inv_hess == "ift":
                     inv_hess_matrices_dwdw = [torch.inverse(hessian(
-                        loss2 * 1, weight_buffer[j][idx], weight_buffer[j][idx]
-                    )) for idx in range(len(weight_buffer[j]))]
+                        loss2 * 1, weight_buffer[i-j-1][idx], weight_buffer[i-j-1][idx]
+                    )) for idx in range(len(weight_buffer[i-j-1]))]
                 elif inv_hess == "exact":
-                    prods = [torch.eye(w.shape[1]) for w in weight_buffer[j]]
-                    for k in range(min(i-2, j), j, -1):
-                        loss3 = compute_train_loss(x=xs[k].to(device), y=ys[k].to(device), criterion=criterion, 
-                            y_pred=model(xs[k].to(device), weight_buffer[k]), model=model)
-                        hess_matrices_dwdw = [hessian(loss3*1, w, w) for w in weight_buffer[k]]
+                    prods = [torch.eye(w.shape[1]) for w in weight_buffer[i-j-1]]
+                    for k in range(0, j, 1):
+                        # print(f"Frist : {weight_buffer[i-k-1]}")
+                        # print(f"second: {weight_buffer[i-k]}")
+
+                        loss3 = compute_train_loss(x=xs[i-k-1].to(device), y=ys[i-k-1].to(device), criterion=criterion, 
+                            y_pred=model(xs[i-k-1].to(device), weight_buffer[i-k-2]), model=model)
+
+                        hess_matrices_dwdw = [hessian(loss3*1, w, w) for w in weight_buffer[i-k-1]]
 
                         for idx, (prod, hess) in enumerate(zip(prods, hess_matrices_dwdw)):
-                            prods[idx] = prods[idx] @ (torch.eye(hess.shape[0]) - hess)
+                            prods[idx] = torch.matmul((torch.eye(hess.shape[0]) - hess), prods[idx])
                     
                     inv_hess_matrices_dwdw = prods
 
@@ -162,8 +166,8 @@ def sotl_gradient(
                     # NOTE this exact pathway only makes sense for the linear model because we materialize the inverse Hessian. So playing with indexes for multiple arch/weight Hessian pairs here is not very meaningful either
 
                     hessian_matrices_dadw = [hessian(
-                        loss2 * 1, weight_buffer[j][idx], arch_param
-                    ) for arch_param in model.arch_params() for idx in range(len(weight_buffer[j]))]
+                        loss2 * 1, weight_buffer[i-j-1][idx], arch_param
+                    ) for arch_param in model.arch_params() for idx in range(len(weight_buffer[i-j-1]))]
 
 
                     # if hasattr(model, "fc1"):
@@ -248,3 +252,4 @@ def sotl_gradient(
     "dominant_eigenvalues":dominant_eigenvalues, 
     "da_direct":da_direct,
     "dw_direct":dw}
+
