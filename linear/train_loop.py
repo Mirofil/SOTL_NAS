@@ -135,6 +135,8 @@ def train_bptt(
             xs, ys = torch.split(batch[0], batch_size), torch.split(
                 batch[1], batch_size
             )
+            if len(xs) != T:
+                continue
             if features is not None:
                 xs = [x[:, features] for x in xs]
             
@@ -147,20 +149,22 @@ def train_bptt(
 
             weight_buffer = WeightBuffer(T=T, checkpoint_freq=w_checkpoint_freq)
             weight_buffer.add(model, 0)
+            # weight_buffer[0][0] = weight_buffer[0][0].detach()
+            # weight_buffer[0][0].requires_grad = True
             sotl = 0
 
             losses = []
 
             for intra_batch_idx, (x, y) in enumerate(zip(xs, ys),1):
+                
                 x, y = x.to(device), y.to(device)
 
                 loss, train_acc_top1 = train_step(x=x, y=y, criterion=criterion, model=model, 
                 w_optimizer=w_optimizer, weight_buffer=weight_buffer, grad_clip=grad_clip, 
                     intra_batch_idx=intra_batch_idx, config=config, optimizer_mode=optimizer_mode, debug=debug)
 
-                if optimizer_mode == "autograd":
-                    losses.append(loss)
-                    sotl = sotl + loss
+                losses.append(loss)
+                sotl = loss
 
                 true_batch_index += 1
                 if mode == "joint":
@@ -230,7 +234,7 @@ def train_bptt(
                     # da_direct = arch_gradients["da_direct"]
                     # dw_direct = arch_gradients["dw_direct"]
 
-                    # weights_after_rollout = switch_weights(model, weight_buffer[0])
+                    weights_after_rollout = switch_weights(model, weight_buffer[0])
 
                     if debug:
                         print(f"Epoch: {epoch}, batch: {batch_idx} Arch grad: {total_arch_gradient}")
