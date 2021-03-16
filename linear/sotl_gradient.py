@@ -102,6 +102,7 @@ def sotl_gradient(
             top_level_y = top_level_y.to(device)
 
 
+
             # (computing the first two terms in (2)) Gradients using the latest-in-time weights, ie. to compute dL(w_t, alpha)/da, we need dL(w_t,alpha)/dalpha, dL(w_t,alpha)/dw
             top_level_weights = weight_buffer[i]
             old_weights = switch_weights(model, top_level_weights)
@@ -114,10 +115,12 @@ def sotl_gradient(
             # no_longer_needed_weights = switch_weights(model, old_weights)
 
             # (computing the sum of gradients in (1))
-            for j in range(0, i+1, 1):
-
+            for j in range(0, i, 1):
                 x = xs[i-j].to(device)
                 y = ys[i-j].to(device)
+                for idx in range(len(weight_buffer)):
+                    weight_buffer[idx][0] = weight_buffer[idx][0].detach()
+                    weight_buffer[idx][0].requires_grad=True
 
                 loss2 = compute_train_loss(x, y, criterion, y_pred=model(x, weight_buffer[i-j]), model=model)
 
@@ -128,11 +131,6 @@ def sotl_gradient(
                 elif inv_hess == "exact":
                     prods = [torch.eye(w.shape[1]) for w in weight_buffer[i-j-2]]
                     for k in range(0, j, 1):
-                        # print(j)
-                        # print(f"Frist : {weight_buffer[i-k-1]}")
-                        # print(f"second: {weight_buffer[i-k]}")
-                        if -k-1 == -j-1:
-                            print("FUCK")
 
                         loss3 = compute_train_loss(x=xs[i-k].to(device), y=ys[i-k].to(device), criterion=criterion, 
                             y_pred=model(xs[i-k].to(device), weight_buffer[i-k]), model=model)
@@ -156,7 +154,7 @@ def sotl_gradient(
                         if ihvp == "ift":
                             ihvp_vec = torch.matmul(grad_w, inverse_hess_dwdw)
                         elif ihvp == "exact":
-                            ihvp_vec = torch.matmul(grad_w, inverse_hess_dwdw)
+                            ihvp_vec = inverse_hess_dwdw
                         elif ihvp == "neumann":
                             dL_train_dw = torch.autograd.grad(loss2, model.weight_params(), create_graph=True)
                             ihvp_vec = approx_inverse_hvp(v=grad_w, f=dL_train_dw, w=list(model.weight_params()), lr=w_lr, steps=500)
@@ -231,6 +229,7 @@ def sotl_gradient(
                 else:
                     raise NotImplementedError
 
+
                 total_arch_gradient_local = [
                     -w_lr*da1 for da1 in second_order_terms
                 ]
@@ -241,19 +240,25 @@ def sotl_gradient(
                     for g1, g2 in zip(total_arch_gradient, total_arch_gradient_local):
                         g1.add_(g2)
 
+            final_grad = [0 for _ in range(len(total_arch_gradient))]
             if total_arch_gradient is None:
                 total_arch_gradient = da_direct
             else:
-                for arch_grad, direct_grad in zip(total_arch_gradient, da_direct):
-                    arch_grad.add_(direct_grad)
-
+                for idx, (arch_grad, direct_grad) in enumerate(zip(total_arch_gradient, da_direct)):
+                    
+                    final_grad[idx] = torch.matmul(dw[0], total_arch_gradient[idx])
+                    mul = final_grad[idx].clone()
+                    final_grad[idx] = final_grad[idx] + direct_grad
+                    # arch_grad.add_(direct_grad)
     # print(total_arch_gradient)
     if normalize_a_lr:
         for g in total_arch_gradient:
             g.multiply_(T/grad_inner_loop_order)
 
-    return {"total_arch_gradient":total_arch_gradient, 
+    return {"total_arch_gradient":final_grad, 
     "dominant_eigenvalues":dominant_eigenvalues, 
     "da_direct":da_direct,
-    "dw_direct":dw}
+    "dw_direct":dw,
+    "nested_grad": total_arch_gradient,
+    "multiplied":torch.ones(total_arch_gradient[0].t().shape) @ total_arch_gradient}
 

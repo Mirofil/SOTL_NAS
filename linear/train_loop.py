@@ -227,14 +227,14 @@ def train_bptt(
                             optimizer_mode=optimizer_mode,
                             arch_train_data=arch_train_data,
                             sotl=sotl,
-                            debug=False)
+                            debug=True)
                     total_arch_gradient = arch_gradients["total_arch_gradient"]
 
                     # # #TODO DELETE THIS LINE LATER
                     # da_direct = arch_gradients["da_direct"]
                     # dw_direct = arch_gradients["dw_direct"]
 
-                    weights_after_rollout = switch_weights(model, weight_buffer[0])
+                    # weights_after_rollout = switch_weights(model, weight_buffer[0])
 
                     if debug:
                         print(f"Epoch: {epoch}, batch: {batch_idx} Arch grad: {total_arch_gradient}")

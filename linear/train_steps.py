@@ -80,8 +80,8 @@ def train_step(x, y, criterion, model, w_optimizer, weight_buffer, grad_clip, co
         grads = torch.autograd.grad(
             loss,
             weight_buffer[-1],
-            retain_graph=True,
-            create_graph=True
+            create_graph=True,
+            retain_graph=True
         )
         # torch.nn.utils.clip_grad_norm_(grads, grad_clip)
 
@@ -133,21 +133,23 @@ def arch_step(model, criterion, xs, ys, weight_buffer, w_lr, hvp, inv_hess, ihvp
             arch_gradient_loss, _ = compute_train_loss(x=val_xs[0], y=val_ys[0], criterion=criterion, 
                 y_pred=model(val_xs[0], weight=weight_buffer[-1]), model=model, return_acc=True)
             
-        total_arch_gradient = torch.autograd.grad(arch_gradient_loss, model.arch_params())
+        total_arch_gradient = torch.autograd.grad(arch_gradient_loss, model.arch_params(), retain_graph=True if debug else False)
         
         if debug:
             if val_xs is not None:
                 x, y = val_xs[0], val_ys[0]
             else:
-                x, y = xs[0], ys[0]
-            weight_buffer[-1][0] = weight_buffer[-1][0].detach()
-            weight_buffer[-1][0].requires_grad = True
+                x, y = xs[-1], ys[-1]
+            w_grad = torch.autograd.grad(weight_buffer[-2], model.arch_params(), grad_outputs=torch.ones((1,18)))
+            weight_buffer[-2][0] = weight_buffer[-2][0].detach()
+            weight_buffer[-2][0].requires_grad = True
             arch_gradient_loss2, _ = compute_train_loss(x=x, y=y, criterion=criterion, 
-                y_pred=model(x, weight=weight_buffer[-1]), model=model, return_acc=True)
+                y_pred=model(x, weight=weight_buffer[-2]), model=model, return_acc=True)
             da_direct = torch.autograd.grad(arch_gradient_loss2, model.arch_params(), retain_graph=True)
-            dw_direct = torch.autograd.grad(arch_gradient_loss2, weight_buffer[-1])
+            dw_direct = torch.autograd.grad(arch_gradient_loss2, weight_buffer[-2])
             arch_gradients["da_direct"] = da_direct
             arch_gradients["dw_direct"] = dw_direct
+            arch_gradients["nested_grad"] = w_grad
                 
 
         arch_gradients["total_arch_gradient"] = total_arch_gradient
