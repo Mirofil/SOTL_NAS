@@ -207,6 +207,12 @@ def train_bptt(
                 if epoch >= w_warm_start:
                     start_time = time.time()
 
+                    if arch_train_data == "sotl":
+                        outers = losses
+                    else:
+                        outers = [compute_train_loss(x=val_x.to(device), y=val_y.to(device), criterion=criterion, 
+                            y_pred=model(val_x.to(device), weight=weight_buffer[-1]), model=model) for val_x, val_y in zip(val_xs, val_ys)]
+
                     arch_gradients = arch_step(model=model,
                             criterion=criterion,
                             xs=xs,
@@ -227,7 +233,7 @@ def train_bptt(
                             a_optimizer=a_optimizer,
                             optimizer_mode=optimizer_mode,
                             arch_train_data=arch_train_data,
-                            outers=losses,
+                            outers=outers,
                             debug=debug,
                             recurrent=recurrent)
                     total_arch_gradient = arch_gradients["total_arch_gradient"]

@@ -55,13 +55,18 @@ def approx_inverse_hvp(v, f, w, lr, steps = 5):
     return lr * p
 
 def dw_da(model, criterion, xs, ys, i, dw, weight_buffer: Sequence, w_lr:float,
-grad_inner_loop_order=1, hvp="exact", 
-val_ys=None, device = 'cuda' if torch.cuda.is_available() else 'cpu',
+grad_inner_loop_order=1, hvp="exact", val_xs=None,val_ys=None, 
+device = 'cuda' if torch.cuda.is_available() else 'cpu',
 inv_hess = "exact", ihvp="exact", recurrent=True, debug=False):
     total_arch_gradient, hessian_matrices_dadw, inv_hess_matrices_dwdw = None, None, None
     debug_info = defaultdict(dict)
 
-    for j in range(0, i if not recurrent else 1, 1):
+    if i == 0:
+
+        total_arch_gradient, hessian_matrices_dadw, inv_hess_matrices_dwdw = [torch.zeros(w.shape).t() for w in dw], [torch.zeros(w.shape).t() for w in dw], [torch.zeros(w.shape).t() for w in dw]
+
+
+    for j in range(0, i if not recurrent else min(1, i), 1):
         if not recurrent:
             j = i - j -1
         x = xs[j].to(device)
@@ -90,7 +95,6 @@ inv_hess = "exact", ihvp="exact", recurrent=True, debug=False):
                 # print(hess_matrices_dwdw[0].shape)
                 for idx, (prod, hess) in enumerate(zip(prods, hess_matrices_dwdw)):
                     prods[idx] = torch.matmul(prods[idx], torch.eye(hess.shape[1]) - w_lr*hess)
-            
             inv_hess_matrices_dwdw = prods
 
 
@@ -239,20 +243,14 @@ def sotl_gradient(
 ) -> Sequence:
 
     total_arch_gradient, loss, da_direct, dw, dominant_eigenvalues = None, None, None, None, None
-    debug_info = {}
 
     assert len(outers) == 1 or len(outers) == len(xs)
-    if (grad_inner_loop_order is None) or (grad_inner_loop_order <= 0):
-        grad_inner_loop_order = min([len(weight_buffer), len(xs), len(ys)])
-    if (grad_outer_loop_order is None) or (grad_outer_loop_order <= 0):
-        grad_outer_loop_order = min([len(weight_buffer), len(xs), len(ys)])
-        if (val_xs is not None) and (val_ys is not None):
-            grad_outer_loop_order = min([grad_outer_loop_order, len(val_xs), len(val_ys)])
 
-    if val_xs is None:
-        grad_inner_loop_order = grad_inner_loop_order - 1
+    if grad_outer_loop_order is not None and grad_outer_loop_order > 0:
+        outers = outers[-grad_outer_loop_order:]
+
     if (
-        len(weight_buffer) == 2 
+        len(weight_buffer) == 56568
     ):  
         loss = criterion(model(xs[0], weight_buffer[0], model.fc1.alphas), ys[0])
         da_direct = [y if y is not None else torch.zeros(x.size()) for x,y in zip(model.arch_params(), torch.autograd.grad(loss, model.arch_params(), retain_graph=True, allow_unused=True))]
@@ -268,21 +266,23 @@ def sotl_gradient(
             len(outers)-1, -1, -1
         ):
 
-            top_level_x = xs[i]
-            top_level_y = xs[i]
+            if len(outers) == 1: # Val
+                cutoff = len(weight_buffer)-1 if val_xs is not None else len(weight_buffer)-2
+            else: #SoTL
+                cutoff = i
+
+            if val_xs is None:
+                top_level_x = xs[cutoff]
+                top_level_y = ys[cutoff]
+            else:
+                top_level_x = val_xs[0]
+                top_level_y = val_ys[0]
 
             top_level_x = top_level_x.to(device)
             top_level_y = top_level_y.to(device)
 
-            if len(outers) == 1: # Val
-                cutoff = len(xs)
-            else: #SoTL
-                cutoff = i+1
-
-
-
             # (computing the first two terms in (2)) Gradients using the latest-in-time weights, ie. to compute dL(w_t, alpha)/da, we need dL(w_t,alpha)/dalpha, dL(w_t,alpha)/dw
-            top_level_weights = weight_buffer[i]
+            top_level_weights = weight_buffer[cutoff]
             old_weights = switch_weights(model, top_level_weights)
             top_level_loss = compute_train_loss(top_level_x, top_level_y, criterion, y_pred=model(top_level_x, top_level_weights), model=model)
             
@@ -295,6 +295,7 @@ def sotl_gradient(
                 i=cutoff, weight_buffer=weight_buffer, w_lr=w_lr,
                 grad_inner_loop_order=grad_inner_loop_order, hvp=hvp, 
                 device = device, inv_hess = inv_hess, ihvp=ihvp, recurrent=recurrent, debug=debug)
+            
             total_arch_gradient=hypergrads["total_arch_gradient"]
 
 

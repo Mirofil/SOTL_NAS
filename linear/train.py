@@ -6,7 +6,7 @@
 # python linear/train.py --model_type=max_deg --dataset=sklearn_friedman1 --dry_run=False --T=1 --a_weight_decay=0.1 --grad_outer_loop_order=1 --grad_inner_loop_order=1 --mode=bilevel --device=cpu --optimizer_mode=autograd --n_samples=50000  --epochs=1
 
 # python linear/train.py --model_type=MNIST --dataset=MNIST --dry_run=False --T=1 --w_warm_start=0 --grad_outer_loop_order=-1 --grad_inner_loop_order=-1 --mode=bilevel --device=cuda --extra_weight_decay=0.0001 --w_weight_decay=0 --arch_train_data=val
-# python linear/train.py --model_type=max_deg --epochs 3 --dataset=fourier --dry_run=True --grad_outer_loop_order=-1 --grad_inner_loop_order=-1 --mode=bilevel --device=cpu --ihvp=exact --inv_hess=exact --hvp=exact --rand_seed 1 --arch_train_data val --optimizer_mode=manual --T=3
+# python linear/train.py --model_type=max_deg --epochs 3 --dataset=fourier --dry_run=True --grad_outer_loop_order=-1 --grad_inner_loop_order=-1 --mode=bilevel --device=cpu --ihvp=exact --inv_hess=exact --hvp=exact --rand_seed 1 --arch_train_data sotl --optimizer_mode=manual --T=3 --recurrent True
 #pip install --force git+https://github.com/Mirofil/pytorch-hessian-eigenthings.git
 
 import itertools
@@ -62,11 +62,11 @@ def main(epochs = 50,
     w_decay_order=2,
     w_lr = 1e-2,
     w_momentum=0.0,
-    w_weight_decay=0,
+    w_weight_decay=0.001,
     a_decay_order=2,
     a_lr = 1e-2,
     a_momentum = 0.0,
-    a_weight_decay = 0,
+    a_weight_decay = 0.001,
     T = 10,
     grad_clip = 100,
     logging_freq = 200,

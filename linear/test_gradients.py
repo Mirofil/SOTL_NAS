@@ -41,8 +41,8 @@ from utils_metrics import (ValidAccEvaluator, obtain_accuracy, SumOfWhatever)
 from train_loop import valid_func, train_bptt
 
 
-def train_model(epochs = 2,
-    steps_per_epoch=None,
+def train_model(epochs = 1,
+    steps_per_epoch=1,
     batch_size = 64,
     n_features = 18,
     n_samples = 5000,

@@ -127,14 +127,11 @@ def arch_step(model, criterion, xs, ys, weight_buffer, w_lr, hvp, inv_hess, ihvp
         total_arch_gradient = arch_gradients["total_arch_gradient"]
     elif optimizer_mode == "autograd":
         arch_gradients = {}
-        if arch_train_data == "sotl":
-            arch_gradient_loss = outers[-1]
-        elif arch_train_data == "val":
-            #TODO DELETE THIS DETACH ONCE DONE DEBUGGING
-            # weight_buffer[-1][0] = weight_buffer[-1][0].detach()
-            arch_gradient_loss, _ = compute_train_loss(x=val_xs[0], y=val_ys[0], criterion=criterion, 
-                y_pred=model(val_xs[0], weight=weight_buffer[-1]), model=model, return_acc=True)
-            
+        if grad_outer_loop_order is not None and grad_outer_loop_order > 0:
+            arch_gradient_loss = sum(outers[-grad_outer_loop_order:])
+        else:
+            arch_gradient_loss = sum(outers)
+        
         total_arch_gradient = torch.autograd.grad(arch_gradient_loss, model.arch_params(), retain_graph=True if debug else False)
         
         if debug:
@@ -161,11 +158,6 @@ def arch_step(model, criterion, xs, ys, weight_buffer, w_lr, hvp, inv_hess, ihvp
                     interim.append(grads[0][0][0])
                 w_grads[idx] = torch.stack(interim)
 
-            weight_buffer[-2][0] = weight_buffer[-2][0].detach()
-            weight_buffer[-2][0].requires_grad = True
-            arch_gradient_loss2, _ = compute_train_loss(x=x, y=y, criterion=criterion, 
-                y_pred=model(x, weight=weight_buffer[-2]), model=model, return_acc=True)
-            da_direct = torch.autograd.grad(arch_gradient_loss2, model.arch_params(), retain_graph=True)
             da_direct = {}
             for idx in range(len(weight_buffer)-1):
                 ws = [w.detach() for w in weight_buffer[idx]]
@@ -182,9 +174,6 @@ def arch_step(model, criterion, xs, ys, weight_buffer, w_lr, hvp, inv_hess, ihvp
 
                 hess_matrices_dwdw[idx] = [hessian(loss3*1, w, w)[0] for w in weight_buffer[idx]]
 
-
-            loss2 = compute_train_loss(xs[1], ys[1], criterion, y_pred=model(x, weight_buffer[1]), model=model)
-
             hessian_matrices_dadw = {}
             for idx in range(len(weight_buffer)-1):
                 loss2 = compute_train_loss(xs[idx], ys[idx], criterion, 
@@ -194,8 +183,6 @@ def arch_step(model, criterion, xs, ys, weight_buffer, w_lr, hvp, inv_hess, ihvp
                     loss2 * 1, weight_buffer[idx][i], arch_param
                 ) for arch_param in model.arch_params() for i in range(len(weight_buffer[idx]))]
                 
-
-            dw_direct = torch.autograd.grad(arch_gradient_loss2, weight_buffer[-2])
             dw_direct = {}
             for idx in range(len(weight_buffer)-1):
                 ws = [w.detach() for w in weight_buffer[idx]]
