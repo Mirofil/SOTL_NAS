@@ -240,7 +240,7 @@ def sotl_gradient(
 
     total_arch_gradient, loss, da_direct, dw, dominant_eigenvalues = None, None, None, None, None
     debug_info = {}
-    
+
     assert len(outers) == 1 or len(outers) == len(xs)
     if (grad_inner_loop_order is None) or (grad_inner_loop_order <= 0):
         grad_inner_loop_order = min([len(weight_buffer), len(xs), len(ys)])
@@ -268,8 +268,8 @@ def sotl_gradient(
             len(outers)-1, -1, -1
         ):
 
-            top_level_x = outers[i]
-            top_level_y = outers[i]
+            top_level_x = xs[i]
+            top_level_y = xs[i]
 
             top_level_x = top_level_x.to(device)
             top_level_y = top_level_y.to(device)
@@ -277,14 +277,13 @@ def sotl_gradient(
             if len(outers) == 1: # Val
                 cutoff = None
             else: #SoTL
-                cutoff = outers+1
+                cutoff = i+1
 
 
 
             # (computing the first two terms in (2)) Gradients using the latest-in-time weights, ie. to compute dL(w_t, alpha)/da, we need dL(w_t,alpha)/dalpha, dL(w_t,alpha)/dw
             top_level_weights = weight_buffer[i]
             old_weights = switch_weights(model, top_level_weights)
-
             top_level_loss = compute_train_loss(top_level_x, top_level_y, criterion, y_pred=model(top_level_x, top_level_weights), model=model)
             
             da_direct = [y if y is not None else torch.zeros(x.size()).to(device) for x,y in zip(model.arch_params(), torch.autograd.grad(top_level_loss, model.arch_params(), retain_graph=True, allow_unused=True))]
