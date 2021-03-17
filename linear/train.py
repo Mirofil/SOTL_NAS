@@ -6,7 +6,7 @@
 # python linear/train.py --model_type=max_deg --dataset=sklearn_friedman1 --dry_run=False --T=1 --a_weight_decay=0.1 --grad_outer_loop_order=1 --grad_inner_loop_order=1 --mode=bilevel --device=cpu --optimizer_mode=autograd --n_samples=50000  --epochs=1
 
 # python linear/train.py --model_type=MNIST --dataset=MNIST --dry_run=False --T=1 --w_warm_start=0 --grad_outer_loop_order=-1 --grad_inner_loop_order=-1 --mode=bilevel --device=cuda --extra_weight_decay=0.0001 --w_weight_decay=0 --arch_train_data=val
-# python linear/train.py --model_type=max_deg --epochs 3 --dataset=fourier --dry_run=True --T=5 --grad_outer_loop_order=-1 --grad_inner_loop_order=-1 --mode=bilevel --device=cpu --optimizer_mode=manual --ihvp=exact --inv_hess=exact --hvp=exact --rand_seed 1 --arch_train_data val
+# python linear/train.py --model_type=max_deg --epochs 3 --dataset=fourier --dry_run=True --T=5 --grad_outer_loop_order=-1 --grad_inner_loop_order=-1 --mode=bilevel --device=cpu --ihvp=exact --inv_hess=exact --hvp=exact --rand_seed 1 --arch_train_data val --optimizer_mode=manual
 #pip install --force git+https://github.com/Mirofil/pytorch-hessian-eigenthings.git
 
 import itertools
@@ -106,6 +106,8 @@ def main(epochs = 50,
     config = locals()
     if dry_run:
         os.environ['WANDB_MODE'] = 'dryrun'
+    if debug:
+        os.environ['WANDB_SILENT']="true"
     wandb_auth()
 
     import warnings
@@ -143,7 +145,7 @@ def main(epochs = 50,
 
     model, metrics = train_bptt(
         epochs=epochs if not smoke_test else 4,
-        steps_per_epoch=steps_per_epoch if not smoke_test else 5,
+        steps_per_epoch=steps_per_epoch,
         model=model,
         criterion=criterion,
         w_optimizer=w_optimizer,

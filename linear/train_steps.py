@@ -41,7 +41,7 @@ from utils_metrics import (ValidAccEvaluator, obtain_accuracy, SumOfWhatever)
 
 def train_step(x, y, criterion, model, w_optimizer, weight_buffer, grad_clip, config,
     intra_batch_idx, optimizer_mode, debug=False):
-
+    debug = False
     # We cannot use PyTorch optimizers for AutoGrad directly because the optimizers work inplace
     if optimizer_mode == "manual":
         loss, train_acc_top1 = compute_train_loss(x=x, y=y, criterion=criterion, 
@@ -57,7 +57,7 @@ def train_step(x, y, criterion, model, w_optimizer, weight_buffer, grad_clip, co
         # torch.nn.utils.clip_grad_norm_(grads, grad_clip)
 
         new_weights = []
-        if not debug:
+        if True:
             # w_optimizer.step()
             # w_optimizer.zero_grad()
             # weight_buffer.add(model, intra_batch_idx)
@@ -86,7 +86,7 @@ def train_step(x, y, criterion, model, w_optimizer, weight_buffer, grad_clip, co
         # torch.nn.utils.clip_grad_norm_(grads, grad_clip)
 
         new_weights = []
-        if not debug:
+        if True:
             for w, dw in zip(weight_buffer[-1], grads):
                 new_weights.append(w - config["w_lr"]*dw) # Manual SGD update that creates new nodes in the computational graph
 
@@ -100,7 +100,7 @@ def train_step(x, y, criterion, model, w_optimizer, weight_buffer, grad_clip, co
 def arch_step(model, criterion, xs, ys, weight_buffer, w_lr, hvp, inv_hess, ihvp,
     grad_inner_loop_order, grad_outer_loop_order, T, 
     normalize_a_lr, val_xs, val_ys, device, grad_clip, arch_train_data,
-    optimizer_mode, a_optimizer, sotl, debug=False):
+    optimizer_mode, a_optimizer, outers, debug=False):
     if optimizer_mode == "manual":
         arch_gradients = sotl_gradient(
             model=model,
@@ -120,13 +120,14 @@ def arch_step(model, criterion, xs, ys, weight_buffer, w_lr, hvp, inv_hess, ihvp
             val_xs=val_xs,
             val_ys=val_ys,
             device=device,
+            outers=outers
 
         )
         total_arch_gradient = arch_gradients["total_arch_gradient"]
     elif optimizer_mode == "autograd":
         arch_gradients = {}
         if arch_train_data == "sotl":
-            arch_gradient_loss = sotl
+            arch_gradient_loss = outers[-1]
         elif arch_train_data == "val":
             #TODO DELETE THIS DETACH ONCE DONE DEBUGGING
             # weight_buffer[-1][0] = weight_buffer[-1][0].detach()
@@ -140,26 +141,65 @@ def arch_step(model, criterion, xs, ys, weight_buffer, w_lr, hvp, inv_hess, ihvp
                 x, y = val_xs[0], val_ys[0]
             else:
                 x, y = xs[-1], ys[-1]
-            w_grad = torch.autograd.grad(weight_buffer[-2], model.arch_params(), grad_outputs=torch.ones((1,18)))
+            w_grad = torch.autograd.grad(weight_buffer[1], model.arch_params(), grad_outputs=torch.ones((1,18)), retain_graph=True)
             weight_buffer[-2][0] = weight_buffer[-2][0].detach()
             weight_buffer[-2][0].requires_grad = True
             arch_gradient_loss2, _ = compute_train_loss(x=x, y=y, criterion=criterion, 
                 y_pred=model(x, weight=weight_buffer[-2]), model=model, return_acc=True)
             da_direct = torch.autograd.grad(arch_gradient_loss2, model.arch_params(), retain_graph=True)
+
+            # f = lambda w: compute_train_loss(x=xs[0].to(device), y=ys[0].to(device), criterion=criterion, 
+            #     y_pred=model(xs[0].to(device), w), model=model)
+            # k = lambda w: criterion(model(xs[2].to(device), w), ys[2].to(device))
+            # mat = torch.rand((1,18), requires_grad=True)
+            # mat = torch.arange(18, dtype=torch.float32).reshape(1,-1)
+            # mat.requires_grad=True
+            # o = lambda w: F.mse_loss(F.linear(xs[2], w), torch.rand(64,1))
+            # o2 = lambda w: F.mse_loss(torch.rand(64,1), (lambda t: F.linear(xs[0], t))(w))
+
+
+            # loss = o2(mat)
+            # loss.backward(retain_graph=True)
+            # grad_params = torch.autograd.grad(loss, mat, create_graph=True)  # p is the weight matrix for a particular layer 
+            # hess_params = torch.zeros_like(grad_params[0])
+
+            # for i in range(grad_params[0].size(0)):
+            #     for j in range(grad_params[0].size(1)):
+            #         hess_params[i, j] = torch.autograd.grad(grad_params[0][i][j], mat, retain_graph=True)[0][i, j]
+
+            # hessian(f(weight_buffer[2])*1, weight_buffer[2][0])
+            # l = criterion(model(xs[0].to(device), weight_buffer[0]), ys[0].to(device))
+
+            loss3 = compute_train_loss(x=xs[0].to(device), y=ys[0].to(device), criterion=criterion, 
+                y_pred=model(xs[0].to(device), weight_buffer[0]), model=model)
+
+            hess_matrices_dwdw = [hessian(loss3*1, w, w) for w in weight_buffer[0]]
+
+            loss2 = compute_train_loss(xs[1], ys[1], criterion, y_pred=model(x, weight_buffer[1]), model=model)
+
+            hessian_matrices_dadw = [hessian(
+                loss2 * 1, weight_buffer[1][idx], arch_param
+            ) for arch_param in model.arch_params() for idx in range(len(weight_buffer[1]))]
+
             dw_direct = torch.autograd.grad(arch_gradient_loss2, weight_buffer[-2])
+
+            arch_gradients["total_arch_gradient"] = total_arch_gradient
             arch_gradients["da_direct"] = da_direct
             arch_gradients["dw_direct"] = dw_direct
             arch_gradients["nested_grad"] = w_grad
-                
+            arch_gradients["inv_hess_dwdw"] = hess_matrices_dwdw
+            arch_gradients["hess_dadw"] = hessian_matrices_dadw
 
-        arch_gradients["total_arch_gradient"] = total_arch_gradient
+                
+        else:
+            arch_gradients["total_arch_gradient"] = total_arch_gradient
 
     a_optimizer.zero_grad()
 
     for g, w in zip(total_arch_gradient, model.arch_params()):
         w.grad = g
     
-    if not debug:
+    if True:
         # arch_coef = torch.nn.utils.clip_grad_norm_(model.arch_params(), grad_clip)
         a_optimizer.step()
 
