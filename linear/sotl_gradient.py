@@ -59,6 +59,7 @@ grad_inner_loop_order=1, hvp="exact",
 val_ys=None, device = 'cuda' if torch.cuda.is_available() else 'cpu',
 inv_hess = "exact", ihvp="exact"):
     total_arch_gradient, hessian_matrices_dadw, inv_hess_matrices_dwdw = None, None, None
+    debug_info = defaultdict(dict)
     for j in range(0, i, 1):
         x = xs[j].to(device)
         y = ys[j].to(device)
@@ -73,14 +74,16 @@ inv_hess = "exact", ihvp="exact"):
                 loss2 * 1, weight_buffer[i-j-1][idx], weight_buffer[i-j-1][idx]
             )) for idx in range(len(weight_buffer[i-j-1]))]
         elif inv_hess == "exact":
-            prods = [torch.eye(w.shape[1]) for w in weight_buffer[i-j-2]]
+            prods = [torch.eye(w.shape[1]) for w in weight_buffer[j]]
             for k in range(0, j, 1):
-
+                l = lambda w: compute_train_loss(x=xs[i-k].to(device), y=ys[i-k].to(device), criterion=criterion, 
+                    y_pred=model(xs[i-k].to(device), [w]), model=model)
                 loss3 = compute_train_loss(x=xs[i-k].to(device), y=ys[i-k].to(device), criterion=criterion, 
                     y_pred=model(xs[i-k].to(device), weight_buffer[i-k]), model=model)
 
                 hess_matrices_dwdw = [hessian(loss3*1, w, w) for w in weight_buffer[i-k]]
-
+                # hess_matrices_dwdw = [torch.autograd.functional.hessian(l, w).reshape((18,18)) for w in weight_buffer[i-k]]
+                # print(hess_matrices_dwdw[0].shape)
                 for idx, (prod, hess) in enumerate(zip(prods, hess_matrices_dwdw)):
                     prods[idx] = torch.matmul(prods[idx], torch.eye(hess.shape[1]) - hess)
             
@@ -88,7 +91,7 @@ inv_hess = "exact", ihvp="exact"):
 
 
         elif inv_hess == "id":
-            inv_hess_matrices_dwdw = [torch.eye(weight_buffer[j][idx].shape[0]) for idx in range(len(weight_buffer[j]))] # TODO THERE SHOULD BE A RANGE TO ACCOMMODATE ALL TIMESTEPS
+            inv_hess_matrices_dwdw = [torch.eye(w.shape[1]) for w in weight_buffer[j]] # TODO THERE SHOULD BE A RANGE TO ACCOMMODATE ALL TIMESTEPS
             
 
         ihvp_vecs = [0 for _ in range(len(dw))]
@@ -104,7 +107,7 @@ inv_hess = "exact", ihvp="exact"):
                     ihvp_vec = approx_inverse_hvp(v=grad_w, f=dL_train_dw, w=list(model.weight_params()), lr=w_lr, steps=500)
                 ihvp_vecs[idx] = ihvp_vec
             else:
-                ihvp_vecs[idx] = grad_w
+                ihvp_vecs[idx] = inverse_hess_dwdw # TODO should be grad_w?
 
         if hvp == "exact":
             # INNER LOOP - computation of gradients within sum
@@ -205,9 +208,14 @@ inv_hess = "exact", ihvp="exact"):
             for g1, g2 in zip(total_arch_gradient, total_arch_gradient_local):
                 g1.add_(g2)
 
+        debug_info["total_arch_gradient"][j] = total_arch_gradient_local
+        debug_info["hess_dadw"][j] = hessian_matrices_dadw
+        debug_info["inv_hess_dwdw"][j] = [h[0] for h in inv_hess_matrices_dwdw]
+        debug_info["second_order_terms"][j] = second_order_terms
+
+
     return {"total_arch_gradient":total_arch_gradient, 
-        "hess_dadw":hessian_matrices_dadw,
-        "inv_hess_dwdw":inv_hess_matrices_dwdw}
+        "debug_info":debug_info}
 
 def sotl_gradient(
     model, criterion, xs, ys, weight_buffer: Sequence, w_lr:float, T:int, outers, 
@@ -303,6 +311,7 @@ def sotl_gradient(
     "dominant_eigenvalues":dominant_eigenvalues, 
     "nested_grad": total_arch_gradient,
     "multiplied":torch.ones(total_arch_gradient[0].t().shape) @ total_arch_gradient[0],
-    "inv_hess_dwdw":hypergrads["inv_hess_dwdw"],
-    "hess_dadw":hypergrads["hess_dadw"]}
+    "inv_hess_dwdw":hypergrads["debug_info"]["inv_hess_dwdw"],
+    "hess_dadw":hypergrads["debug_info"]["hess_dadw"],
+    "second_order_terms":hypergrads["debug_info"]["second_order_terms"]}
 
