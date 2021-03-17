@@ -57,10 +57,11 @@ def approx_inverse_hvp(v, f, w, lr, steps = 5):
 def dw_da(model, criterion, xs, ys, i, dw, weight_buffer: Sequence, w_lr:float,
 grad_inner_loop_order=1, hvp="exact", 
 val_ys=None, device = 'cuda' if torch.cuda.is_available() else 'cpu',
-inv_hess = "exact", ihvp="exact"):
+inv_hess = "exact", ihvp="exact", recurrent=True):
     total_arch_gradient, hessian_matrices_dadw, inv_hess_matrices_dwdw = None, None, None
     debug_info = defaultdict(dict)
-    for j in range(0, i, 1):
+
+    for j in range(0, i if not recurrent else 1, 1):
         x = xs[j].to(device)
         y = ys[j].to(device)
         for idx in range(len(weight_buffer)):
@@ -208,11 +209,41 @@ inv_hess = "exact", ihvp="exact"):
             for g1, g2 in zip(total_arch_gradient, total_arch_gradient_local):
                 g1.add_(g2)
 
+
+        #NOTE FOR LOGGING ONLY, DELETE LATER
+        loss3 = compute_train_loss(x=xs[j].to(device), y=ys[j].to(device), criterion=criterion, 
+            y_pred=model(xs[j].to(device), weight_buffer[j]), model=model)
+        inv_hess_matrices_dwdw = [hessian(loss3*1, w, w) for w in weight_buffer[j]]
+
+        loss2 = compute_train_loss(xs[j], ys[j], criterion, y_pred=model(xs[j], weight_buffer[j]), model=model)
+        hessian_matrices_dadw = [hessian(
+            loss2 * 1, weight_buffer[j][idx], arch_param
+        ) for arch_param in model.arch_params() for idx in range(len(weight_buffer[j]))]
+
         debug_info["total_arch_gradient"][j] = total_arch_gradient_local
         debug_info["hess_dadw"][j] = hessian_matrices_dadw
         debug_info["inv_hess_dwdw"][j] = [h[0] for h in inv_hess_matrices_dwdw]
         debug_info["second_order_terms"][j] = second_order_terms
+    
+    if recurrent:
+        for j in range(1, i):
+            # for idx in range(len(weight_buffer)):
+            #     weight_buffer[idx][0] = weight_buffer[idx][0].detach()
+            #     weight_buffer[idx][0].requires_grad=True
+            model.fc1.alphas = torch.nn.Parameter(model.fc1.alphas.detach(), requires_grad=True)
+            loss = compute_train_loss(xs[j], ys[j], criterion, model=model, y_pred=model(xs[j], weight_buffer[j]))
+            inv_hess_matrices_dwdw = [hessian(loss*1, w, w) for w in weight_buffer[j]]
 
+            loss = compute_train_loss(xs[j], ys[j], criterion, model=model, y_pred=model(xs[j], weight_buffer[j]))
+            hessian_matrices_dadw = [hessian(
+                loss * 1, weight_buffer[j][idx], arch_param
+            ) for arch_param in model.arch_params() for idx in range(len(weight_buffer[j-1]))]
+            total_arch_gradient = [g - w_lr*(h_dwdw @ g + h_dadw) for g, h_dwdw, h_dadw in zip(total_arch_gradient, inv_hess_matrices_dwdw, hessian_matrices_dadw)]
+
+            debug_info["total_arch_gradient"][j] = total_arch_gradient
+            debug_info["hess_dadw"][j] = hessian_matrices_dadw
+            debug_info["inv_hess_dwdw"][j] = [h[0] for h in inv_hess_matrices_dwdw]
+            debug_info["second_order_terms"][j] = second_order_terms
 
     return {"total_arch_gradient":total_arch_gradient, 
         "debug_info":debug_info}
