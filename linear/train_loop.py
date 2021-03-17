@@ -150,8 +150,8 @@ def train_bptt(
 
             weight_buffer = WeightBuffer(T=T, checkpoint_freq=w_checkpoint_freq)
             weight_buffer.add(model, 0)
-            weight_buffer[0][0] = weight_buffer[0][0].detach()
-            weight_buffer[0][0].requires_grad = True
+            # weight_buffer[0][0] = weight_buffer[0][0].detach()
+            # weight_buffer[0][0].requires_grad = True
             sotl = 0
 
             losses = []
@@ -227,7 +227,7 @@ def train_bptt(
                             a_optimizer=a_optimizer,
                             optimizer_mode=optimizer_mode,
                             arch_train_data=arch_train_data,
-                            outers=losses[-1:],
+                            outers=losses,
                             debug=debug,
                             recurrent=recurrent)
                     total_arch_gradient = arch_gradients["total_arch_gradient"]
@@ -268,6 +268,8 @@ def train_bptt(
 
                 weights_after_rollout = switch_weights(model, weight_buffer[0])
                 w_optimizer, a_optimizer, w_scheduler, a_scheduler = get_optimizers(model, config)
+
+                #TODO This doesnt work when recurrent=True.. wtf?
                 w_optimizer.load_state_dict(prerollout_w_optim_state_dict)
 
                 #NOTE this train step should be identical to the loop above apart from WeightBuffer management! But it is difficult to abstract this in pure PyTorch, although it could be hacked with kwargs forwarding?

@@ -41,7 +41,6 @@ from utils_metrics import (ValidAccEvaluator, obtain_accuracy, SumOfWhatever)
 
 def train_step(x, y, criterion, model, w_optimizer, weight_buffer, grad_clip, config,
     intra_batch_idx, optimizer_mode, debug=False):
-    debug = False
     # We cannot use PyTorch optimizers for AutoGrad directly because the optimizers work inplace
     if optimizer_mode == "manual":
         loss, train_acc_top1 = compute_train_loss(x=x, y=y, criterion=criterion, 

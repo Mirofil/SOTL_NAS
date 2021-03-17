@@ -62,6 +62,8 @@ inv_hess = "exact", ihvp="exact", recurrent=True, debug=False):
     debug_info = defaultdict(dict)
 
     for j in range(0, i if not recurrent else 1, 1):
+        if not recurrent:
+            j = i - j -1
         x = xs[j].to(device)
         y = ys[j].to(device)
         for idx in range(len(weight_buffer)):
@@ -77,11 +79,13 @@ inv_hess = "exact", ihvp="exact", recurrent=True, debug=False):
         elif inv_hess == "exact":
             prods = [torch.eye(w.shape[1]) for w in weight_buffer[j]]
             for k in range(0, j, 1):
+                if not recurrent:
+                    k = i-k
 
-                loss3 = compute_train_loss(x=xs[i-k].to(device), y=ys[i-k].to(device), criterion=criterion, 
-                    y_pred=model(xs[i-k].to(device), weight_buffer[i-k]), model=model)
+                loss3 = compute_train_loss(x=xs[k].to(device), y=ys[k].to(device), criterion=criterion, 
+                    y_pred=model(xs[k].to(device), weight_buffer[k]), model=model)
 
-                hess_matrices_dwdw = [hessian(loss3*1, w, w) for w in weight_buffer[i-k]]
+                hess_matrices_dwdw = [hessian(loss3*1, w, w) for w in weight_buffer[k]]
                 # hess_matrices_dwdw = [torch.autograd.functional.hessian(l, w).reshape((18,18)) for w in weight_buffer[i-k]]
                 # print(hess_matrices_dwdw[0].shape)
                 for idx, (prod, hess) in enumerate(zip(prods, hess_matrices_dwdw)):
@@ -127,29 +131,9 @@ inv_hess = "exact", ihvp="exact", recurrent=True, debug=False):
 
             second_order_terms = []
             for hess_dadw in hessian_matrices_dadw:
-                for ihvp_vec, inverse_hess_dwdw in zip(ihvp_vecs, inv_hess_matrices_dwdw):
+                for ihvp_vec in ihvp_vecs:
                     jvp = torch.matmul(ihvp_vec, -w_lr*hess_dadw)
                     second_order_terms.append(jvp)
-
-            # if j == 1:
-            #     loss4 = compute_train_loss(xs[1], ys[1], criterion, y_pred=model(xs[1], weight_buffer[1]), model=model)
-            #     item1 = hessian_matrices_dadw = [-hessian(
-            #         loss4 * 1, weight_buffer[1][idx], arch_param
-            #     ) for arch_param in model.arch_params() for idx in range(len(weight_buffer[1]))]
-            #     loss5 = compute_train_loss(xs[0], ys[0], criterion, y_pred=model(xs[0], weight_buffer[0]), model=model)
-            #     hess1 = [-hessian(
-            #         loss5 * 1, weight_buffer[0][idx], arch_param
-            #     ) for arch_param in model.arch_params() for idx in range(len(weight_buffer[1]))]
-            #     loss6 = compute_train_loss(xs[1], ys[1], criterion, y_pred=model(xs[1], weight_buffer[1]), model=model)
-
-            #     hess2=[hessian(
-            #         loss6 * 1, weight_buffer[1][idx], weight_buffer[1][idx]
-            #     ) for arch_param in model.arch_params() for idx in range(len(weight_buffer[1]))]
-
-            #     hess2 = [torch.eye(hess.shape[0])-hess for hess in hess2]
-            #     item2 = [h2 @ h1 for h1, h2 in zip(hess1, hess2)]
-
-            #     second_order_terms = [i1 for i1, i2 in zip(item1, item2)]
 
 
         elif hvp == "finite_diff":
@@ -229,7 +213,7 @@ inv_hess = "exact", ihvp="exact", recurrent=True, debug=False):
             # for idx in range(len(weight_buffer)):
             #     weight_buffer[idx][0] = weight_buffer[idx][0].detach()
             #     weight_buffer[idx][0].requires_grad=True
-            model.fc1.alphas = torch.nn.Parameter(model.fc1.alphas.detach(), requires_grad=True)
+            # model.fc1.alphas = torch.nn.Parameter(model.fc1.alphas.detach(), requires_grad=True)
             loss = compute_train_loss(xs[j], ys[j], criterion, model=model, y_pred=model(xs[j], weight_buffer[j]))
             inv_hess_matrices_dwdw = [hessian(loss*1, w, w) for w in weight_buffer[j]]
 
@@ -237,7 +221,7 @@ inv_hess = "exact", ihvp="exact", recurrent=True, debug=False):
             hessian_matrices_dadw = [hessian(
                 loss * 1, weight_buffer[j][idx], arch_param
             ) for arch_param in model.arch_params() for idx in range(len(weight_buffer[j-1]))]
-            total_arch_gradient = [g - w_lr*(h_dwdw @ g + h_dadw) for g, h_dwdw, h_dadw in zip(total_arch_gradient, inv_hess_matrices_dwdw, hessian_matrices_dadw)]
+            total_arch_gradient = [(torch.eye(h_dwdw.shape[0]) - w_lr*h_dwdw) @ g - w_lr*h_dadw for g, h_dwdw, h_dadw in zip(total_arch_gradient, inv_hess_matrices_dwdw, hessian_matrices_dadw)]
 
             debug_info["total_arch_gradient"][j] = total_arch_gradient
             debug_info["hess_dadw"][j] = hessian_matrices_dadw
@@ -257,6 +241,7 @@ def sotl_gradient(
     total_arch_gradient, loss, da_direct, dw, dominant_eigenvalues = None, None, None, None, None
     debug_info = {}
     
+    assert len(outers) == 1 or len(outers) == len(xs)
     if (grad_inner_loop_order is None) or (grad_inner_loop_order <= 0):
         grad_inner_loop_order = min([len(weight_buffer), len(xs), len(ys)])
     if (grad_outer_loop_order is None) or (grad_outer_loop_order <= 0):
@@ -277,23 +262,22 @@ def sotl_gradient(
     else:
         # (1) The outer loop equation is dSoTL/da = sum_{t=T-outer_loop_order)^T dL(w_t, alpha)/da
         # (2) The inner loop equation is dL(w_t, alpha)da = dL(w_t,alpha)/da + dL(w_t,alpha)/dw * -eta sum_{i=t-inner_loop_order}^t d^2L(w_i, alpha)dadw
-        
+        combined_outer_grads = None
         # OUTER LOOP
-        outer_loop_boundary = len(weight_buffer)-grad_outer_loop_order-2 
-
         for i in range(
-            len(weight_buffer) - 2, outer_loop_boundary, -1
+            len(outers)-1, -1, -1
         ):
-            if (val_xs is not None) and (val_ys is not None):
-                top_level_x = val_xs[0]
-                top_level_y = val_ys[0]
-                
-            else:
-                top_level_x = xs[i]
-                top_level_y = ys[i]
+
+            top_level_x = outers[i]
+            top_level_y = outers[i]
 
             top_level_x = top_level_x.to(device)
             top_level_y = top_level_y.to(device)
+
+            if len(outers) == 1: # Val
+                cutoff = None
+            else: #SoTL
+                cutoff = outers+1
 
 
 
@@ -308,11 +292,10 @@ def sotl_gradient(
 
             # no_longer_needed_weights = switch_weights(model, old_weights)
 
-            hypergrads = dw_da(model=model, criterion=criterion, xs=xs, ys=ys, dw=dw,
-                i=i, weight_buffer=weight_buffer, w_lr=w_lr,
+            hypergrads = dw_da(model=model, criterion=criterion, xs=xs[:cutoff], ys=ys[:cutoff], dw=dw,
+                i=i, weight_buffer=weight_buffer[:cutoff], w_lr=w_lr,
                 grad_inner_loop_order=grad_inner_loop_order, hvp=hvp, 
-                val_ys=val_ys, device = device,
-                inv_hess = inv_hess, ihvp=ihvp, recurrent=recurrent, debug=debug)
+                device = device, inv_hess = inv_hess, ihvp=ihvp, recurrent=recurrent, debug=debug)
             total_arch_gradient=hypergrads["total_arch_gradient"]
 
 
@@ -326,15 +309,20 @@ def sotl_gradient(
                     final_grad[idx] = torch.matmul(dw[idx], total_arch_gradient[idx])
                     mul = final_grad[idx].clone()
                     final_grad[idx] = final_grad[idx] + direct_grad
-                    # arch_grad.add_(direct_grad)
-    # print(total_arch_gradient)
+
+            if combined_outer_grads is None:
+                combined_outer_grads = final_grad
+            else:
+                for g1, g2 in zip(combined_outer_grads, final_grad):
+                    g1.add_(g2)
+
     if normalize_a_lr:
         for g in total_arch_gradient:
             g.multiply_(T/grad_inner_loop_order)
     
     
     if debug:
-        return {"total_arch_gradient":final_grad, 
+        return {"total_arch_gradient":combined_outer_grads, 
         "da_direct":da_direct,
         "dw_direct":dw,
         
