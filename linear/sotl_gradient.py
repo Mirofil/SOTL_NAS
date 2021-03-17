@@ -57,18 +57,19 @@ def approx_inverse_hvp(v, f, w, lr, steps = 5):
 def dw_da(model, criterion, xs, ys, i, dw, weight_buffer: Sequence, w_lr:float,
 grad_inner_loop_order=1, hvp="exact", 
 val_ys=None, device = 'cuda' if torch.cuda.is_available() else 'cpu',
-inv_hess = "exact", ihvp="exact", recurrent=True):
+inv_hess = "exact", ihvp="exact", recurrent=True, debug=False):
     total_arch_gradient, hessian_matrices_dadw, inv_hess_matrices_dwdw = None, None, None
     debug_info = defaultdict(dict)
 
     for j in range(0, i if not recurrent else 1, 1):
-        x = xs[j].to(device)
-        y = ys[j].to(device)
+        x = xs[i-j].to(device)
+        y = ys[i-j].to(device)
+        model.fc1.alphas = torch.nn.Parameter(model.fc1.alphas.detach(), requires_grad=True)
         for idx in range(len(weight_buffer)):
             weight_buffer[idx][0] = weight_buffer[idx][0].detach()
             weight_buffer[idx][0].requires_grad=True
 
-        loss2 = compute_train_loss(x, y, criterion, y_pred=model(x, weight_buffer[j]), model=model)
+        loss2 = compute_train_loss(x, y, criterion, y_pred=model(x, weight_buffer[i-j]), model=model)
 
         if inv_hess == "ift":
             inv_hess_matrices_dwdw = [torch.inverse(hessian(
@@ -86,7 +87,7 @@ inv_hess = "exact", ihvp="exact", recurrent=True):
                 # hess_matrices_dwdw = [torch.autograd.functional.hessian(l, w).reshape((18,18)) for w in weight_buffer[i-k]]
                 # print(hess_matrices_dwdw[0].shape)
                 for idx, (prod, hess) in enumerate(zip(prods, hess_matrices_dwdw)):
-                    prods[idx] = torch.matmul(prods[idx], torch.eye(hess.shape[1]) - hess)
+                    prods[idx] = torch.matmul(prods[idx], torch.eye(hess.shape[1]) - w_lr * hess)
             
             inv_hess_matrices_dwdw = prods
 
@@ -108,7 +109,7 @@ inv_hess = "exact", ihvp="exact", recurrent=True):
                     ihvp_vec = approx_inverse_hvp(v=grad_w, f=dL_train_dw, w=list(model.weight_params()), lr=w_lr, steps=500)
                 ihvp_vecs[idx] = ihvp_vec
             else:
-                ihvp_vecs[idx] = inverse_hess_dwdw # TODO should be grad_w?
+                ihvp_vecs[idx] = grad_w # TODO should be grad_w?
 
         if hvp == "exact":
             # INNER LOOP - computation of gradients within sum
@@ -116,7 +117,7 @@ inv_hess = "exact", ihvp="exact", recurrent=True):
             # NOTE this exact pathway only makes sense for the linear model because we materialize the inverse Hessian. So playing with indexes for multiple arch/weight Hessian pairs here is not very meaningful either
 
             hessian_matrices_dadw = [hessian(
-                loss2 * 1, weight_buffer[j][idx], arch_param
+                loss2 * 1, weight_buffer[i-j][idx], arch_param
             ) for arch_param in model.arch_params() for idx in range(len(weight_buffer[i-j-1]))]
 
 
@@ -129,7 +130,7 @@ inv_hess = "exact", ihvp="exact", recurrent=True):
             second_order_terms = []
             for hess_dadw in hessian_matrices_dadw:
                 for ihvp_vec, inverse_hess_dwdw in zip(ihvp_vecs, inv_hess_matrices_dwdw):
-                    jvp = torch.matmul(ihvp_vec, hess_dadw)
+                    jvp = torch.matmul(ihvp_vec, -w_lr * hess_dadw)
                     second_order_terms.append(jvp)
 
             # if j == 1:
@@ -200,7 +201,7 @@ inv_hess = "exact", ihvp="exact", recurrent=True):
 
 
         total_arch_gradient_local = [
-            -w_lr*da1 for da1 in second_order_terms
+            da1 for da1 in second_order_terms
         ]
         if total_arch_gradient is None:
             total_arch_gradient = total_arch_gradient_local
@@ -210,40 +211,42 @@ inv_hess = "exact", ihvp="exact", recurrent=True):
                 g1.add_(g2)
 
 
-        #NOTE FOR LOGGING ONLY, DELETE LATER
-        loss3 = compute_train_loss(x=xs[j].to(device), y=ys[j].to(device), criterion=criterion, 
-            y_pred=model(xs[j].to(device), weight_buffer[j]), model=model)
-        inv_hess_matrices_dwdw = [hessian(loss3*1, w, w) for w in weight_buffer[j]]
+        if debug:
+            #NOTE FOR LOGGING ONLY, DELETE LATER
+            loss3 = compute_train_loss(x=xs[j].to(device), y=ys[j].to(device), criterion=criterion, 
+                y_pred=model(xs[j].to(device), weight_buffer[j]), model=model)
+            inv_hess_matrices_dwdw = [hessian(loss3*1, w, w) for w in weight_buffer[j]]
 
-        loss2 = compute_train_loss(xs[j], ys[j], criterion, y_pred=model(xs[j], weight_buffer[j]), model=model)
-        hessian_matrices_dadw = [hessian(
-            loss2 * 1, weight_buffer[j][idx], arch_param
-        ) for arch_param in model.arch_params() for idx in range(len(weight_buffer[j]))]
+            loss2 = compute_train_loss(xs[j], ys[j], criterion, y_pred=model(xs[j], weight_buffer[j]), model=model)
+            hessian_matrices_dadw = [hessian(
+                loss2 * 1, weight_buffer[j][idx], arch_param
+            ) for arch_param in model.arch_params() for idx in range(len(weight_buffer[j]))]
 
-        debug_info["total_arch_gradient"][j] = total_arch_gradient_local
-        debug_info["hess_dadw"][j] = hessian_matrices_dadw
-        debug_info["inv_hess_dwdw"][j] = [h[0] for h in inv_hess_matrices_dwdw]
-        debug_info["second_order_terms"][j] = second_order_terms
-    
+            debug_info["total_arch_gradient"][j] = total_arch_gradient_local
+            debug_info["hess_dadw"][j] = hessian_matrices_dadw
+            debug_info["inv_hess_dwdw"][j] = [h[0] for h in inv_hess_matrices_dwdw]
+            debug_info["second_order_terms"][j] = second_order_terms
+        
     if recurrent:
         for j in range(1, i):
             # for idx in range(len(weight_buffer)):
             #     weight_buffer[idx][0] = weight_buffer[idx][0].detach()
             #     weight_buffer[idx][0].requires_grad=True
-            model.fc1.alphas = torch.nn.Parameter(model.fc1.alphas.detach(), requires_grad=True)
+            # model.fc1.alphas = torch.nn.Parameter(model.fc1.alphas.detach(), requires_grad=True)
             loss = compute_train_loss(xs[j], ys[j], criterion, model=model, y_pred=model(xs[j], weight_buffer[j]))
             inv_hess_matrices_dwdw = [hessian(loss*1, w, w) for w in weight_buffer[j]]
 
             loss = compute_train_loss(xs[j], ys[j], criterion, model=model, y_pred=model(xs[j], weight_buffer[j]))
             hessian_matrices_dadw = [hessian(
                 loss * 1, weight_buffer[j][idx], arch_param
-            ) for arch_param in model.arch_params() for idx in range(len(weight_buffer[j-1]))]
-            total_arch_gradient = [g - w_lr*(h_dwdw @ g + h_dadw) for g, h_dwdw, h_dadw in zip(total_arch_gradient, inv_hess_matrices_dwdw, hessian_matrices_dadw)]
+            ) for arch_param in model.arch_params() for idx in range(len(weight_buffer[j]))]
+            total_arch_gradient = [(torch.eye(h_dwdw.shape[0]) - w_lr*h_dwdw) @ g - w_lr*h_dadw for g, h_dwdw, h_dadw in zip(total_arch_gradient, inv_hess_matrices_dwdw, hessian_matrices_dadw)]
 
-            debug_info["total_arch_gradient"][j] = total_arch_gradient
-            debug_info["hess_dadw"][j] = hessian_matrices_dadw
-            debug_info["inv_hess_dwdw"][j] = [h[0] for h in inv_hess_matrices_dwdw]
-            debug_info["second_order_terms"][j] = second_order_terms
+            if debug:
+                debug_info["total_arch_gradient"][j] = total_arch_gradient
+                debug_info["hess_dadw"][j] = hessian_matrices_dadw
+                debug_info["inv_hess_dwdw"][j] = [h[0] for h in inv_hess_matrices_dwdw]
+                debug_info["second_order_terms"][j] = second_order_terms
 
     return {"total_arch_gradient":total_arch_gradient, 
         "debug_info":debug_info}
@@ -252,7 +255,7 @@ def sotl_gradient(
     model, criterion, xs, ys, weight_buffer: Sequence, w_lr:float, T:int, outers, 
     grad_outer_loop_order=1,grad_inner_loop_order=1, hvp="exact", 
     normalize_a_lr=False, weight_decay_term=0, val_xs = None, val_ys=None, device = 'cuda' if torch.cuda.is_available() else 'cpu',
-    mode="joint", inv_hess = "exact", ihvp="exact"
+    mode="joint", inv_hess = "exact", ihvp="exact", recurrent=True, debug=False
 ) -> Sequence:
 
     total_arch_gradient, loss, da_direct, dw, dominant_eigenvalues = None, None, None, None, None
@@ -313,7 +316,7 @@ def sotl_gradient(
                 i=i, weight_buffer=weight_buffer, w_lr=w_lr,
                 grad_inner_loop_order=grad_inner_loop_order, hvp=hvp, 
                 val_ys=val_ys, device = device,
-                inv_hess = inv_hess, ihvp=ihvp)
+                inv_hess = inv_hess, ihvp=ihvp, recurrent=recurrent, debug=debug)
             total_arch_gradient=hypergrads["total_arch_gradient"]
 
 
@@ -334,15 +337,18 @@ def sotl_gradient(
             g.multiply_(T/grad_inner_loop_order)
     
     
-
-    return {"total_arch_gradient":final_grad, 
-    "da_direct":da_direct,
-    "dw_direct":dw,
+    if debug:
+        return {"total_arch_gradient":final_grad, 
+        "da_direct":da_direct,
+        "dw_direct":dw,
+        
+        "dominant_eigenvalues":dominant_eigenvalues, 
+        "nested_grad": total_arch_gradient,
+        "multiplied":torch.ones(total_arch_gradient[0].t().shape) @ total_arch_gradient[0],
+        "inv_hess_dwdw":hypergrads["debug_info"]["inv_hess_dwdw"],
+        "hess_dadw":hypergrads["debug_info"]["hess_dadw"],
+        "second_order_terms":hypergrads["debug_info"]["second_order_terms"]}
     
-    "dominant_eigenvalues":dominant_eigenvalues, 
-    "nested_grad": total_arch_gradient,
-    "multiplied":torch.ones(total_arch_gradient[0].t().shape) @ total_arch_gradient[0],
-    "inv_hess_dwdw":hypergrads["debug_info"]["inv_hess_dwdw"],
-    "hess_dadw":hypergrads["debug_info"]["hess_dadw"],
-    "second_order_terms":hypergrads["debug_info"]["second_order_terms"]}
+    else:
+        return {"total_arch_gradient":fial_grad, "dominant_eigenvalues":dominant_eigenvalues}
 

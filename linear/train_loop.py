@@ -91,7 +91,8 @@ def train_bptt(
     decay_scheduler:str = 'linear',
     optimizer_mode="manual",
     bilevel_w_steps=None,
-    debug=False
+    debug=False,
+    recurrent=True
 ):
     orig_model_cfg = deepcopy(model.config)
     train_loader = torch.utils.data.DataLoader(
@@ -227,7 +228,8 @@ def train_bptt(
                             optimizer_mode=optimizer_mode,
                             arch_train_data=arch_train_data,
                             outers=losses[-1:],
-                            debug=debug)
+                            debug=debug,
+                            recurrent=recurrent)
                     total_arch_gradient = arch_gradients["total_arch_gradient"]
 
                     # # #TODO DELETE THIS LINE LATER

@@ -100,7 +100,7 @@ def train_step(x, y, criterion, model, w_optimizer, weight_buffer, grad_clip, co
 def arch_step(model, criterion, xs, ys, weight_buffer, w_lr, hvp, inv_hess, ihvp,
     grad_inner_loop_order, grad_outer_loop_order, T, 
     normalize_a_lr, val_xs, val_ys, device, grad_clip, arch_train_data,
-    optimizer_mode, a_optimizer, outers, debug=False):
+    optimizer_mode, a_optimizer, outers, debug=False, recurrent=True):
     if optimizer_mode == "manual":
         arch_gradients = sotl_gradient(
             model=model,
@@ -120,7 +120,9 @@ def arch_step(model, criterion, xs, ys, weight_buffer, w_lr, hvp, inv_hess, ihvp
             val_xs=val_xs,
             val_ys=val_ys,
             device=device,
-            outers=outers
+            outers=outers,
+            recurrent=recurrent,
+            debug=debug
 
         )
         total_arch_gradient = arch_gradients["total_arch_gradient"]
@@ -173,29 +175,6 @@ def arch_step(model, criterion, xs, ys, weight_buffer, w_lr, hvp, inv_hess, ihvp
                 loss, _ = compute_train_loss(x=xs[idx], y=ys[idx], criterion=criterion, 
                 y_pred=model(xs[idx], weight=ws), model=model, return_acc=True)
                 da_direct[idx]= torch.autograd.grad(loss, model.arch_params(), retain_graph=True)
-
-            # f = lambda w: compute_train_loss(x=xs[0].to(device), y=ys[0].to(device), criterion=criterion, 
-            #     y_pred=model(xs[0].to(device), w), model=model)
-            # k = lambda w: criterion(model(xs[2].to(device), w), ys[2].to(device))
-            # mat = torch.rand((1,18), requires_grad=True)
-            # mat = torch.arange(18, dtype=torch.float32).reshape(1,-1)
-            # mat.requires_grad=True
-            # o = lambda w: F.mse_loss(F.linear(xs[2], w), torch.rand(64,1))
-            # o2 = lambda w: F.mse_loss(torch.rand(64,1), (lambda t: F.linear(xs[0], t))(w))
-
-
-            # loss = o2(mat)
-            # loss.backward(retain_graph=True)
-            # grad_params = torch.autograd.grad(loss, mat, create_graph=True)  # p is the weight matrix for a particular layer 
-            # hess_params = torch.zeros_like(grad_params[0])
-
-            # for i in range(grad_params[0].size(0)):
-            #     for j in range(grad_params[0].size(1)):
-            #         hess_params[i, j] = torch.autograd.grad(grad_params[0][i][j], mat, retain_graph=True)[0][i, j]
-
-            # hessian(f(weight_buffer[2])*1, weight_buffer[2][0])
-            # l = criterion(model(xs[0].to(device), weight_buffer[0]), ys[0].to(device))
-
 
             hess_matrices_dwdw = {}
             for idx in range(len(weight_buffer)-1):
