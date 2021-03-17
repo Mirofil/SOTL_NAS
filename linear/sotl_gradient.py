@@ -77,8 +77,7 @@ inv_hess = "exact", ihvp="exact", recurrent=True, debug=False):
         elif inv_hess == "exact":
             prods = [torch.eye(w.shape[1]) for w in weight_buffer[j]]
             for k in range(0, j, 1):
-                l = lambda w: compute_train_loss(x=xs[i-k].to(device), y=ys[i-k].to(device), criterion=criterion, 
-                    y_pred=model(xs[i-k].to(device), [w]), model=model)
+
                 loss3 = compute_train_loss(x=xs[i-k].to(device), y=ys[i-k].to(device), criterion=criterion, 
                     y_pred=model(xs[i-k].to(device), weight_buffer[i-k]), model=model)
 
@@ -86,7 +85,7 @@ inv_hess = "exact", ihvp="exact", recurrent=True, debug=False):
                 # hess_matrices_dwdw = [torch.autograd.functional.hessian(l, w).reshape((18,18)) for w in weight_buffer[i-k]]
                 # print(hess_matrices_dwdw[0].shape)
                 for idx, (prod, hess) in enumerate(zip(prods, hess_matrices_dwdw)):
-                    prods[idx] = torch.matmul(prods[idx], torch.eye(hess.shape[1]) - hess)
+                    prods[idx] = torch.matmul(prods[idx], torch.eye(hess.shape[1]) - w_lr*hess)
             
             inv_hess_matrices_dwdw = prods
 
@@ -129,7 +128,7 @@ inv_hess = "exact", ihvp="exact", recurrent=True, debug=False):
             second_order_terms = []
             for hess_dadw in hessian_matrices_dadw:
                 for ihvp_vec, inverse_hess_dwdw in zip(ihvp_vecs, inv_hess_matrices_dwdw):
-                    jvp = torch.matmul(ihvp_vec, hess_dadw)
+                    jvp = torch.matmul(ihvp_vec, -w_lr*hess_dadw)
                     second_order_terms.append(jvp)
 
             # if j == 1:
@@ -200,7 +199,7 @@ inv_hess = "exact", ihvp="exact", recurrent=True, debug=False):
 
 
         total_arch_gradient_local = [
-            -w_lr*da1 for da1 in second_order_terms
+            da1 for da1 in second_order_terms
         ]
         if total_arch_gradient is None:
             total_arch_gradient = total_arch_gradient_local
