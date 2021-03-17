@@ -275,7 +275,7 @@ def sotl_gradient(
             top_level_y = top_level_y.to(device)
 
             if len(outers) == 1: # Val
-                cutoff = None
+                cutoff = len(xs)
             else: #SoTL
                 cutoff = i+1
 
@@ -291,8 +291,8 @@ def sotl_gradient(
 
             # no_longer_needed_weights = switch_weights(model, old_weights)
 
-            hypergrads = dw_da(model=model, criterion=criterion, xs=xs[:cutoff], ys=ys[:cutoff], dw=dw,
-                i=i, weight_buffer=weight_buffer[:cutoff], w_lr=w_lr,
+            hypergrads = dw_da(model=model, criterion=criterion, xs=xs, ys=ys, dw=dw,
+                i=cutoff, weight_buffer=weight_buffer, w_lr=w_lr,
                 grad_inner_loop_order=grad_inner_loop_order, hvp=hvp, 
                 device = device, inv_hess = inv_hess, ihvp=ihvp, recurrent=recurrent, debug=debug)
             total_arch_gradient=hypergrads["total_arch_gradient"]
