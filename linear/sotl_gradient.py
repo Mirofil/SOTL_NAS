@@ -64,7 +64,7 @@ inv_hess = "exact", ihvp="exact", recurrent=True, debug=False):
     for j in range(0, i if not recurrent else 1, 1):
         x = xs[i-j].to(device)
         y = ys[i-j].to(device)
-        model.fc1.alphas = torch.nn.Parameter(model.fc1.alphas.detach(), requires_grad=True)
+        # model.fc1.alphas = torch.nn.Parameter(model.fc1.alphas.detach(), requires_grad=True)
         for idx in range(len(weight_buffer)):
             weight_buffer[idx][0] = weight_buffer[idx][0].detach()
             weight_buffer[idx][0].requires_grad=True
@@ -232,21 +232,20 @@ inv_hess = "exact", ihvp="exact", recurrent=True, debug=False):
             # for idx in range(len(weight_buffer)):
             #     weight_buffer[idx][0] = weight_buffer[idx][0].detach()
             #     weight_buffer[idx][0].requires_grad=True
-            # model.fc1.alphas = torch.nn.Parameter(model.fc1.alphas.detach(), requires_grad=True)
+            model.fc1.alphas = torch.nn.Parameter(model.fc1.alphas.detach(), requires_grad=True)
             loss = compute_train_loss(xs[j], ys[j], criterion, model=model, y_pred=model(xs[j], weight_buffer[j]))
             inv_hess_matrices_dwdw = [hessian(loss*1, w, w) for w in weight_buffer[j]]
 
             loss = compute_train_loss(xs[j], ys[j], criterion, model=model, y_pred=model(xs[j], weight_buffer[j]))
             hessian_matrices_dadw = [hessian(
                 loss * 1, weight_buffer[j][idx], arch_param
-            ) for arch_param in model.arch_params() for idx in range(len(weight_buffer[j]))]
-            total_arch_gradient = [(torch.eye(h_dwdw.shape[0]) - w_lr*h_dwdw) @ g - w_lr*h_dadw for g, h_dwdw, h_dadw in zip(total_arch_gradient, inv_hess_matrices_dwdw, hessian_matrices_dadw)]
+            ) for arch_param in model.arch_params() for idx in range(len(weight_buffer[j-1]))]
+            total_arch_gradient = [g - w_lr*(h_dwdw @ g + h_dadw) for g, h_dwdw, h_dadw in zip(total_arch_gradient, inv_hess_matrices_dwdw, hessian_matrices_dadw)]
 
-            if debug:
-                debug_info["total_arch_gradient"][j] = total_arch_gradient
-                debug_info["hess_dadw"][j] = hessian_matrices_dadw
-                debug_info["inv_hess_dwdw"][j] = [h[0] for h in inv_hess_matrices_dwdw]
-                debug_info["second_order_terms"][j] = second_order_terms
+            debug_info["total_arch_gradient"][j] = total_arch_gradient
+            debug_info["hess_dadw"][j] = hessian_matrices_dadw
+            debug_info["inv_hess_dwdw"][j] = [h[0] for h in inv_hess_matrices_dwdw]
+            debug_info["second_order_terms"][j] = second_order_terms
 
     return {"total_arch_gradient":total_arch_gradient, 
         "debug_info":debug_info}
