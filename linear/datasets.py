@@ -13,6 +13,8 @@ from urllib.request import urlopen
 import scipy.io
 from sklearn.model_selection import train_test_split
 import sklearn.datasets
+
+
 def get_datasets(name, path=None, val_split=0.1, test_split=0.2, normalize=True, **kwargs):
     n_classes = None
     n_features=None
@@ -92,6 +94,37 @@ def get_datasets(name, path=None, val_split=0.1, test_split=0.2, normalize=True,
         dset_test = torch.utils.data.TensorDataset(x_test, y_test)
 
         n_classes = 1
+    
+    elif name == "MNISTrff":
+        max_label=2
+        root = '.'
+        input_size = 28
+        input_transform = transforms.Compose([
+            transforms.ToTensor(),
+            transforms.LinearTransformation(torch.eye(input_size**2), torch.zeros(input_size**2))
+        ])
+        mnist = datasets.MNIST(root + "data/MNIST", train=True, transform=input_transform, target_transform=None, download=True)
+        
+        x = mnist.data.reshape(-1, input_size**2)
+        y = mnist.targets.numpy().reshape(-1)
+        test = datasets.MNIST(root + "data/MNIST", train=False, transform=input_transform, target_transform=None, download=True)
+        xtest = test.data.reshape(-1, input_size**2)
+        ytest = test.targets.numpy().reshape(-1)
+        x = x.numpy()
+
+        # Subset generation
+
+        x_train = torch.tensor(x[np.where(y <max_label)], dtype=torch.float32)
+        y_train = torch.tensor(y[np.where(y < max_label)], dtype=torch.float32)
+        x_test = torch.tensor(xtest[np.where(ytest <max_label)], dtype=torch.float32)
+        y_test = torch.tensor(ytest[np.where(ytest < max_label)], dtype=torch.float32)
+
+        dset_train = torch.utils.data.TensorDataset(x_train, y_train)
+        dset_test = torch.utils.data.TensorDataset(x_test, y_test)
+
+
+        n_classes = max_label
+
 
     elif name == "sklearn_reg":
         x_train, y_train = sklearn.datasets.make_regression(n_samples=kwargs["n_samples"], 

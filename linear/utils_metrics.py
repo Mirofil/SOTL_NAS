@@ -38,8 +38,9 @@ class ValidAccEvaluator:
       logits = network(inputs.to(self.device))
       loss = criterion(logits, targets.to(self.device))
       if logits.shape[1] != 1:
-        val_acc_top1, val_acc_top5 = obtain_accuracy(logits.cpu().data, targets.data, topk=(1, 5))
-        val_acc_top1, val_acc_top5 = val_acc_top1.item(), val_acc_top5.item()
+        # TODO fix so that it doesnt crash if there is less than 5 classes
+        val_acc_top1 = obtain_accuracy(logits.cpu().data, targets.data, topk=(1,))[0]
+        val_acc_top1, val_acc_top5 = val_acc_top1.item(), val_acc_top1.item()
       else:
         val_acc_top1, val_acc_top5 = None, None
     network.train()

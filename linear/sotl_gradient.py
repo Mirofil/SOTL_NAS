@@ -334,5 +334,5 @@ def sotl_gradient(
         "second_order_terms":hypergrads["debug_info"]["second_order_terms"]}
     
     else:
-        return {"total_arch_gradient":final_grad, "dominant_eigenvalues":dominant_eigenvalues}
+        return {"total_arch_gradient":combined_outer_grads, "dominant_eigenvalues":dominant_eigenvalues}
 

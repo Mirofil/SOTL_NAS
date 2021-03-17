@@ -5,7 +5,7 @@ from torch import Tensor
 import numpy as np
 import matplotlib.pyplot as plt
 from traits import FeatureSelectableTrait
-
+from rff_mnist import *
 
 class LinearSquash(torch.nn.Linear, FeatureSelectableTrait):
     def __init__(self, in_features, out_features, bias, squash_type="softmax", **kwargs) -> None:
@@ -64,6 +64,31 @@ class FeatureSelection(torch.nn.Module):
             return F.softmax(*args, **kwargs)
         elif self.squash_type == "sigmoid":
             return torch.sigmoid(*args, **kwargs)
+
+class RFFEmbedding(torch.nn.Module):
+    def __init__(self, d, input_dim, l, renew=True, device='cuda' if torch.cuda.is_available() else 'cpu', **kwargs) -> None:
+        super().__init__()
+        # self.embedding = build_embedding(d=d, k=input_dim, l=l)
+        self.w = torch.rand(d, input_dim)
+        self.b = 2*np.pi * np.random.rand(d)
+        self.d = torch.tensor(d)
+        self.alpha_l = torch.nn.Parameter(torch.tensor(l, dtype=torch.float32), requires_grad=True)
+        self.renew = renew
+        self.counter = 0
+        self.input_dim = input_dim
+    def forward(self, x):
+        return self.embedding(x)
+
+    def embedding(self, X):
+        if self.renew and self.counter % 1 == 0:
+            self.w = torch.rand(self.d, self.input_dim)
+            self.b = 2*np.pi * np.random.rand(self.d)
+            self.counter += 1
+        n = X.shape[0]
+        X = torch.tensor(X, dtype=torch.float32)
+        fs = ((self.w/torch.sqrt(self.alpha_l)) @ X.T).T + torch.tensor(np.repeat([self.b], n, axis=0))
+        return torch.sqrt(2/self.d) * torch.cos(fs).float()
+
 
 class LinearMaxDeg(torch.nn.Linear):
     def __init__(self, *args, degree=30, **kwargs) -> None:

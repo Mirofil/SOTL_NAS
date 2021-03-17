@@ -82,7 +82,7 @@ def train_step(x, y, criterion, model, w_optimizer, weight_buffer, grad_clip, co
             create_graph=True
         )
         # TODO should there be retain_graph = True?
-        # torch.nn.utils.clip_grad_norm_(grads, grad_clip)
+        torch.nn.utils.clip_grad_norm_(grads, grad_clip)
 
         new_weights = []
         if True:
@@ -194,12 +194,12 @@ def arch_step(model, criterion, xs, ys, weight_buffer, w_lr, hvp, inv_hess, ihvp
 
             arch_gradients["total_arch_gradient"] = total_arch_gradient
             arch_gradients["total_arch_gradients"] = total_arch_gradients
-            arch_gradients["da_direct"] = da_direct
-            arch_gradients["dw_direct"] = dw_direct
-            arch_gradients["nested_grad"] = w_grad
-            arch_gradients["nested_grad_real"] = w_grads
-            arch_gradients["inv_hess_dwdw"] = hess_matrices_dwdw
-            arch_gradients["hess_dadw"] = hessian_matrices_dadw
+            # arch_gradients["da_direct"] = da_direct
+            # arch_gradients["dw_direct"] = dw_direct
+            # arch_gradients["nested_grad"] = w_grad
+            # arch_gradients["nested_grad_real"] = w_grads
+            # arch_gradients["inv_hess_dwdw"] = hess_matrices_dwdw
+            # arch_gradients["hess_dadw"] = hessian_matrices_dadw
 
                 
         else:
@@ -211,7 +211,7 @@ def arch_step(model, criterion, xs, ys, weight_buffer, w_lr, hvp, inv_hess, ihvp
         w.grad = g
     
     if True:
-        # arch_coef = torch.nn.utils.clip_grad_norm_(model.arch_params(), grad_clip)
+        arch_coef = torch.nn.utils.clip_grad_norm_(model.arch_params(), grad_clip)
         a_optimizer.step()
 
     return arch_gradients

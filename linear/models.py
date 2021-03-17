@@ -1,5 +1,5 @@
 import torch
-from layers import LinearSquash, LinearMaxDeg, FlexibleLinear, FeatureSelection
+from layers import LinearSquash, LinearMaxDeg, FlexibleLinear, FeatureSelection, RFFEmbedding
 import torch.nn as nn
 import torch.nn.functional as F
 import itertools
@@ -36,11 +36,10 @@ class RegressionNet(torch.nn.Module):
 
 
 class SoTLNet(RegressionNet):
-    def __init__(self, num_features = 2, task='reg', model_type = "softmax_mult",
+    def __init__(self, num_features = 2, model_type = "softmax_mult", task="whatever",
      weight_decay=0, n_classes=1, config=None, **kwargs):
         super().__init__(**kwargs)
         self.model_type = model_type
-        self.task = task
         self.num_features = num_features
         self.n_classes = n_classes
         self.config = config
@@ -52,6 +51,8 @@ class SoTLNet(RegressionNet):
             self.fc1 = LinearSquash(num_features, n_classes, bias=False, squash_type="sigmoid", **kwargs)
 
             self.model = self.fc1
+        elif model_type == "rff":
+            self.model = RFFRegression(1000, 784, 1e4)
         elif model_type == "max_deg":
             self.fc1 = LinearMaxDeg(num_features, n_classes, bias=False, **kwargs)
 
@@ -112,6 +113,18 @@ class SoTLNet(RegressionNet):
     def feature_normalizers(self):
         return self.model.feature_normalizers()
 
+
+class RFFRegression(RegressionNet):
+    def __init__(self, d, input_dim, l, num_classes=2):
+        super().__init__()
+        self.embedding = RFFEmbedding(d=d, input_dim=input_dim, l=l)
+        self.fc1 = FlexibleLinear(d, num_classes)
+
+    def forward(self, x, weight=None, *args, **kwargs):
+            
+        x = self.embedding(x)
+        x = self.fc1(x, weight=weight, **kwargs)
+        return x
         
 class LogReg(nn.Module, FeatureSelectableTrait):
     def __init__(self, input_dim=28*28, output_dim=10):

@@ -7,6 +7,8 @@
 
 # python linear/train.py --model_type=MNIST --dataset=MNIST --dry_run=False --T=1 --w_warm_start=0 --grad_outer_loop_order=-1 --grad_inner_loop_order=-1 --mode=bilevel --device=cuda --extra_weight_decay=0.0001 --w_weight_decay=0 --arch_train_data=val
 # python linear/train.py --model_type=max_deg --epochs 3 --dataset=fourier --dry_run=True --grad_outer_loop_order=-1 --grad_inner_loop_order=-1 --mode=bilevel --device=cpu --ihvp=exact --inv_hess=exact --hvp=exact --rand_seed 1 --arch_train_data sotl --optimizer_mode=manual --T=3 --recurrent True
+# python linear/train.py --model_type=rff --epochs 50 --dataset=MNISTrff --dry_run=True --grad_outer_loop_order=-1 --grad_inner_loop_order=-1 --mode=bilevel --device=cpu --ihvp=exact --inv_hess=exact --hvp=exact --rand_seed 1 --arch_train_data sotl --optimizer_mode=autograd --loss=ce --T=3 --recurrent True --a_weight_decay 0 --a_lr=200000000
+
 #pip install --force git+https://github.com/Mirofil/pytorch-hessian-eigenthings.git
 
 import itertools
@@ -62,13 +64,13 @@ def main(epochs = 50,
     w_decay_order=2,
     w_lr = 1e-2,
     w_momentum=0.0,
-    w_weight_decay=0.001,
+    w_weight_decay=0.00001,
     a_decay_order=2,
     a_lr = 1e-2,
     a_momentum = 0.0,
-    a_weight_decay = 0.001,
+    a_weight_decay = 0.00001,
     T = 10,
-    grad_clip = 100,
+    grad_clip = 1,
     logging_freq = 200,
     w_checkpoint_freq = 1,
     n_informative=7,
@@ -366,7 +368,7 @@ w_momentum=0.0
 w_weight_decay=0
 a_optim="SGD"
 a_decay_order=2
-a_lr = 3e-2
+a_lr = 200
 a_momentum = 0.0
 a_weight_decay = 0
 T = 3
@@ -388,8 +390,8 @@ extra_weight_decay=0
 grad_inner_loop_order=-1
 grad_outer_loop_order=-1
 arch_train_data="sotl"
-model_type="max_deg"
-dataset="fourier"
+model_type="rff"
+dataset="MNISTrff"
 device = 'cpu'
 train_arch=True
 dry_run=False
@@ -401,11 +403,12 @@ decay_scheduler=None
 w_scheduler=None
 a_scheduler=None
 features=None
-loss='mse'
+loss='ce'
 log_suffix = ""
-optimizer_mode = "manual"
+optimizer_mode = "autograd"
 bilevel_w_steps=None
 debug=False
+recurrent=True
 rand_seed=1
 from copy import deepcopy
 config=locals()

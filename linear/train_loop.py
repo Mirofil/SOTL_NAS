@@ -238,9 +238,6 @@ def train_bptt(
                             recurrent=recurrent)
                     total_arch_gradient = arch_gradients["total_arch_gradient"]
 
-                    # # #TODO DELETE THIS LINE LATER
-                    # da_direct = arch_gradients["da_direct"]
-                    # dw_direct = arch_gradients["dw_direct"]
 
                     # weights_after_rollout = switch_weights(model, weight_buffer[0])
 
@@ -317,7 +314,7 @@ def train_bptt(
                             "Epoch": epoch,
                             "Batch": true_batch_index,
                         })
-            # print(to_log)
+
             wandb.log({suffixed_name:{dataset:{**to_log}}})
         try:
             best_alphas = torch.sort([x.data for x in model.arch_params()][0].view(-1), descending=True).values[0:10]
@@ -375,10 +372,10 @@ def train_bptt(
         if a_scheduler is not None:
             a_scheduler.step()
 
-    for metric in primal_metrics:
-        if metric in metrics.keys():
-            metrics[metric+"E1"] = SumOfWhatever(measurements = metrics[metric], e=1).get_time_series(chunked=True)
-            metrics[metric+"Einf"] = SumOfWhatever(measurements = metrics[metric], e=1000).get_time_series(chunked=True)
+    # for metric in primal_metrics:
+    #     if metric in metrics.keys():
+    #         metrics[metric+"E1"] = SumOfWhatever(measurements = metrics[metric], e=1).get_time_series(chunked=True)
+    #         metrics[metric+"Einf"] = SumOfWhatever(measurements = metrics[metric], e=1000).get_time_series(chunked=True)
 
 
     return model, metrics

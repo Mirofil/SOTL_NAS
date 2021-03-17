@@ -71,14 +71,14 @@ def calculate_weight_decay(model, alpha_w_order=None, w_order=1, adaptive_decay=
                 param_norm_a = param_norm_a + a_coef * torch.sum(torch.norm(arch_param, a_order))
                 D_a = D_a + torch.numel(arch_param)
         else:
-            # if hasattr(model.model, "squash"):
-            for arch_param in model.arch_params():
-                param_norm_a = param_norm_a + a_coef * torch.sum(torch.norm(model.model.squash(arch_param), a_order))
-                D_a = D_a + torch.numel(arch_param)
-            # else:
-            #     for arch_param in model.arch_params():
-            #         param_norm_a = param_norm_a + a_coef * torch.sum(torch.abs(arch_param))
-            #         D_a = D_a + torch.numel(arch_param)
+            if hasattr(model.model, "squash"):
+                for arch_param in model.arch_params():
+                    param_norm_a = param_norm_a + a_coef * torch.sum(torch.norm(model.model.squash(arch_param), a_order))
+                    D_a = D_a + torch.numel(arch_param)
+            else:
+                for arch_param in model.arch_params():
+                    param_norm_a = param_norm_a + a_coef * torch.sum(torch.norm(arch_param, a_order))
+                    D_a = D_a + torch.numel(arch_param)
     if w_order is not None:
         for w_param in model.weight_params():
             param_norm_w = param_norm_w + w_coef * torch.pow(torch.norm(w_param, w_order), w_order)
@@ -123,7 +123,7 @@ def compute_train_loss(x, y, criterion, model, weight_buffer=None, weight_decay=
 
     if return_acc:
         if y_pred.shape[1] != 1: # Must be regression task
-            acc_top1, acc_top5 = obtain_accuracy(y_pred.cpu().data, y.data, topk=(1, 5))
+            acc_top1 = obtain_accuracy(y_pred.cpu().data, y.data, topk=(1,))
         else:
             acc_top1 = None
         return loss, acc_top1
