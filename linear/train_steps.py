@@ -119,7 +119,7 @@ def arch_step(model, criterion, xs, ys, weight_buffer, w_lr, hvp, inv_hess, ihvp
             val_xs=val_xs,
             val_ys=val_ys,
             device=device,
-            outers=[outers[-1]],
+            outers=outers,
             recurrent=recurrent,
             debug=debug
 
@@ -128,7 +128,7 @@ def arch_step(model, criterion, xs, ys, weight_buffer, w_lr, hvp, inv_hess, ihvp
     elif optimizer_mode == "autograd":
         arch_gradients = {}
         if arch_train_data == "sotl":
-            arch_gradient_loss = sum(outers[:-1])
+            arch_gradient_loss = outers[-1]
         elif arch_train_data == "val":
             #TODO DELETE THIS DETACH ONCE DONE DEBUGGING
             # weight_buffer[-1][0] = weight_buffer[-1][0].detach()
