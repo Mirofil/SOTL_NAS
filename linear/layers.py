@@ -81,7 +81,9 @@ class RFFEmbedding(torch.nn.Module):
 
     def embedding(self, X):
         if self.renew and self.counter % 1 == 0:
-            self.w = torch.rand(self.d, self.input_dim)
+            self.w = torch.normal(0,1,(self.d, self.input_dim)).reshape(self.d, self.input_dim)
+            # self.w = torch.linspace(-self.alpha_l.item(), self.alpha_l.item(), self.d*self.input_dim).reshape(self.d, self.input_dim)
+
             self.b = 2*np.pi * np.random.rand(self.d)
             self.counter += 1
         n = X.shape[0]

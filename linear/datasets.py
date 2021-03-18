@@ -96,18 +96,29 @@ def get_datasets(name, path=None, val_split=0.1, test_split=0.2, normalize=True,
         n_classes = 1
     
     elif name == "MNISTrff":
-        max_label=2
-        root = '.'
-        input_size = 28
-        input_transform = transforms.Compose([
+        # max_label=2
+        # root = '.'
+        # input_size = 28
+        # input_transform = transforms.Compose([
+        #     transforms.ToTensor(),
+        #     transforms.LinearTransformation(torch.eye(input_size**2), torch.zeros(input_size**2))
+        # ])
+        # mnist = datasets.MNIST(root + "data/MNIST", train=True, transform=input_transform, target_transform=None, download=True)
+        mnist = datasets.MNIST('./data', train=True, download=True,
+        transform=transforms.Compose([
             transforms.ToTensor(),
-            transforms.LinearTransformation(torch.eye(input_size**2), torch.zeros(input_size**2))
-        ])
-        mnist = datasets.MNIST(root + "data/MNIST", train=True, transform=input_transform, target_transform=None, download=True)
-        
+            transforms.Normalize((0.1307,), (0.3081,))
+        ]))
+        input_size = 28
+        max_label=2
         x = mnist.data.reshape(-1, input_size**2)
         y = mnist.targets.numpy().reshape(-1)
-        test = datasets.MNIST(root + "data/MNIST", train=False, transform=input_transform, target_transform=None, download=True)
+        # test = datasets.MNIST(root + "data/MNIST", train=False, transform=input_transform, target_transform=None, download=True)
+        test = datasets.MNIST('./data', train=True, download=True,
+        transform=transforms.Compose([
+            transforms.ToTensor(),
+            transforms.Normalize((0.1307,), (0.3081,))
+        ]))
         xtest = test.data.reshape(-1, input_size**2)
         ytest = test.targets.numpy().reshape(-1)
         x = x.numpy()

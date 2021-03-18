@@ -7,7 +7,7 @@
 
 # python linear/train.py --model_type=MNIST --dataset=MNIST --dry_run=False --T=1 --w_warm_start=0 --grad_outer_loop_order=-1 --grad_inner_loop_order=-1 --mode=bilevel --device=cuda --extra_weight_decay=0.0001 --w_weight_decay=0 --arch_train_data=val
 # python linear/train.py --model_type=max_deg --epochs 3 --dataset=fourier --dry_run=True --grad_outer_loop_order=-1 --grad_inner_loop_order=-1 --mode=bilevel --device=cpu --ihvp=exact --inv_hess=exact --hvp=exact --rand_seed 1 --arch_train_data sotl --optimizer_mode=manual --T=3 --recurrent True
-# python linear/train.py --model_type=rff --epochs 50 --dataset=MNISTrff --dry_run=True --grad_outer_loop_order=-1 --grad_inner_loop_order=-1 --mode=bilevel --device=cpu --ihvp=exact --inv_hess=exact --hvp=exact --rand_seed 1 --arch_train_data sotl --optimizer_mode=autograd --loss=ce --T=3 --recurrent True --a_weight_decay 0 --a_lr=200000000
+# python linear/train.py --model_type=rff --epochs 50 --dataset=MNISTrff --dry_run=True --grad_outer_loop_order=-1 --grad_inner_loop_order=-1 --mode=bilevel --device=cpu --ihvp=exact --inv_hess=exact --hvp=exact --rand_seed 1 --arch_train_data sotl --optimizer_mode=autograd --loss=ce --T=2 --recurrent True --a_weight_decay 0 --a_lr=1500000000000 --w_weight_decay 1
 
 #pip install --force git+https://github.com/Mirofil/pytorch-hessian-eigenthings.git
 
@@ -103,7 +103,8 @@ def main(epochs = 50,
     optimizer_mode="manual",
     bilevel_w_steps=None,
     debug=False,
-    recurrent=True
+    recurrent=True,
+    l=1e5
     ):
 
     config = locals()

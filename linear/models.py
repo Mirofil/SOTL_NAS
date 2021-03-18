@@ -52,7 +52,8 @@ class SoTLNet(RegressionNet):
 
             self.model = self.fc1
         elif model_type == "rff":
-            self.model = RFFRegression(1000, 784, 1e4)
+            l = config["l"] if "l" in config.keys() else 1e5
+            self.model = RFFRegression(1000, 784, l, **kwargs)
         elif model_type == "max_deg":
             self.fc1 = LinearMaxDeg(num_features, n_classes, bias=False, **kwargs)
 
@@ -115,7 +116,7 @@ class SoTLNet(RegressionNet):
 
 
 class RFFRegression(RegressionNet):
-    def __init__(self, d, input_dim, l, num_classes=2):
+    def __init__(self, d, input_dim, l, num_classes=2, **kwargs):
         super().__init__()
         self.embedding = RFFEmbedding(d=d, input_dim=input_dim, l=l)
         self.fc1 = FlexibleLinear(d, num_classes)
