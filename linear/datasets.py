@@ -133,7 +133,6 @@ def get_datasets(name, path=None, val_split=0.1, test_split=0.2, normalize=True,
         dset_train = torch.utils.data.TensorDataset(x_train, y_train)
         dset_test = torch.utils.data.TensorDataset(x_test, y_test)
 
-
         n_classes = max_label
 
 

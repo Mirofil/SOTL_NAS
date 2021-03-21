@@ -1,9 +1,10 @@
 import torch
-from layers import LinearSquash, LinearMaxDeg, FlexibleLinear, FeatureSelection, RFFEmbedding
+from layers import LinearSquash, LinearMaxDeg, FlexibleLinear, FeatureSelection, RFFEmbedding, EmbeddingCombiner
 import torch.nn as nn
 import torch.nn.functional as F
 import itertools
 from traits import FeatureSelectableTrait, AutoEncoder, Regressor, Classifier
+import numpy as np
 
 class RegressionNet(torch.nn.Module):
     def __init__(self, num_features = 2, **kwargs):
@@ -52,8 +53,10 @@ class SoTLNet(RegressionNet):
 
             self.model = self.fc1
         elif model_type == "rff":
-            l = config["l"] if "l" in config.keys() else 1e5
-            self.model = RFFRegression(1000, 784, l, **kwargs)
+            l = config["l"] if "l" in config.keys() else 1
+            self.model = RFFRegression(1000, num_features, l, **kwargs)
+        elif model_type == "rff_bag":
+            self.model = RFFRegressionBag(1000, num_features, **kwargs)
         elif model_type == "max_deg":
             self.fc1 = LinearMaxDeg(num_features, n_classes, bias=False, **kwargs)
 
@@ -116,9 +119,24 @@ class SoTLNet(RegressionNet):
 
 
 class RFFRegression(RegressionNet):
-    def __init__(self, d, input_dim, l, num_classes=2, **kwargs):
+    def __init__(self, d, input_dim, l, num_classes=2, device='cuda' if torch.cuda.is_available() else 'cpu', **kwargs):
         super().__init__()
-        self.embedding = RFFEmbedding(d=d, input_dim=input_dim, l=l)
+        self.embedding = RFFEmbedding(d=d, input_dim=input_dim, l=l, device=device)
+        self.fc1 = FlexibleLinear(d, num_classes)
+
+    def forward(self, x, weight=None, *args, **kwargs):
+            
+        x = self.embedding(x)
+        x = self.fc1(x, weight=weight, **kwargs)
+        return x
+
+class RFFRegressionBag(RegressionNet):
+    def __init__(self, d, input_dim, l=1e1, num_classes=2, emb_count=5, device='cuda' if torch.cuda.is_available() else 'cpu', **kwargs):
+        super().__init__()
+        ls = np.logspace(1, 15, num=emb_count)
+        print(f"Generating {emb_count} RFF embeddings with lengthscales {ls}")
+        # ls=[1e5,1e7,1e9,1e11,1e13]
+        self.embedding = EmbeddingCombiner(embeddings=[RFFEmbedding(d=d, input_dim=input_dim, renew=False, l=ls[i]) for i in range(emb_count)])
         self.fc1 = FlexibleLinear(d, num_classes)
 
     def forward(self, x, weight=None, *args, **kwargs):

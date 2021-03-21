@@ -3,7 +3,7 @@
 # python linear/train.py --model_type=sigmoid --dataset=gisette --arch_train_data sotl --grad_outer_loop_order=None --mode=bilevel --device=cuda --initial_degree 1 --hvp=finite_diff --epochs=100 --w_lr=0.001 --T=1 --a_lr=0.01 --hessian_tracking False --w_optim=Adam --a_optim=Adam --w_warm_start 3 --train_arch=True --a_weight_decay=0.00000001--smoke_test False --dry_run=True --w_weight_decay=0.001 --batch_size=64 --decay_scheduler None
 
 # python linear/train.py --model_type=max_deg --dataset=fourier --dry_run=True --T=1 --grad_outer_loop_order=1 --grad_inner_loop_order=1 --mode=bilevel --device=cpu --optimizer_mode=autograd --arch_train_data=val
-# python linear/train.py --model_type=MNIST --dataset=MNIST --dry_run=False --T=1 --w_warm_start=0 --grad_outer_loop_order=-1 --grad_inner_loop_order=-1 --mode=bilevel --device=cuda --extra_weight_decay=0.0001 --w_weight_decay=0 --arch_train_data=val
+# python linear/train.py --model_type=MNIST --dataset=MNIST --dry_run=False --T=1 --w_warm_start=0 --grad_outer_loop_order=-1 --grad_inner_loop_order=-1 --mode=bilevel --device=cuda --extra_weight_decay=0.0001 --w_weight_decay=0 --arch_train_data=val --train_arch=True
 
 #pip install --force git+https://github.com/Mirofil/pytorch-hessian-eigenthings.git
 
@@ -92,9 +92,11 @@ def train_bptt(
     optimizer_mode="manual",
     bilevel_w_steps=None,
     debug=False,
-    recurrent=True
+    recurrent=True,
+    arch_update_frequency=1
 ):
     orig_model_cfg = deepcopy(model.config)
+    print(f"Starting with with train_arch={train_arch}")
     train_loader = torch.utils.data.DataLoader(
         dset_train, batch_size=batch_size * T, shuffle=True
     )
@@ -112,6 +114,7 @@ def train_bptt(
 
     val_acc_evaluator = ValidAccEvaluator(val_loader, device=device)
 
+    arch_update_idx = 0
     for epoch in tqdm(range(epochs), desc='Iterating over epochs', total = epochs):
         model.train()
 
@@ -136,11 +139,10 @@ def train_bptt(
             xs, ys = torch.split(batch[0], batch_size), torch.split(
                 batch[1], batch_size
             )
-            if len(xs) != T:
-                continue
+            if len(xs) != T and optimizer_mode != "autograd":
+                continue # TODO would be good to fix manual grads so that this can be voided
             if features is not None:
                 xs = [x[:, features] for x in xs]
-            
 
             if mode == "bilevel":
                 
@@ -181,9 +183,10 @@ def train_bptt(
 
                     train_loss.update(loss.item())
                     to_log.update({
-                            "Train loss": train_loss.avg,
+                            "train_loss": train_loss.avg,
                             "Epoch": epoch,
                             "Batch": true_batch_index,
+                            "arch_update_idx": arch_update_idx
                         })
 
             if train_arch:
@@ -204,8 +207,9 @@ def train_bptt(
                         )
 
 
-                if epoch >= w_warm_start:
+                if epoch >= w_warm_start and batch_idx % arch_update_frequency == 0:
                     start_time = time.time()
+                    arch_update_idx += 1
 
                     if arch_train_data == "sotl":
                         outers = losses
@@ -267,7 +271,7 @@ def train_bptt(
 
 
 
-            if mode == "bilevel" and epoch >= w_warm_start:
+            if mode == "bilevel" and epoch >= w_warm_start and batch_idx % arch_update_frequency == 0:
 
                 weights_after_rollout = switch_weights(model, weight_buffer[0])
                 w_optimizer, a_optimizer, w_scheduler, a_scheduler = get_optimizers(model, config)
@@ -310,14 +314,19 @@ def train_bptt(
 
 
                     to_log.update({
-                            "Train loss": train_loss.avg,
+                            "train_loss": train_loss.avg,
                             "Epoch": epoch,
                             "Batch": true_batch_index,
+                            "arch_update_idx": arch_update_idx
                         })
 
             wandb.log({suffixed_name:{dataset:{**to_log}}})
         try:
-            best_alphas = torch.sort([x.data for x in model.arch_params()][0].view(-1), descending=True).values[0:10]
+            if model.model_type == "max_deg":
+                best_alphas = torch.sort([x.data for x in model.arch_params()][0].view(-1), descending=True).values[0:10]
+            else:
+                best_alphas = [x.data for x in model.arch_params()][0:10]
+
         except:
             best_alphas = "No arch params"
         tqdm.write(
@@ -326,7 +335,7 @@ def train_bptt(
                 true_batch_index,
                 train_loss.avg,
                 [x.data for x in model.arch_params()] if len(str([x.data for x in model.arch_params()])) < 20 else best_alphas,
-                [x.data for x in model.weight_params()] if len(str([x.data for x in model.arch_params()])) < 75 else f'Too long'
+                [x.data for x in model.weight_params()] if len(str([x.data for x in model.weight_params()])) < 200 else f'Too long'
             )
         )
         # if debug:
@@ -359,8 +368,8 @@ def train_bptt(
 
 
         tqdm.write("Epoch: {}, Val Loss: {}, Test Loss: {}, Discretized AUC: {}, MSE: {}, Reconstruction Acc: {}, Hess: {}".format(epoch, val_results.avg, test_results.avg, auc, mse, acc, hessian_eigenvalue))
-        to_log = {**to_log, "Val loss": val_results.avg, "Val acc": val_acc_results.avg, "Test loss": test_results.avg, "Test acc": test_acc_results.avg, "AUC_training": auc, "MSE training":mse, 
-            "RecAcc training":acc, "Arch. Hessian domin. eigenvalue": hessian_eigenvalue, "Epoch": epoch}
+        to_log = {**to_log, "val_loss": val_results.avg, "val_acc": val_acc_results.avg, "test_loss": test_results.avg, "test_acc": test_acc_results.avg, "AUC_training": auc, "MSE training":mse, 
+            "RecAcc training":acc, "Arch. Hessian domin. eigenvalue": hessian_eigenvalue, "epoch": epoch, "arch_update_idx": arch_update_idx}
         wandb.log({suffixed_name:{dataset:{**to_log}}})
         wandb.run.summary["Grad compute speed"] = grad_compute_speed.avg
 
@@ -372,10 +381,10 @@ def train_bptt(
         if a_scheduler is not None:
             a_scheduler.step()
 
-    # for metric in primal_metrics:
-    #     if metric in metrics.keys():
-    #         metrics[metric+"E1"] = SumOfWhatever(measurements = metrics[metric], e=1).get_time_series(chunked=True)
-    #         metrics[metric+"Einf"] = SumOfWhatever(measurements = metrics[metric], e=1000).get_time_series(chunked=True)
+    for metric in primal_metrics:
+        if metric in metrics.keys():
+            metrics[metric+"E1"] = SumOfWhatever(measurements = metrics[metric], e=1).get_time_series(chunked=True)
+            metrics[metric+"Einf"] = SumOfWhatever(measurements = metrics[metric], e=1000).get_time_series(chunked=True)
 
 
     return model, metrics

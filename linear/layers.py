@@ -65,35 +65,68 @@ class FeatureSelection(torch.nn.Module):
         elif self.squash_type == "sigmoid":
             return torch.sigmoid(*args, **kwargs)
 
+
+class EmbeddingCombiner(torch.nn.Module):
+    def __init__(self, embeddings, device='cuda' if torch.cuda.is_available() else 'cpu', **kwargs) -> None:
+        super().__init__()
+        #NOTE embeddings should be in a Python list (NOT ParameterList) so that they are not seen as Parameters by NN.module! 
+        # The parameters of each embedding should not be optimized!
+        self.embeddings = [emb.to(device) for emb in embeddings]
+        self.alpha_lin_comb = torch.nn.Parameter(torch.tensor([0 for _ in range(len(embeddings))], dtype=torch.float32))
+        self.softmax = torch.nn.Softmax(dim=0)
+        self.device=device
+    def forward(self, x):
+        embs = [emb(x) for emb in self.embeddings]
+        weights = self.softmax(self.alpha_lin_comb)
+
+        # print(embs)
+        # embs = torch.sum([emb*w for emb, w in zip(embs, weights)], dim=1)
+        # for emb in embs:
+        #     print(emb.shape)
+
+        embs = sum([emb*w for emb, w in zip(embs, weights)])
+
+        return embs
+
 class RFFEmbedding(torch.nn.Module):
-    def __init__(self, d, input_dim, l, renew=True, device='cuda' if torch.cuda.is_available() else 'cpu', **kwargs) -> None:
+    def __init__(self, d, input_dim, l, renew=False, device='cuda' if torch.cuda.is_available() else 'cpu', **kwargs) -> None:
         super().__init__()
         # self.embedding = build_embedding(d=d, k=input_dim, l=l)
-        self.w = torch.rand(d, input_dim)
-        self.b = 2*np.pi * np.random.rand(d)
+        # self.w = torch.rand(d, input_dim)
         self.d = torch.tensor(d)
+        self.input_dim = input_dim
+        self.device =device
+
+
+        self.w = torch.normal(0,1,(self.d, self.input_dim)).reshape(self.d, self.input_dim).to(self.device)
+        self.b = torch.tensor(2*np.pi * np.random.rand(d)).to(self.device)
         self.alpha_l = torch.nn.Parameter(torch.tensor(l, dtype=torch.float32), requires_grad=True)
         self.renew = renew
         self.counter = 0
-        self.input_dim = input_dim
     def forward(self, x):
         return self.embedding(x)
 
     def embedding(self, X):
         if self.renew and self.counter % 1 == 0:
-            self.w = torch.normal(0,1,(self.d, self.input_dim)).reshape(self.d, self.input_dim)
+            self.w = torch.normal(0,1,(self.d, self.input_dim)).reshape(self.d, self.input_dim).to(self.device)
             # self.w = torch.linspace(-self.alpha_l.item(), self.alpha_l.item(), self.d*self.input_dim).reshape(self.d, self.input_dim)
 
-            self.b = 2*np.pi * np.random.rand(self.d)
-            self.counter += 1
+            self.b =torch.tensor(2*np.pi * np.random.rand(self.d)).to(self.device)
+        self.counter += 1
         n = X.shape[0]
-        X = torch.tensor(X, dtype=torch.float32)
-        fs = ((self.w/torch.sqrt(self.alpha_l)) @ X.T).T + torch.tensor(np.repeat([self.b], n, axis=0))
+        #TOOD should there be sqrt near alpha_l?
+        # print(self.b.shape)
+        # print(self.w.shape)
+        # print(n)
+        # print((self.w/self.alpha_l @ X.T).T.shape)
+        # print(torch.repeat_interleave(self.b, n, axis=0).shape)
+
+        fs = ((self.w/self.alpha_l) @ X.T).T + torch.tensor(torch.repeat_interleave(self.b, 1, axis=0)).to(self.device)
         return torch.sqrt(2/self.d) * torch.cos(fs).float()
 
 
 class LinearMaxDeg(torch.nn.Linear):
-    def __init__(self, *args, degree=30, **kwargs) -> None:
+    def __init__(self, *args, degree=30, device='cuda' if torch.cuda.is_available() else 'cpu', **kwargs) -> None:
         super().__init__(*args, **kwargs)
         self.alphas = torch.nn.Parameter(torch.tensor([degree], dtype=torch.float32).unsqueeze(dim=0))
         constants = [0]
@@ -103,6 +136,7 @@ class LinearMaxDeg(torch.nn.Linear):
         constants = constants[:self.in_features]
         self.degree = self.alphas
         self.alpha_constants = torch.nn.Parameter(torch.tensor(constants,dtype=torch.float32).unsqueeze(dim=0), requires_grad=False)
+        self.device=device
 
     def forward(self, input: Tensor, weight: Tensor = None, alphas: Tensor = None) -> Tensor:
         if weight is None:
@@ -114,7 +148,7 @@ class LinearMaxDeg(torch.nn.Linear):
         else:
             alphas = alphas[0]
 
-        return F.linear(input, weight*self.compute_deg_constants(alphas=alphas).to(self.alpha_constants.device), self.bias)
+        return F.linear(input, weight.to(self.device)*self.compute_deg_constants(alphas=alphas).to(self.alpha_constants.device), self.bias)
 
     def compute_deg_constants(self, alphas = None):
         if alphas is None:

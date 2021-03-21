@@ -113,7 +113,7 @@ inv_hess = "exact", ihvp="exact", recurrent=True, debug=False):
                 elif ihvp == "neumann":
                     dL_train_dw = torch.autograd.grad(loss2, model.weight_params(), create_graph=True)
                     ihvp_vec = approx_inverse_hvp(v=grad_w, f=dL_train_dw, w=list(model.weight_params()), lr=w_lr, steps=500)
-                ihvp_vecs[idx] = ihvp_vec
+                ihvp_vecs[idx] = ihvp_vec.to(device)
             else:
                 ihvp_vecs[idx] = inverse_hess_dwdw # TODO should be grad_w?
 

@@ -123,7 +123,7 @@ def compute_train_loss(x, y, criterion, model, weight_buffer=None, weight_decay=
 
     if return_acc:
         if y_pred.shape[1] != 1: # Must be regression task
-            acc_top1 = obtain_accuracy(y_pred.cpu().data, y.data, topk=(1,))
+            acc_top1 = obtain_accuracy(y_pred.cpu().data, y.cpu().data, topk=(1,))
         else:
             acc_top1 = None
         return loss, acc_top1
