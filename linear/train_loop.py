@@ -139,8 +139,7 @@ def train_bptt(
             xs, ys = torch.split(batch[0], batch_size), torch.split(
                 batch[1], batch_size
             )
-            if len(xs) != T and optimizer_mode != "autograd":
-                continue # TODO would be good to fix manual grads so that this can be voided
+
             if features is not None:
                 xs = [x[:, features] for x in xs]
 
@@ -299,7 +298,8 @@ def train_bptt(
                     with torch.no_grad():
                         for g, w in zip(grads, model.weight_params()):
                             w.grad = g
-                    torch.nn.utils.clip_grad_norm_(model.weight_params(), grad_clip)
+                    if grad_clip is not None:
+                        torch.nn.utils.clip_grad_norm_(model.weight_params(), grad_clip)
 
                     w_optimizer.step()
                     w_optimizer.zero_grad()

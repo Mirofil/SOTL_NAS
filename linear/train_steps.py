@@ -76,7 +76,7 @@ def train_step(x, y, criterion, model, w_optimizer, weight_buffer, grad_clip, co
         grads = torch.autograd.grad(
             loss,
             weight_buffer[-1],
-            create_graph=True
+            create_graph=True,
         )
         # TODO should there be retain_graph = True?
         if grad_clip is not None:

@@ -86,10 +86,8 @@ inv_hess = "exact", ihvp="exact", recurrent=True, debug=False):
             for k in range(0, j, 1):
                 if not recurrent:
                     k = i-k
-
                 loss3 = compute_train_loss(x=xs[k].to(device), y=ys[k].to(device), criterion=criterion, 
                     y_pred=model(xs[k].to(device), weight_buffer[k]), model=model)
-
                 hess_matrices_dwdw = [hessian(loss3*1, w, w) for w in weight_buffer[k]]
                 # hess_matrices_dwdw = [torch.autograd.functional.hessian(l, w).reshape((18,18)) for w in weight_buffer[i-k]]
                 # print(hess_matrices_dwdw[0].shape)
