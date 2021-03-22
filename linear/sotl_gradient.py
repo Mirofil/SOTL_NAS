@@ -62,9 +62,7 @@ inv_hess = "exact", ihvp="exact", recurrent=True, debug=False):
     debug_info = defaultdict(dict)
 
     if i == 0:
-
         total_arch_gradient, hessian_matrices_dadw, inv_hess_matrices_dwdw = [torch.zeros(w.shape).t() for w in dw], [torch.zeros(w.shape).t() for w in dw], [torch.zeros(w.shape).t() for w in dw]
-
 
     for j in range(0, i if not recurrent else min(1, i), 1):
         if not recurrent:
