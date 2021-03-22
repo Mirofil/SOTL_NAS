@@ -48,7 +48,6 @@ def train_step(x, y, criterion, model, w_optimizer, weight_buffer, grad_clip, co
         grads = torch.autograd.grad(
             loss,
             weight_buffer[-1]
-
         )
         # with torch.no_grad():
         #     for g, w in zip(grads, model.weight_params()):
@@ -57,22 +56,19 @@ def train_step(x, y, criterion, model, w_optimizer, weight_buffer, grad_clip, co
             torch.nn.utils.clip_grad_norm_(grads, grad_clip)
 
         new_weights = []
-        if True:
-            # w_optimizer.step()
-            # w_optimizer.zero_grad()
-            # weight_buffer.add(model, intra_batch_idx)
-            with torch.no_grad():
-                for w, dw in zip(weight_buffer[-1], grads):
-                    new_weight = w - config["w_lr"]*dw
-                    # new_weight = new_weight.detach()
-                    new_weight.requires_grad = True
-                    new_weights.append(new_weight) # Manual SGD update that creates new nodes in the computational graph
+        # w_optimizer.step()
+        # w_optimizer.zero_grad()
+        # weight_buffer.add(model, intra_batch_idx)
+        with torch.no_grad():
+            for w, dw in zip(weight_buffer[-1], grads):
+                new_weight = w - config["w_lr"]*dw
+                # new_weight = new_weight.detach()
+                new_weight.requires_grad = True
+                new_weights.append(new_weight) # Manual SGD update that creates new nodes in the computational graph
 
-            weight_buffer.direct_add(new_weights)
+        weight_buffer.direct_add(new_weights)
 
-            model_old_weights = switch_weights(model, weight_buffer[-1]) 
-        else:
-            weight_buffer.direct_add(weight_buffer[-1])
+        model_old_weights = switch_weights(model, weight_buffer[-1]) 
 
     elif optimizer_mode == "autograd":
         loss, train_acc_top1 = compute_train_loss(x=x, y=y, criterion=criterion, 
@@ -87,15 +83,14 @@ def train_step(x, y, criterion, model, w_optimizer, weight_buffer, grad_clip, co
             torch.nn.utils.clip_grad_norm_(grads, grad_clip)
 
         new_weights = []
-        if True:
-            for w, dw in zip(weight_buffer[-1], grads):
-                new_weights.append(w - config["w_lr"]*dw) # Manual SGD update that creates new nodes in the computational graph
 
-            weight_buffer.direct_add(new_weights)
+        for w, dw in zip(weight_buffer[-1], grads):
+            new_weights.append(w - config["w_lr"]*dw) # Manual SGD update that creates new nodes in the computational graph
 
-            # model_old_weights = switch_weights(model, weight_buffer[-1]) # This is useful for auxiliary tasks - but the actual grad evaluation happens by using the external WeightBuffer weights
-        else:
-            weight_buffer.direct_add(weight_buffer[-1])
+        weight_buffer.direct_add(new_weights)
+
+        # model_old_weights = switch_weights(model, weight_buffer[-1]) # This is useful for auxiliary tasks - but the actual grad evaluation happens by using the external WeightBuffer weights
+
     return loss, train_acc_top1
 
 def arch_step(model, criterion, xs, ys, weight_buffer, w_lr, hvp, inv_hess, ihvp,
@@ -203,7 +198,6 @@ def arch_step(model, criterion, xs, ys, weight_buffer, w_lr, hvp, inv_hess, ihvp
             # arch_gradients["inv_hess_dwdw"] = hess_matrices_dwdw
             # arch_gradients["hess_dadw"] = hessian_matrices_dadw
 
-                
         else:
             arch_gradients["total_arch_gradient"] = total_arch_gradient
 
@@ -217,3 +211,40 @@ def arch_step(model, criterion, xs, ys, weight_buffer, w_lr, hvp, inv_hess, ihvp
     a_optimizer.step()
 
     return arch_gradients
+
+
+######## MANUAL EXAMPLE
+# # Our data points
+# x1 = torch.tensor([1., 2., 3., 4., 5.], requires_grad=False, dtype=torch.float32)
+# x2 = torch.tensor([2., 3., 4., 5., 6.], requires_grad=False, dtype=torch.float32)
+# x3 = torch.tensor([3., 4., 5., 6., 7.], requires_grad=False, dtype=torch.float32)
+
+# model = torch.nn.Linear(5, 1)
+# # We will keep copies of the model weights in a buffer as in the manual case. 
+# weight1 = model.weight
+# print(f"Model weight: {model.weight}")
+
+# y1 = 2*F.linear(x1, weight1) # Loss function
+
+# grads_y1 = torch.autograd.grad(y1, weight1, create_graph=True, retain_graph=True)
+
+# for p, dp in zip(model.parameters(), grads_y1):
+#     weight2 = weight1 - lr * dp
+
+# print(f"Model weight after 1st update: {model.weight}")
+
+# y2 = 2*F.linear(x2, weight2)
+
+# grads_y2 = torch.autograd.grad(y2, weight2, create_graph=True, retain_graph=True)
+
+# for p, dp in zip(model.parameters(), grads_y2):
+#     weight3 = weight2 - lr * dp
+
+# print(f"Model weight after 2nd update: {model.weight}")
+
+# y3 = 2*F.linear(x3, weight3)
+
+# grads_y3 = torch.autograd.grad(y3, lr, create_graph=True, retain_graph=True)
+
+# grads_sotl = torch.autograd.grad(y3+y2+y1, lr, create_graph=True, retain_graph=True)
+# print(grads_sotl)

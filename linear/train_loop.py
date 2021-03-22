@@ -489,7 +489,6 @@ def eval_feature_selection(model, dset_train, dset_val, dataset_cfg):
 
 # model = torch.nn.Linear(5, 1)
 # # We will keep copies of the model weights in a buffer as in the manual case. 
-# # TODO is there a way to replace the model parameters in place and only keep the weight copies implicitly in the computational graph?
 # weight1 = model.weight
 # print(f"Model weight: {model.weight}")
 
