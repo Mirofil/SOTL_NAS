@@ -75,18 +75,20 @@ def train_step(x, y, criterion, model, w_optimizer, weight_buffer, grad_clip, co
             weight_buffer=weight_buffer, model=model, return_acc=True)
         grads = torch.autograd.grad(
             loss,
-            model.weight_params(),
+            weight_buffer[-1],
             create_graph=True,
         )
         # TODO should there be retain_graph = True?
         if grad_clip is not None:
             torch.nn.utils.clip_grad_norm_(grads, grad_clip)
 
-        new_weights=[]
+        new_weights = []
+
         for w, dw in zip(weight_buffer[-1], grads):
-            new_weights.append(w-config["w_lr"]*dw)
-        old_weights=switch_weights(model, new_weights)
+            new_weights.append(w - config["w_lr"]*dw) # Manual SGD update that creates new nodes in the computational graph
+
         weight_buffer.direct_add(new_weights)
+
         # model_old_weights = switch_weights(model, weight_buffer[-1]) # This is useful for auxiliary tasks - but the actual grad evaluation happens by using the external WeightBuffer weights
 
     return loss, train_acc_top1
@@ -127,7 +129,7 @@ def arch_step(model, criterion, xs, ys, weight_buffer, w_lr, hvp, inv_hess, ihvp
         else:
             arch_gradient_loss = sum(outers)
         
-        total_arch_gradient = torch.autograd.grad(arch_gradient_loss, model.arch_params(), retain_graph=True)
+        total_arch_gradient = torch.autograd.grad(arch_gradient_loss, model.arch_params(), retain_graph=True if debug else False)
         
         if debug:
             if val_xs is not None:

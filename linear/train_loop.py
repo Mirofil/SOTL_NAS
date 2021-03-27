@@ -241,6 +241,7 @@ def train_bptt(
                             recurrent=recurrent)
                     total_arch_gradient = arch_gradients["total_arch_gradient"]
 
+
                     # weights_after_rollout = switch_weights(model, weight_buffer[0])
 
                     if debug:
@@ -300,14 +301,7 @@ def train_bptt(
                     if grad_clip is not None:
                         torch.nn.utils.clip_grad_norm_(model.weight_params(), grad_clip)
 
-                    with torch.no_grad():
-                        for w, dw in zip(model.weight_params(), grads):
-                            w.subtract_(config["w_lr"]*dw)
-                            # new_weight = new_weight.detach()
-                            # new_weight.requires_grad = True
-                            # new_weights.append(new_weight) # Manual SGD update that creates new nodes in the computational graph
-
-                    # w_optimizer.step()
+                    w_optimizer.step()
                     w_optimizer.zero_grad()
 
                     metrics["train_loss"][epoch].append(-loss.item())
