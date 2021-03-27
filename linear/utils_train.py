@@ -135,7 +135,8 @@ def switch_weights(model, weight_buffer_elem):
         old_weights = [w.clone() for w in model.weight_params()]
 
         for w_old, w_new in zip(model.weight_params(), weight_buffer_elem):
-            w_old.copy_(w_new)
+            # w_old.copy_(w_new)
+            w_old.data = w_new
     
     return old_weights
 

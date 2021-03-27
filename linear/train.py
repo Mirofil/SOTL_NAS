@@ -105,7 +105,8 @@ def main(epochs = 50,
     debug=False,
     recurrent=True,
     l=1e5,
-    adaptive_a_lr=False
+    adaptive_a_lr=False,
+    alpha_lr = None
     ):
     if adaptive_a_lr is True:
         a_lr = a_lr*(T**(1/2))
@@ -143,11 +144,13 @@ def main(epochs = 50,
 
     model = SoTLNet(num_features=int(len(dset_train[0][0])) if n_features is None else n_features, model_type=model_type, 
         degree=initial_degree, weight_decay=extra_weight_decay, 
-        task=task, n_classes=n_classes, config=config, device=device)
+        task=task, n_classes=n_classes, config=config, device=device, alpha_lr=alpha_lr)
     model = model.to(device)
 
     criterion = get_criterion(model_type, dataset_cfg, loss)
 
+    if alpha_lr is not None:
+        config["w_lr"] = model.alpha_lr
     w_optimizer, a_optimizer, w_scheduler, a_scheduler = get_optimizers(model, config)
 
     model, metrics = train_bptt(
@@ -394,8 +397,8 @@ extra_weight_decay=0
 grad_inner_loop_order=-1
 grad_outer_loop_order=-1
 arch_train_data="sotl"
-model_type="rff_bag"
-dataset="MNISTrff"
+model_type="log_reg"
+dataset="fourier"
 device = 'cuda'
 train_arch=True
 dry_run=False
@@ -407,12 +410,15 @@ decay_scheduler=None
 w_scheduler=None
 a_scheduler=None
 features=None
-loss='ce'
+loss='mse'
 log_suffix = ""
 optimizer_mode = "autograd"
 bilevel_w_steps=None
 debug=False
 recurrent=True
 rand_seed=1
+adaptive_a_lr = False
+alpha_lr=0.001
+arch_update_frequency=1
 from copy import deepcopy
 config=locals()

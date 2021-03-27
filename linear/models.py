@@ -5,14 +5,15 @@ import torch.nn.functional as F
 import itertools
 from traits import FeatureSelectableTrait, AutoEncoder, Regressor, Classifier
 import numpy as np
+from utils_train import switch_weights
 
-class RegressionNet(torch.nn.Module):
+class Hypertrainable(torch.nn.Module):
     def __init__(self, num_features = 2, **kwargs):
-        super(RegressionNet, self).__init__()
+        super(Hypertrainable, self).__init__()
         self.alphas = []
 
     def forward(self, x):
-        return self.fc1(x)
+        raise NotImplementedError
 
     def named_weight_params(self):
         for n,p in self.named_parameters():
@@ -36,9 +37,9 @@ class RegressionNet(torch.nn.Module):
                 continue
 
 
-class SoTLNet(RegressionNet):
+class SoTLNet(Hypertrainable):
     def __init__(self, num_features = 2, model_type = "softmax_mult", task="whatever",
-     weight_decay=0, n_classes=1, config=None, **kwargs):
+     weight_decay=0, n_classes=1, config=None, alpha_lr=None, **kwargs):
         super().__init__(**kwargs)
         self.model_type = model_type
         self.num_features = num_features
@@ -72,7 +73,7 @@ class SoTLNet(RegressionNet):
             self.config["w_decay_order"] = 1
             self.config["w_weight_decay"] = 1
             self.config["a_decay_order"] = 0
-        elif model_type == "log_regression":
+        elif model_type == "log_reg":
             self.model = LogReg(input_dim=num_features, output_dim=n_classes)
         elif model_type == "AE":
             self.model = AE(input_dim=num_features)
@@ -87,6 +88,11 @@ class SoTLNet(RegressionNet):
             self.alpha_weight_decay = torch.nn.Parameter(torch.tensor([weight_decay], dtype=torch.float32, requires_grad=True).unsqueeze(dim=0))
         else:
             self.alpha_weight_decay = torch.tensor(0)
+        if alpha_lr is not None:
+            self.alpha_lr = torch.nn.Parameter(torch.tensor([alpha_lr], dtype=torch.float32, requires_grad=True).unsqueeze(dim=0))
+        else:
+            self.alpha_lr = torch.tensor(0)
+
     def forward(self, x, weight=None, alphas=None, feature_indices=None):
         orig_shape = x.shape
         x = x.view(-1, self.num_features)
@@ -99,10 +105,13 @@ class SoTLNet(RegressionNet):
                 if to_delete not in self.feature_indices:
                     x[:, to_delete] = 0
 
+        if weight is not None:
+            old_weights = switch_weights(self, weight)
+
         if 'AE' in self.model_type:
-            return self.model(x, weight, alphas).reshape(orig_shape)
+            return self.model(x).reshape(orig_shape)
         else:
-            return self.model(x, weight, alphas)
+            return self.model(x)
 
     def adaptive_weight_decay(self):
         return torch.sum(torch.abs(self.fc1.weight*self.fc1.compute_deg_constants()))
@@ -118,7 +127,7 @@ class SoTLNet(RegressionNet):
         return self.model.feature_normalizers()
 
 
-class RFFRegression(RegressionNet):
+class RFFRegression(Hypertrainable):
     def __init__(self, d, input_dim, l, num_classes=2, device='cuda' if torch.cuda.is_available() else 'cpu', **kwargs):
         super().__init__()
         self.embedding = RFFEmbedding(d=d, input_dim=input_dim, l=l, device=device)
@@ -130,7 +139,7 @@ class RFFRegression(RegressionNet):
         x = self.fc1(x, weight=weight, **kwargs)
         return x
 
-class RFFRegressionBag(RegressionNet):
+class RFFRegressionBag(Hypertrainable):
     def __init__(self, d, input_dim, l=1e1, num_classes=2, emb_count=5, device='cuda' if torch.cuda.is_available() else 'cpu', **kwargs):
         super().__init__()
         ls = np.logspace(1, 15, num=emb_count)
@@ -145,27 +154,29 @@ class RFFRegressionBag(RegressionNet):
         x = self.fc1(x, weight=weight, **kwargs)
         return x
         
-class LogReg(nn.Module, FeatureSelectableTrait):
+class LogReg(Hypertrainable, FeatureSelectableTrait):
     def __init__(self, input_dim=28*28, output_dim=10):
         super(LogReg, self).__init__()
         self._input_dim = input_dim
-        self.lin1 = nn.Linear(input_dim, output_dim)
+        self.lin1 = nn.Linear(input_dim, output_dim, bias=False)
 
-    def forward(self, x, weights=None, alphas=None):
+    def forward(self, x, weight=None, alphas=None):
+
         x = x.view(-1, self._input_dim)
         x = self.lin1(x)
         return x
+
     def alpha_feature_selectors(self):
         return torch.abs(self.lin1.weight).data.mean(dim=0)
     
     def feature_normalizers(self):
         return torch.abs(self.lin1.weight).data.mean(dim=0)
     
-    def squash(self, x, **wargs):
+    def squash(self, x, **kwargs):
         return x
 
     
-class MLP(RegressionNet, FeatureSelectableTrait):
+class MLP(Hypertrainable, FeatureSelectableTrait):
     def __init__(self, input_dim=28*28, hidden_dim=1000, output_dim=10, weight_decay=0, dropout_p=0.2, **kwargs):
         super(MLP, self).__init__()
         self._input_dim = input_dim
@@ -200,7 +211,7 @@ class MLP(RegressionNet, FeatureSelectableTrait):
     def feature_normalizers(self):
         return self.feature_selection.weight.mean(dim=0)
 
-class LinearAE(RegressionNet, FeatureSelectableTrait, AutoEncoder):
+class LinearAE(Hypertrainable, FeatureSelectableTrait, AutoEncoder):
     def __init__(self, input_dim=28*28, dropout_p=0.2, **kwargs):
         super().__init__()
         self._input_dim = input_dim
@@ -232,7 +243,7 @@ class LinearAE(RegressionNet, FeatureSelectableTrait, AutoEncoder):
     
     def feature_normalizers(self):
         return self.feature_selection.weight
-class AE(RegressionNet, FeatureSelectableTrait, AutoEncoder):
+class AE(Hypertrainable, FeatureSelectableTrait, AutoEncoder):
     def __init__(self, input_dim=28*28, dropout_p=0.1, **kwargs):
         super().__init__()
         self._input_dim = input_dim
