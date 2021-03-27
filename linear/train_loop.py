@@ -301,7 +301,11 @@ def train_bptt(
                     if grad_clip is not None:
                         torch.nn.utils.clip_grad_norm_(model.weight_params(), grad_clip)
 
-                    w_optimizer.step()
+                    with torch.no_grad():
+                        for w, dw in zip(weight_buffer[-1], grads):
+                            w.subtract(config["w_lr"]*dw)
+
+                    # w_optimizer.step()
                     w_optimizer.zero_grad()
 
                     metrics["train_loss"][epoch].append(-loss.item())

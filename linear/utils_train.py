@@ -14,6 +14,7 @@ from sklearn.decomposition import PCA
 from utils_features import mcfs_ours, pfa_transform, lap_ours, pca, univariate_test, sklearn_model, choose_features
 from utils_metrics import obtain_accuracy
 from sotl_optimizers import HyperSGD
+import operator
 
 def reconstruction_error(model, k, x_train, y_train, x_test, 
     y_test, mode = "normalized"):
@@ -130,15 +131,25 @@ def compute_train_loss(x, y, criterion, model, weight_buffer=None, weight_decay=
     else:
         return loss
 
-def switch_weights(model, weight_buffer_elem):
-    with torch.no_grad():
-        old_weights = [w.clone() for w in model.weight_params()]
-
-        for w_old, w_new in zip(model.weight_params(), weight_buffer_elem):
-            # w_old.copy_(w_new)
-            w_old.data = w_new
-    
-    return old_weights
+def switch_weights(model, weight_buffer_elem, state_dict=True):
+    if state_dict:
+        old_weights = []
+        for w_name, new_w in zip([k for k in model.state_dict().keys() if 'alpha' not in k], weight_buffer_elem):
+            path = w_name.split('.')
+            old_weights.append(model.state_dict()[w_name])
+            if len(path) > 1:
+                f = operator.attrgetter('.'.join(path[:-1]))
+                setattr(f(model), path[-1], new_w)
+            else:
+                setattr(model, w_name, new_w)
+        return old_weights
+    else:
+        with torch.no_grad():
+            old_weights = [w.clone() for w in model.weight_params()]
+            for w_old, w_new in zip(model.weight_params(), weight_buffer_elem):
+                # w_old.copy_(w_new)
+                w_old.data = w_new
+        return old_weights
 
 def hinge_loss(x,y, threshold):
     if abs(x-y) <= threshold:

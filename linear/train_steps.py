@@ -59,12 +59,13 @@ def train_step(x, y, criterion, model, w_optimizer, weight_buffer, grad_clip, co
         # w_optimizer.step()
         # w_optimizer.zero_grad()
         # weight_buffer.add(model, intra_batch_idx)
-        with torch.no_grad():
-            for w, dw in zip(weight_buffer[-1], grads):
-                new_weight = w - config["w_lr"]*dw
-                # new_weight = new_weight.detach()
-                new_weight.requires_grad = True
-                new_weights.append(new_weight) # Manual SGD update that creates new nodes in the computational graph
+
+        # with torch.no_grad():
+        for w, dw in zip(weight_buffer[-1], grads):
+            new_weight = w - config["w_lr"]*dw
+            # new_weight = new_weight.detach()
+            new_weight.requires_grad = True
+            new_weights.append(new_weight) # Manual SGD update that creates new nodes in the computational graph
 
         weight_buffer.direct_add(new_weights)
 
