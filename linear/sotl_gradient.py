@@ -4,6 +4,7 @@ from typing import *
 import math
 from utils_train import switch_weights, compute_train_loss, calculate_weight_decay
 from collections import defaultdict
+import copy
 
 class WeightBuffer:
     def __init__(self, checkpoint_freq, T):
@@ -15,7 +16,7 @@ class WeightBuffer:
     def add(self, model, intra_batch_idx, clone=True):
         if intra_batch_idx is None or intra_batch_idx % self.checkpoint_freq == 0:
             if clone is True:
-                self.weight_buffer.append([w.clone() for w in model.weight_params()])
+                self.weight_buffer.append([copy.deepcopy(w) for w in model.weight_params()])
             else:
                 self.weight_buffer.append(list(model.weight_params()))
         else:

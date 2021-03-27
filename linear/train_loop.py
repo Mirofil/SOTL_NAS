@@ -151,10 +151,7 @@ def train_bptt(
 
             weight_buffer = WeightBuffer(T=T, checkpoint_freq=w_checkpoint_freq)
             weight_buffer.add(model, 0)
-            # weight_buffer[0][0] = weight_buffer[0][0].detach()
-            # weight_buffer[0][0].requires_grad = True
             sotl = 0
-
             losses = []
 
             for intra_batch_idx, (x, y) in enumerate(zip(xs, ys),1):
