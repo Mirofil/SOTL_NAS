@@ -13,7 +13,7 @@ class WeightBuffer:
         self.T = T
 
     def add(self, model, intra_batch_idx, clone=True):
-        if intra_batch_idx % self.checkpoint_freq == 0:
+        if intra_batch_idx is None or intra_batch_idx % self.checkpoint_freq == 0:
             if clone is True:
                 self.weight_buffer.append([w.clone() for w in model.weight_params()])
             else:
