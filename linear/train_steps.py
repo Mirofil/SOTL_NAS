@@ -62,7 +62,7 @@ def train_step(x, y, criterion, model, w_optimizer, weight_buffer, grad_clip, co
         new_weights = {}
         with torch.no_grad():
             for (w_name, w), dw in zip(weight_buffer[-1].items(), grads):
-                if type(config["w_lr"]) is float:
+                if type(config["w_lr"]) is float or not config["softplus_alpha_lr"]:
                     new_weights[w_name] = w - config["w_lr"]*dw # Manual SGD update that creates new nodes in the computational graph
                 else:
                     new_weights[w_name] = w - F.softplus(config["w_lr"], config["softplus_beta"])*dw # Manual SGD update that creates new nodes in the computational graph
@@ -79,10 +79,11 @@ def train_step(x, y, criterion, model, w_optimizer, weight_buffer, grad_clip, co
             loss,
             weight_buffer[-1].values(),
             create_graph=True,
+            allow_unused=True
         )
         # TODO should there be retain_graph = True?
         if grad_clip is not None:
-            torch.nn.utils.clip_grad_norm_(grads, grad_clip)
+            grad_coef=torch.nn.utils.clip_grad_norm_(grads, grad_clip)
 
         new_weights = {}
 

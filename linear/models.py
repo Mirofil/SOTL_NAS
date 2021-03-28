@@ -88,9 +88,9 @@ class SoTLNet(Hypertrainable):
         #     old_weights = switch_weights(self, weight)
 
         if 'AE' in self.model_type:
-            return self.model(x, weight, alphas).reshape(orig_shape)
+            return self.model(x.reshape(orig_shape), weight, alphas).reshape(orig_shape)
         else:
-            return self.model(x, weight, alphas)
+            return self.model(x.reshape(orig_shape), weight, alphas)
 
     def adaptive_weight_decay(self):
         return torch.sum(torch.abs(self.fc1.weight*self.fc1.compute_deg_constants()))
@@ -173,6 +173,18 @@ class MLP2(Hypertrainable):
 
         return x
 
+class HyperSequential(torch.nn.Sequential):
+    def __init__(self, *args):
+        super().__init__(*args)
+    
+    def forward(self, input, weight=None, alphas=None):
+        for module in self:
+            if issubclass(type(module), Hypertrainable):
+                input = module(input, weight=weight)
+            else:
+                input = module(input)
+        return input
+
 class VGG(nn.Module):
     '''
     VGG model
@@ -180,7 +192,7 @@ class VGG(nn.Module):
     def __init__(self, features):
         super(VGG, self).__init__()
         self.features = features
-        self.classifier = nn.Sequential(
+        self.classifier = HyperSequential(
             nn.Dropout(),
             FlexibleLinear(512, 512),
             nn.ReLU(True),
@@ -197,10 +209,10 @@ class VGG(nn.Module):
                 m.bias.data.zero_()
 
 
-    def forward(self, x):
-        x = self.features(x)
+    def forward(self, x, weight, alphas=None):
+        x = self.features(x, weight)
         x = x.view(x.size(0), -1)
-        x = self.classifier(x)
+        x = self.classifier(x, weight)
         return x
 
 def make_layers(cfg, batch_norm=False):
@@ -212,11 +224,11 @@ def make_layers(cfg, batch_norm=False):
         else:
             conv2d = HyperConv2d(in_channels, v, kernel_size=3, padding=1)
             if batch_norm:
-                layers += [conv2d, nn.BatchNorm2d(v), nn.ReLU(inplace=True)]
+                layers += [conv2d, HyperBatchNorm2d(v), nn.ReLU(inplace=True)]
             else:
                 layers += [conv2d, nn.ReLU(inplace=True)]
             in_channels = v
-    return nn.Sequential(*layers)
+    return HyperSequential(*layers)
 
 vgg_cfg = {
     'A': [64, 'M', 128, 'M', 256, 256, 'M', 512, 512, 'M', 512, 512, 'M'],

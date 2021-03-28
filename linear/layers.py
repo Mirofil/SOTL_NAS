@@ -184,4 +184,27 @@ class HyperConv2d(torch.nn.Conv2d, Hypertrainable):
             return super().forward(input)
         else:
             extracted_params = {k:weight[self.parent_path+"."+k] for k, v in self.named_weight_params()}
-            return F.conv3d(input, **extracted_params)
+            return F.conv2d(input, padding=self.padding, stride=self.stride, **extracted_params)
+class HyperBatchNorm2d(torch.nn.BatchNorm2d, Hypertrainable):
+    def __init__(self, in_channels, out_channels, kernel_size, **kwargs):
+        super().__init__(in_channels, out_channels, kernel_size, **kwargs)
+
+    def forward(self, input: Tensor, weight: Tensor = None, alphas: Tensor = None, **kwargs) -> Tensor:
+        if weight is None:
+            return super().forward(input)
+        else:
+            if self.momentum is None:
+                exponential_average_factor = 0.0
+            else:
+                exponential_average_factor = self.momentum
+            if self.training:
+                bn_training = True
+            else:
+                bn_training = (self.running_mean is None) and (self.running_var is None)
+            extracted_params = {k:weight[self.parent_path+"."+k] for k, v in self.named_weight_params()}
+            return F.batch_norm(
+                        input,
+                        # If buffers are not to be tracked, ensure that they won't be updated
+                        self.running_mean if not self.training or self.track_running_stats else None,
+                        self.running_var if not self.training or self.track_running_stats else None,
+                        bn_training, exponential_average_factor, self.eps, **extracted_params)

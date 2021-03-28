@@ -115,8 +115,8 @@ def train_bptt(
     metrics = defaultdict(lambda : [[] for _ in range(epochs)])
 
     val_acc_evaluator = ValidAccEvaluator(val_loader, device=device)
-
     arch_update_idx = 0
+    
     for epoch in tqdm(range(epochs), desc='Iterating over epochs', total = epochs):
         model.train()
 
@@ -157,7 +157,7 @@ def train_bptt(
                 x, y = x.to(device), y.to(device)
 
                 loss, train_acc_top1, param_norm = train_step(x=x, y=y, criterion=criterion, model=model, 
-                w_optimizer=w_optimizer, weight_buffer=weight_buffer, grad_clip=grad_clip, 
+                w_optimizer=w_optimizer, weight_buffer=weight_buffer, grad_clip=grad_clip_bilevel, 
                     intra_batch_idx=intra_batch_idx, config=config, optimizer_mode=optimizer_mode, debug=debug, detailed=True)
                 losses.append(loss)
                 if loss_threshold is not None and (loss-param_norm).item() < loss_threshold:
