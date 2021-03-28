@@ -271,8 +271,8 @@ def train_bptt(
                 optims = get_optimizers(model, config)
                 w_optimizer, a_optimizer, w_scheduler, a_scheduler = optims["w_optimizer"], optims["a_optimizer"], optims["w_scheduler"], optims["a_scheduler"]
 
-                #TODO This doesnt work when recurrent=True.. wtf?
-                w_optimizer.load_state_dict(prerollout_w_optim_state_dict)
+                #TODO We should use new LR when doing alpha_lr setting I guess, but otherwise use the same setting I guess.. how to fix?
+                # w_optimizer.load_state_dict(prerollout_w_optim_state_dict)
 
                 #NOTE this train step should be identical to the loop above apart from WeightBuffer management! But it is difficult to abstract this in pure PyTorch, although it could be hacked with kwargs forwarding?
                 if bilevel_w_steps is None or bilevel_w_steps == "None":
