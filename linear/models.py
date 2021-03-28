@@ -43,7 +43,7 @@ class SoTLNet(Hypertrainable):
         elif model_type == "MLP2":
             self.model = MLP2(input_dim=n_features,hidden_dim=1000,output_dim=n_classes, weight_decay=extra_weight_decay)
         elif model_type =="vgg":
-            self.model = VGG(make_layers(cfg['D'], batch_norm=True))
+            self.model = VGG(make_layers(vgg_cfg['D'], batch_norm=True))
         elif model_type == "pt_logistic_l1":
             self.model = LogReg(input_dim=n_features, output_dim=n_classes)
             print("Setting (overriding?) default decay values for logistic L1")
@@ -218,7 +218,7 @@ def make_layers(cfg, batch_norm=False):
             in_channels = v
     return nn.Sequential(*layers)
 
-cfg = {
+vgg_cfg = {
     'A': [64, 'M', 128, 'M', 256, 256, 'M', 512, 512, 'M', 512, 512, 'M'],
     'B': [64, 64, 'M', 128, 128, 'M', 256, 256, 'M', 512, 512, 'M', 512, 512, 'M'],
     'D': [64, 64, 'M', 128, 128, 'M', 256, 256, 256, 'M', 512, 512, 512, 'M', 512, 512, 512, 'M'],
