@@ -139,7 +139,6 @@ def record_parents(model, root=""):
         cur_path = first_part + module_name
         module.parent_path = cur_path
         record_parents(module, root = cur_path)
-    
     pass
 
 def switch_weights(model, weight_buffer_elem, state_dict=False):
@@ -156,8 +155,8 @@ def switch_weights(model, weight_buffer_elem, state_dict=False):
         return old_weights
     else:
         with torch.no_grad():
-            old_weights = [w.clone() for w in model.weight_params()]
-            for w_old, w_new in zip(model.weight_params(), weight_buffer_elem):
+            old_weights = {w_name:w.clone() for w_name, w in model.named_weight_params()}
+            for (w_name, w_old), (w_name_new, w_new) in zip(model.named_weight_params(), weight_buffer_elem.items()):
                 # w_old.copy_(w_new)
                 w_old.data = w_new
         return old_weights
@@ -222,7 +221,7 @@ def get_criterion(model_type, dataset_cfg, preferred_loss=None):
     
     else:
         print("Trying to guess proper loss from model name")
-        if model_type in ["MNIST", "log_regression", "MLP", "pt_logistic_l1"]:
+        if model_type in ["MNIST", "log_regression", "MLP", "pt_logistic_l1", "log_reg"]:
             criterion = torch.nn.CrossEntropyLoss()
         elif model_type in ["max_deg", "softmax_mult", "linear", "fourier", "polynomial", "sigmoid", "AE", "linearAE"]:
             criterion = torch.nn.MSELoss()

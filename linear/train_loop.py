@@ -293,14 +293,14 @@ def train_bptt(
                     )
 
                     with torch.no_grad():
-                        for g, w in zip(grads, model.weight_params()):
+                        for g, (w_name, w) in zip(grads, model.named_weight_params()):
                             w.grad = g
                     if grad_clip is not None:
                         torch.nn.utils.clip_grad_norm_(model.weight_params(), grad_clip)
 
                     with torch.no_grad():
-                        for w, dw in zip(weight_buffer[-1], grads):
-                            w.subtract(config["w_lr"]*dw)
+                        for (w_name, w), dw in zip(model.named_weight_params(), grads):
+                            w.subtract_(config["w_lr"]*dw)
 
                     # w_optimizer.step()
                     w_optimizer.zero_grad()

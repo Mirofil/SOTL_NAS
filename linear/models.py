@@ -5,37 +5,8 @@ import torch.nn.functional as F
 import itertools
 from traits import FeatureSelectableTrait, AutoEncoder, Regressor, Classifier
 import numpy as np
-from utils_train import switch_weights
-
-class Hypertrainable(torch.nn.Module):
-    def __init__(self, num_features = 2, **kwargs):
-        super(Hypertrainable, self).__init__()
-        self.alphas = []
-
-    def forward(self, x):
-        raise NotImplementedError
-
-    def named_weight_params(self):
-        for n,p in self.named_parameters():
-            if 'alpha' not in n:
-                yield (n,p)
-            else:
-                continue
-    
-    def weight_params(self):
-        for n,p in self.named_parameters():
-            if 'alpha' not in n:
-                yield p
-            else:
-                continue
-    
-    def arch_params(self):
-        for n,p in self.named_parameters():
-            if 'alpha' in n and p.requires_grad:
-                yield p
-            else:
-                continue
-
+from utils_train import switch_weights, record_parents
+from models_base import Hypertrainable
 
 class SoTLNet(Hypertrainable):
     def __init__(self, num_features = 2, model_type = "softmax_mult", task="whatever",
@@ -89,9 +60,11 @@ class SoTLNet(Hypertrainable):
         else:
             self.alpha_weight_decay = torch.tensor(0)
         if alpha_lr is not None:
-            self.alpha_lr = torch.nn.Parameter(torch.tensor([alpha_lr], dtype=torch.float32, requires_grad=True).unsqueeze(dim=0))
+            self.alpha_lr = torch.nn.Parameter(torch.tensor(alpha_lr, dtype=torch.float32, requires_grad=True).unsqueeze(dim=0))
         else:
             self.alpha_lr = torch.tensor(0)
+
+        record_parents(self, "")
 
     def forward(self, x, weight=None, alphas=None, feature_indices=None):
         orig_shape = x.shape

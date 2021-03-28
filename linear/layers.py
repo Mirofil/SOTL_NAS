@@ -6,8 +6,9 @@ import numpy as np
 import matplotlib.pyplot as plt
 from traits import FeatureSelectableTrait
 from rff_mnist import *
+from models_base import Hypertrainable
 
-class LinearSquash(torch.nn.Linear, FeatureSelectableTrait):
+class LinearSquash(torch.nn.Linear, Hypertrainable, FeatureSelectableTrait):
     def __init__(self, in_features, out_features, bias, squash_type="softmax", **kwargs) -> None:
         super().__init__(in_features,out_features,bias)
         self.alphas = torch.nn.Parameter(torch.zeros(1, in_features))
@@ -17,11 +18,11 @@ class LinearSquash(torch.nn.Linear, FeatureSelectableTrait):
     def forward(self, input: Tensor, weight: Tensor = None, alphas: Tensor = None) -> Tensor:
         if weight is None:
             weight = self.weight
+            return F.linear(input, weight*self.squash(alphas), self.bias)
         else:
-            weight = weight[0]
-        if alphas is None:
-            alphas = self.alphas
-        return F.linear(input, weight*self.squash(alphas), self.bias)
+            extracted_params = {k:weight[self.parent_path+"."+k] for k, v in self.named_weight_params()}
+            extracted_params["weight"] = extracted_params["weight"]*self.squash(alphas)
+            return F.linear(input, **extracted_params)
     
     def squash_constants(self):
         return self.squash(self.alphas)
@@ -38,7 +39,7 @@ class LinearSquash(torch.nn.Linear, FeatureSelectableTrait):
     def feature_normalizers(self):
         return self.weight.mean(dim=0)
 
-class FeatureSelection(torch.nn.Module):
+class FeatureSelection(Hypertrainable):
     def __init__(self, in_features, squash_type="sigmoid", **kwargs) -> None:
         super().__init__()
         # self.weight = torch.ones((1, in_features))
@@ -66,7 +67,7 @@ class FeatureSelection(torch.nn.Module):
             return torch.sigmoid(*args, **kwargs)
 
 
-class EmbeddingCombiner(torch.nn.Module):
+class EmbeddingCombiner(Hypertrainable):
     def __init__(self, embeddings, device='cuda' if torch.cuda.is_available() else 'cpu', **kwargs) -> None:
         super().__init__()
         #NOTE embeddings should be in a Python list (NOT ParameterList) so that they are not seen as Parameters by NN.module! 
@@ -88,7 +89,7 @@ class EmbeddingCombiner(torch.nn.Module):
 
         return embs
 
-class RFFEmbedding(torch.nn.Module):
+class RFFEmbedding(Hypertrainable):
     def __init__(self, d, input_dim, l, renew=False, device='cuda' if torch.cuda.is_available() else 'cpu', **kwargs) -> None:
         super().__init__()
         # self.embedding = build_embedding(d=d, k=input_dim, l=l)
@@ -125,7 +126,7 @@ class RFFEmbedding(torch.nn.Module):
         return torch.sqrt(2/self.d) * torch.cos(fs).float()
 
 
-class LinearMaxDeg(torch.nn.Linear):
+class LinearMaxDeg(torch.nn.Linear, Hypertrainable):
     def __init__(self, *args, degree=30, device='cuda' if torch.cuda.is_available() else 'cpu', **kwargs) -> None:
         super().__init__(*args, **kwargs)
         self.alphas = torch.nn.Parameter(torch.tensor([degree], dtype=torch.float32).unsqueeze(dim=0))
@@ -141,14 +142,12 @@ class LinearMaxDeg(torch.nn.Linear):
     def forward(self, input: Tensor, weight: Tensor = None, alphas: Tensor = None) -> Tensor:
         if weight is None:
             weight = self.weight
+            return F.linear(input, weight.to(self.device)*self.compute_deg_constants(alphas=alphas).to(self.alpha_constants.device), self.bias)
         else:
-            weight = weight[0]
-        if alphas is None:
-            alphas = self.alphas
-        else:
-            alphas = alphas[0]
+            extracted_params = {k:weight[self.parent_path+"."+k] for k, v in self.named_weight_params()}
+            extracted_params["weight"] = extracted_params["weight"].to(self.device)*self.compute_deg_constants(alphas=alphas).to(self.alpha_constants.device)
+            return F.linear(input, **extracted_params)
 
-        return F.linear(input, weight.to(self.device)*self.compute_deg_constants(alphas=alphas).to(self.alpha_constants.device), self.bias)
 
     def compute_deg_constants(self, alphas = None):
         if alphas is None:
@@ -167,15 +166,15 @@ class LinearMaxDeg(torch.nn.Linear):
     def squash(self, *args, **kwargs):
         return self.squished_tanh(*args, **kwargs)
 
-class FlexibleLinear(torch.nn.Linear):
+class FlexibleLinear(torch.nn.Linear, Hypertrainable):
     def __init__(self, in_features, out_features, bias=True, **kwargs):
-        super().__init__(in_features, out_features, bias=False)
+        super().__init__(in_features, out_features, bias=bias)
         self.alphas = None
 
     def forward(self, input: Tensor, weight: Tensor = None, alphas: Tensor = None, **kwargs) -> Tensor:
         if weight is None:
             weight = self.weight
+            return F.linear(input, weight)
         else:
-            weight = weight[0]
-
-        return F.linear(input, weight, self.bias)
+            extracted_params = {k:weight[self.parent_path+"."+k] for k, v in self.named_weight_params()}
+            return F.linear(input, **extracted_params)

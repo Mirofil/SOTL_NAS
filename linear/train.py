@@ -6,7 +6,7 @@
 # python linear/train.py --model_type=max_deg --dataset=sklearn_friedman1 --dry_run=False --T=1 --a_weight_decay=0.1 --grad_outer_loop_order=1 --grad_inner_loop_order=1 --mode=bilevel --device=cpu --optimizer_mode=autograd --n_samples=50000  --epochs=1
 
 # python linear/train.py --model_type=MNIST --dataset=MNIST --dry_run=False --T=1 --w_warm_start=0 --grad_outer_loop_order=-1 --grad_inner_loop_order=-1 --mode=bilevel --device=cuda --extra_weight_decay=0.0001 --w_weight_decay=0 --arch_train_data=val
-# python linear/train.py --model_type=max_deg --epochs 20 --steps_per_epoch=1 --dataset=fourier --dry_run=True --grad_outer_loop_order=-1 --grad_inner_loop_order=-1 --mode=bilevel --device=cpu --ihvp=exact --inv_hess=exact --hvp=exact --rand_seed 1 --arch_train_data sotl --optimizer_mode=autograd --T=25 --recurrent True --w_lr=1e-1 --a_lr=1e-3 --adaptive_a_lr=True
+# python linear/train.py --model_type=max_deg --epochs 20 --steps_per_epoch=1 --dataset=fourier --dry_run=True --grad_outer_loop_order=-1 --grad_inner_loop_order=-1 --mode=bilevel --device=cpu --ihvp=exact --inv_hess=exact --hvp=exact --rand_seed 1 --arch_train_data sotl --optimizer_mode=autograd --T=25 --recurrent True --w_lr=1e-1 --a_lr=1e-3 --adaptive_a_lr=False
 # python linear/train.py --model_type=rff_bag --epochs 50 --dataset=MNISTrff --dry_run=True --grad_outer_loop_order=-1 --grad_inner_loop_order=-1 --mode=bilevel --device=cpu --ihvp=exact --inv_hess=exact --hvp=exact --rand_seed 1 --arch_train_data sotl --optimizer_mode=autograd --loss=ce --T=2 --recurrent True --a_weight_decay 0 --a_lr=1500000000000 --w_weight_decay 0.0001 --train_arch=True --w_lr=1
 # python linear/train.py --model_type=rff_bag --epochs 300 --dataset=MNISTrff --dry_run=True --grad_outer_loop_order=-1 --grad_inner_loop_order=-1 --mode=bilevel --device=cuda --ihvp=exact --inv_hess=exact --hvp=exact --rand_seed 1 --arch_train_data sotl --optimizer_mode=autograd --loss=ce --T=2 --recurrent True --a_weight_decay 0 --a_lr=1 --w_weight_decay 0.01 --train_arch=True --w_lr=10
 #pip install --force git+https://github.com/Mirofil/pytorch-hessian-eigenthings.git
@@ -375,7 +375,7 @@ w_momentum=0.0
 w_weight_decay=0
 a_optim="SGD"
 a_decay_order=2
-a_lr = 200
+a_lr = 0.01
 a_momentum = 0.0
 a_weight_decay = 0
 T = 3
@@ -418,7 +418,7 @@ debug=False
 recurrent=True
 rand_seed=1
 adaptive_a_lr = False
-alpha_lr=None
+alpha_lr=0.001
 arch_update_frequency=1
 from copy import deepcopy
 config=locals()

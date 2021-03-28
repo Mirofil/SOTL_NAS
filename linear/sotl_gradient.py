@@ -3,7 +3,7 @@ from utils import hessian
 from typing import *
 import math
 from utils_train import switch_weights, compute_train_loss, calculate_weight_decay
-from collections import defaultdict
+from collections import defaultdict, OrderedDict
 import copy
 
 
@@ -15,12 +15,12 @@ class WeightBuffer:
         self.checkpoint_freq = checkpoint_freq
         self.T = T
 
-    def add(self, model, intra_batch_idx, clone=True):
+    def add(self, model, intra_batch_idx=None, clone=True):
         if intra_batch_idx is None or intra_batch_idx % self.checkpoint_freq == 0:
             if clone is True:
-                self.weight_buffer.append([copy.deepcopy(w) for w in model.weight_params()])
+                self.weight_buffer.append({w_name:w.clone() for w_name, w in model.named_weight_params()})
             else:
-                self.weight_buffer.append(list(model.weight_params()))
+                self.weight_buffer.append(dict(model.named_weight_params()))
         else:
             start = math.floor(intra_batch_idx / self.checkpoint_freq)
             end = min(start + self.checkpoint_freq, self.T - 1)
@@ -36,7 +36,7 @@ class WeightBuffer:
         return self.get(key)
 
     def get(self, i: int):
-        if not isinstance(self.weight_buffer[i][0], (int)):
+        if not isinstance(self.weight_buffer[i], int):
             return self.weight_buffer[i]
         else:
             start_w = self.weight_buffer[i][0]
