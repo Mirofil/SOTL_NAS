@@ -111,6 +111,7 @@ def main(epochs = 50,
     l=1e5,
     adaptive_a_lr=False,
     alpha_lr = None,
+    softplus_alpha_lr=True,
     w_threshold=None
     ):
 
@@ -135,10 +136,10 @@ def main(epochs = 50,
         prepare_seed(rand_seed)
 
     if adaptive_a_lr is True:
-        a_lr = a_lr*(T**(1/2))
-        # a_lr =a_lr * T
+        # a_lr = a_lr*(T**(1/2))
+        a_lr =a_lr * T
 
-    if alpha_lr is not None:
+    if alpha_lr is not None and softplus_alpha_lr:
         config["alpha_lr"] = inverse_softplus(config["alpha_lr"])
     dataset_cfg = get_datasets(**config)
     model = SoTLNet(cfg=config,**{**config, **dataset_cfg})

@@ -87,7 +87,7 @@ def train_step(x, y, criterion, model, w_optimizer, weight_buffer, grad_clip, co
         new_weights = {}
 
         for (w_name, w), dw in zip(weight_buffer[-1].items(), grads):
-            if type(config["w_lr"]) is float:
+            if type(config["w_lr"]) is float or not config["softplus_alpha_lr"]:
                 new_weights[w_name] = w - config["w_lr"]*dw # Manual SGD update that creates new nodes in the computational graph
             else:
                 new_weights[w_name] = w - F.softplus(config["w_lr"])*dw # Manual SGD update that creates new nodes in the computational graph
