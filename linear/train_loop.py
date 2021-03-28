@@ -265,7 +265,7 @@ def train_bptt(
                         if hasattr(model, "alpha_lr"):
                             print(config["w_lr"])
                             print(model.alpha_lr.item())
-                            to_log.update({"alpha_lr": config["w_lr"]})
+                            to_log.update({"alpha_lr": config["w_lr"].item()})
 
             if mode == "bilevel" and epoch >= w_warm_start and batch_idx % arch_update_frequency == 0:
 
