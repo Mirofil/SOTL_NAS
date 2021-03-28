@@ -15,7 +15,7 @@ from sklearn.model_selection import train_test_split
 import sklearn.datasets
 
 
-def get_datasets(name, path=None, val_split=0.1, test_split=0.2, normalize=True, **kwargs):
+def get_datasets(dataset, path=None, val_split=0.1, test_split=0.2, normalize=True, **kwargs):
     n_classes = None
     n_features=None
     if os.name == 'nt':
@@ -23,7 +23,7 @@ def get_datasets(name, path=None, val_split=0.1, test_split=0.2, normalize=True,
     else:
         data_path = Path('./data/')
 
-    if name == "songs":
+    if dataset == "songs":
         if path is None:
             path = r"C:\Users\kawga\Documents\Oxford\thesis\data\YearPredictionMSD.txt"
 
@@ -38,7 +38,7 @@ def get_datasets(name, path=None, val_split=0.1, test_split=0.2, normalize=True,
         dset_train, dset_test = torch.utils.data.random_split(
             dset, [int(len(dset) * test_split), len(dset) - int(len(dset) * test_split)]
         )
-    elif name == "gisette":
+    elif dataset == "gisette":
 
         f= open(data_path / "gisette_train.data")
         train_data=[]
@@ -80,7 +80,7 @@ def get_datasets(name, path=None, val_split=0.1, test_split=0.2, normalize=True,
         n_classes = 2
         n_features=5000
 
-    elif name == "fourier":
+    elif dataset == "fourier":
         x_train, y_train = data_generator(
             **kwargs
         )
@@ -95,7 +95,7 @@ def get_datasets(name, path=None, val_split=0.1, test_split=0.2, normalize=True,
 
         n_classes = 1
     
-    elif name == "MNISTrff":
+    elif dataset == "MNISTrff":
         # max_label=2
         # root = '.'
         # input_size = 28
@@ -136,7 +136,7 @@ def get_datasets(name, path=None, val_split=0.1, test_split=0.2, normalize=True,
         n_classes = max_label
 
 
-    elif name == "sklearn_reg":
+    elif dataset == "sklearn_reg":
         x_train, y_train = sklearn.datasets.make_regression(n_samples=kwargs["n_samples"], 
             n_features=kwargs["n_features"], n_informative=kwargs["n_informative"], noise = kwargs["noise"])
         x_train, y_train = torch.tensor(x_train, dtype=torch.float32), torch.tensor(y_train, dtype=torch.float32)
@@ -149,7 +149,7 @@ def get_datasets(name, path=None, val_split=0.1, test_split=0.2, normalize=True,
 
         n_classes = 1            
     
-    elif name == "sklearn_friedman1":
+    elif dataset == "sklearn_friedman1":
         x_train, y_train = sklearn.datasets.make_friedman1(n_samples=kwargs["n_samples"], 
             n_features=kwargs["n_features"], noise=kwargs["noise"])
         x_train, y_train = torch.tensor(x_train, dtype=torch.float32), torch.tensor(y_train.astype(float), dtype=torch.float32)
@@ -162,7 +162,7 @@ def get_datasets(name, path=None, val_split=0.1, test_split=0.2, normalize=True,
 
         n_classes = 1
         
-    elif name == "sklearn_sparse":
+    elif dataset == "sklearn_sparse":
         x_train, y_train = sklearn.datasets.make_sparse_uncorrelated(n_samples=kwargs["n_samples"], 
             n_features=kwargs["n_features"])
         x_train, y_train = torch.tensor(x_train, dtype=torch.float32), torch.tensor(y_train.astype(float), dtype=torch.float32)
@@ -174,7 +174,7 @@ def get_datasets(name, path=None, val_split=0.1, test_split=0.2, normalize=True,
         dset_test = torch.utils.data.TensorDataset(x_test, y_test)
 
         n_classes = 1
-    elif name == 'isolet':
+    elif dataset == 'isolet':
         x_train = np.genfromtxt(data_path / 'isolet1+2+3+4.data', delimiter = ',', usecols = range(0, 617), encoding = 'UTF-8')
         y_train = np.genfromtxt(data_path / 'isolet1+2+3+4.data', delimiter = ',', usecols = [617], encoding = 'UTF-8')
         x_test = np.genfromtxt(data_path / 'isolet5.data', delimiter = ',', usecols = range(0, 617), encoding = 'UTF-8')
@@ -193,7 +193,7 @@ def get_datasets(name, path=None, val_split=0.1, test_split=0.2, normalize=True,
         n_classes = 26
 
     
-    elif name == 'activity':
+    elif dataset == 'activity':
         x_train = np.loadtxt(data_path / 'har/train/X_train.txt')
         x_test = np.loadtxt(data_path /  'har/test/X_test.txt')
         y_train = np.loadtxt(data_path / 'har/train/y_train.txt')
@@ -206,7 +206,7 @@ def get_datasets(name, path=None, val_split=0.1, test_split=0.2, normalize=True,
         y_train = torch.tensor(y_train, dtype=torch.long)
         y_test = torch.tensor(y_test, dtype=torch.long)
 
-    elif name=="madelon":
+    elif dataset=="madelon":
         train_data_url = 'https://archive.ics.uci.edu/ml/machine-learning-databases/madelon/MADELON/madelon_train.data'
         val_data_url = 'https://archive.ics.uci.edu/ml/machine-learning-databases/madelon/MADELON/madelon_valid.data'
         train_resp_url = 'https://archive.ics.uci.edu/ml/machine-learning-databases/madelon/MADELON/madelon_train.labels'
@@ -221,7 +221,7 @@ def get_datasets(name, path=None, val_split=0.1, test_split=0.2, normalize=True,
         n_classes = 2
         # TODO finish
     
-    elif name == "coil":
+    elif dataset == "coil":
         samples = []
         for i in range(1, 21):
             for image_index in range(72):
@@ -242,7 +242,7 @@ def get_datasets(name, path=None, val_split=0.1, test_split=0.2, normalize=True,
         x_test, y_test = torch.tensor(data[l:], dtype=torch.float), torch.tensor(targets[l:], dtype=torch.long)
 
         n_classes = 20
-    elif name == "MNIST" or name == "MNISTsmall":
+    elif dataset == "MNIST" or dataset == "MNISTsmall":
         dset_train = datasets.MNIST('./data', train=True, download=True,
                 transform=transforms.Compose([
                     transforms.ToTensor(),
@@ -251,7 +251,7 @@ def get_datasets(name, path=None, val_split=0.1, test_split=0.2, normalize=True,
 
         dset_test = datasets.MNIST('./data', train=False, transform=transforms.Compose([transforms.ToTensor(), transforms.Normalize((0.1307,), (0.3081,))]))
         
-        if name == "MNISTsmall":
+        if dataset == "MNISTsmall":
             # This should replicate the MNIST version from the Concrete Autoencoder
             dset_train, dset_test = torch.utils.data.random_split(
                 dset_test, [int(len(dset_test) * 0.6), len(dset_test) - int(len(dset_test) * 0.6)]
@@ -260,7 +260,7 @@ def get_datasets(name, path=None, val_split=0.1, test_split=0.2, normalize=True,
         n_classes = 10
         n_features=28*28
 
-    elif name.lower() == 'relathe':
+    elif dataset.lower() == 'relathe':
         mat = scipy.io.loadmat(data_path / "RELATHE.mat")
         mat['Y'] = mat['Y'].flatten()
         for i in range(2):
@@ -269,7 +269,7 @@ def get_datasets(name, path=None, val_split=0.1, test_split=0.2, normalize=True,
         x_train, x_test, y_train, y_test = train_test_split(mat['X'], mat['Y'], test_size=test_split)
 
         n_classes = 2
-    elif name.lower() == "basehock":
+    elif dataset.lower() == "basehock":
         mat = scipy.io.loadmat(data_path / "BASEHOCK.mat")
         mat['Y'] = mat['Y'].flatten()
         for i in range(2):
@@ -278,7 +278,7 @@ def get_datasets(name, path=None, val_split=0.1, test_split=0.2, normalize=True,
         x_train, x_test, y_train, y_test = train_test_split(mat['X'], mat['Y'], test_size=test_split)
         
         n_classes = 2
-    elif name.lower() == "pcmac":
+    elif dataset.lower() == "pcmac":
         mat = scipy.io.loadmat(data_path / "PCMAC.mat")
         mat['Y'] = mat['Y'].flatten()
         for i in range(2):
@@ -287,7 +287,7 @@ def get_datasets(name, path=None, val_split=0.1, test_split=0.2, normalize=True,
         x_train, x_test, y_train, y_test = train_test_split(mat['X'], mat['Y'], test_size=test_split)
         
         n_classes = 2
-    elif name.lower() == "prostate_ge":
+    elif dataset.lower() == "prostate_ge":
         mat = scipy.io.loadmat(data_path / "Prostate_GE.mat")
         mat['Y'] = mat['Y'].flatten()
         for i in range(2):
@@ -296,7 +296,7 @@ def get_datasets(name, path=None, val_split=0.1, test_split=0.2, normalize=True,
         x_train, x_test, y_train, y_test = train_test_split(mat['X'], mat['Y'], test_size=test_split)
         
         n_classes = 2
-    elif name.lower() == "allaml":
+    elif dataset.lower() == "allaml":
         mat = scipy.io.loadmat(data_path / "ALLAML.mat")
         mat['Y'] = mat['Y'].flatten()
         for i in range(2):
@@ -306,7 +306,7 @@ def get_datasets(name, path=None, val_split=0.1, test_split=0.2, normalize=True,
         x_train, x_test, y_train, y_test = train_test_split(mat['X'], mat['Y'], test_size=test_split)
 
         n_classes = 2
-    elif name.lower() == "cll_sub":
+    elif dataset.lower() == "cll_sub":
         mat = scipy.io.loadmat(data_path / "CLL_SUB_111.mat")
         mat['Y'] = mat['Y'].flatten()
         for i in range(3):
@@ -315,7 +315,7 @@ def get_datasets(name, path=None, val_split=0.1, test_split=0.2, normalize=True,
         x_train, x_test, y_train, y_test = train_test_split(mat['X'], mat['Y'], test_size=test_split)
 
         n_classes = 3
-    elif name.lower() == "glioma":
+    elif dataset.lower() == "glioma":
         mat = scipy.io.loadmat(data_path / "GLIOMA.mat")
         mat['Y'] = mat['Y'].flatten()
         for i in range(4):
@@ -324,14 +324,14 @@ def get_datasets(name, path=None, val_split=0.1, test_split=0.2, normalize=True,
         x_train, x_test, y_train, y_test = train_test_split(mat['X'], mat['Y'], test_size=test_split)
     
         n_classes = 4
-    elif name.lower() == "smk_can":
+    elif dataset.lower() == "smk_can":
         mat = scipy.io.loadmat(data_path / "SMK_CAN_187.mat")
         mat['Y'] = mat['Y'].flatten()
         x_train, x_test, y_train, y_test = train_test_split(mat['X'], mat['Y'], test_size=test_split)
 
         n_classes=2
 
-    elif name == 'MNIST35':
+    elif dataset == 'MNIST35':
         
         x_train, y_train = load_svmlight_file(str(data_path / 'mnist-35-noisy-binary.train.svm'))
         x_test, y_test = load_svmlight_file(str(data_path / 'mnist-35-noisy-binary.test.svm'))
@@ -347,7 +347,7 @@ def get_datasets(name, path=None, val_split=0.1, test_split=0.2, normalize=True,
         n_classes = 2
         n_features=28*28
 
-    elif name == "FashionMNIST" or name == "FashionMNISTsmall":
+    elif dataset == "FashionMNIST" or dataset == "FashionMNISTsmall":
         dset_train = datasets.FashionMNIST('./data', train=True, download=True,
                 transform=transforms.Compose([
                     transforms.ToTensor(),
@@ -356,7 +356,7 @@ def get_datasets(name, path=None, val_split=0.1, test_split=0.2, normalize=True,
 
         dset_test = datasets.FashionMNIST('./data', train=False, transform=transforms.Compose([transforms.ToTensor(), transforms.Normalize((0.1307,), (0.3081,))]))
         
-        if name == "FashionMNISTsmall":
+        if dataset == "FashionMNISTsmall":
             # This should replicate the MNIST version from the Concrete Autoencoder
             dset_train, dset_test = torch.utils.data.random_split(
                 dset_test, [int(len(dset_test) * 0.6), len(dset_test) - int(len(dset_test) * 0.6)]
@@ -366,7 +366,7 @@ def get_datasets(name, path=None, val_split=0.1, test_split=0.2, normalize=True,
         n_classes = 10
         n_features=28*28
 
-    elif name == "CIFAR":
+    elif dataset == "CIFAR":
         normalize = transforms.Normalize(mean=[0.485, 0.456, 0.406],
                                          std=[0.229, 0.224, 0.225])
         dset_train = datasets.CIFAR10(root='./data', train=True, transform=transforms.Compose([
@@ -385,7 +385,7 @@ def get_datasets(name, path=None, val_split=0.1, test_split=0.2, normalize=True,
     else:
         raise NotImplementedError
 
-    if name not in ['CIFAR', 'MNIST', 'FashionMNIST', 'MNISTsmall', 'FashionMNISTsmall', 'fourier', 'sklearn_friedman1', 'sklearn_reg']:
+    if dataset not in ['CIFAR', 'MNIST', 'FashionMNIST', 'MNISTsmall', 'FashionMNISTsmall', 'fourier', 'sklearn_friedman1', 'sklearn_reg']:
         # The datasets from Torchvision have different Classes and they come already well split
        
         if normalize:
@@ -402,9 +402,9 @@ def get_datasets(name, path=None, val_split=0.1, test_split=0.2, normalize=True,
     dset_train, dset_val = torch.utils.data.random_split(
             dset_train, [int(len(dset_train) * (1-val_split)), len(dset_train) - int(len(dset_train) * (1-val_split))]
         )
-    if name in ['MNIST', 'CIFAR', "FashionMNIST", 'isolet', 'madelon', 'activity', 'coil']:
+    if dataset in ['MNIST', 'CIFAR', "FashionMNIST", 'isolet', 'madelon', 'activity', 'coil']:
         task = 'multiclass'
-    elif name in ['gisette', 'MNIST35']:
+    elif dataset in ['gisette', 'MNIST35']:
         task = 'binary'
     else:
         task = 'reg'

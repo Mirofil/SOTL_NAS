@@ -10,12 +10,14 @@ from models_base import Hypertrainable
 
 class SoTLNet(Hypertrainable):
     def __init__(self, num_features = 2, model_type = "softmax_mult", task="whatever",
-     weight_decay=0, n_classes=1, config=None, alpha_lr=None, **kwargs):
+     extra_weight_decay=0, n_classes=1, cfg=None, alpha_lr=None, **kwargs):
         super().__init__(**kwargs)
         self.model_type = model_type
         self.num_features = num_features
         self.n_classes = n_classes
-        self.config = config
+        self.cfg = cfg
+
+    
 
         if model_type == "softmax_mult":
             self.fc1 = LinearSquash(num_features, n_classes, bias=False, squash_type="softmax", **kwargs)
@@ -25,7 +27,7 @@ class SoTLNet(Hypertrainable):
 
             self.model = self.fc1
         elif model_type == "rff":
-            l = config["l"] if "l" in config.keys() else 1
+            l = cfg["l"] if "l" in cfg.keys() else 1
             self.model = RFFRegression(1000, num_features, l, **kwargs)
         elif model_type == "rff_bag":
             self.model = RFFRegressionBag(1000, num_features, **kwargs)
@@ -37,7 +39,7 @@ class SoTLNet(Hypertrainable):
             self.fc1 = FlexibleLinear(num_features, n_classes, bias=False)
             self.model = self.fc1
         elif model_type == "MNIST" or model_type == "MLP":
-            self.model = MLP(input_dim=num_features,hidden_dim=1000,output_dim=n_classes, weight_decay=weight_decay)
+            self.model = MLP(input_dim=num_features,hidden_dim=1000,output_dim=n_classes, weight_decay=extra_weight_decay)
         elif model_type == "pt_logistic_l1":
             self.model = LogReg(input_dim=num_features, output_dim=n_classes)
             print("Setting (overriding?) default decay values for logistic L1")
@@ -55,8 +57,8 @@ class SoTLNet(Hypertrainable):
         self.alphas = []
         self.feature_indices = None
         self.model.feature_indices = self.feature_indices
-        if weight_decay > 0:
-            self.alpha_weight_decay = torch.nn.Parameter(torch.tensor([weight_decay], dtype=torch.float32, requires_grad=True).unsqueeze(dim=0))
+        if extra_weight_decay > 0:
+            self.alpha_weight_decay = torch.nn.Parameter(torch.tensor([extra_weight_decay], dtype=torch.float32, requires_grad=True).unsqueeze(dim=0))
         else:
             self.alpha_weight_decay = torch.tensor(0)
         if alpha_lr is not None:

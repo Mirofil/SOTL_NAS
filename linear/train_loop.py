@@ -93,10 +93,11 @@ def train_bptt(
     bilevel_w_steps=None,
     debug=False,
     recurrent=True,
-    arch_update_frequency=1
+    arch_update_frequency=1,
+    **kwargs
 ):
-    orig_model_cfg = deepcopy(model.config)
-    print(f"Starting with with config={model.config}")
+    orig_model_cfg = model.cfg
+    print(f"Starting with with config={model.cfg}")
     train_loader = torch.utils.data.DataLoader(
         dataset_cfg["dset_train"], batch_size=batch_size * T, shuffle=True
     )
@@ -104,8 +105,7 @@ def train_bptt(
     grad_compute_speed = AverageMeter()
 
     suffixed_name = model.model_type + log_suffix
-    if log_alphas:
-        running_degree_mismatch = 0
+    running_degree_mismatch = 0
 
     if device is None:
         device = 'cuda' if torch.cuda.is_available() else 'cpu'
@@ -135,14 +135,11 @@ def train_bptt(
                 break
 
             to_log = {}
-
             xs, ys = torch.split(batch[0], batch_size), torch.split(
                 batch[1], batch_size
             )
-
             if features is not None:
                 xs = [x[:, features] for x in xs]
-
             if mode == "bilevel":
                 
                 prerollout_w_optim_state_dict = w_optimizer.state_dict()
@@ -151,11 +148,8 @@ def train_bptt(
 
             weight_buffer = WeightBuffer(T=T, checkpoint_freq=w_checkpoint_freq)
             weight_buffer.add(model, 0)
-            sotl = 0
             losses = []
-
             # model.alpha_lr = torch.nn.Parameter(model.alpha_lr.detach())
-
             for intra_batch_idx, (x, y) in enumerate(zip(xs, ys),1):
                 
                 x, y = x.to(device), y.to(device)
@@ -165,9 +159,6 @@ def train_bptt(
                     intra_batch_idx=intra_batch_idx, config=config, optimizer_mode=optimizer_mode, debug=debug)
 
                 losses.append(loss)
-                sotl = loss
-
-
 
                 true_batch_index += 1
                 if mode == "joint":
@@ -179,7 +170,6 @@ def train_bptt(
                         metrics["val"][epoch].append(val_acc_top1)
                     if train_acc_top1 is not None:
                         metrics["train_acc"][epoch].append(train_acc_top1)
-
 
                     train_loss.update(loss.item())
                     to_log.update({

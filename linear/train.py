@@ -134,14 +134,9 @@ def main(epochs = 50,
     if rand_seed is not None:
         prepare_seed(rand_seed)
 
-    dataset_cfg = get_datasets(name=dataset, n_samples=n_samples, n_features=n_features,
-        n_informative=n_informative,
-        noise=noise,
-        featurize_type=featurize_type)
+    dataset_cfg = get_datasets(**config)
 
-    model = SoTLNet(num_features=int(len(dataset_cfg["dset_train"][0][0])) if dataset_cfg["n_features"] is None else dataset_cfg["n_features"], 
-    model_type=model_type, degree=initial_degree, weight_decay=extra_weight_decay, 
-        task=dataset_cfg["task"], n_classes=dataset_cfg["n_classes"], config=config, device=device, alpha_lr=alpha_lr)
+    model = SoTLNet(cfg=config,**config)
     model = model.to(device)
 
     criterion = get_criterion(model_type, dataset_cfg, loss)
@@ -151,46 +146,7 @@ def main(epochs = 50,
     w_optimizer, a_optimizer, w_scheduler, a_scheduler = get_optimizers(model, config)
 
     model, metrics = train_bptt(
-        epochs=epochs if not smoke_test else 4,
-        steps_per_epoch=steps_per_epoch,
-        model=model,
-        criterion=criterion,
-        w_optimizer=w_optimizer,
-        a_optimizer=a_optimizer,
-        w_scheduler=w_scheduler,
-        a_scheduler=a_scheduler,
-        decay_scheduler=decay_scheduler,
-        dataset_cfg=dataset_cfg,
-        dataset=dataset,
-        dset_train=dataset_cfg["dset_train"],
-        dset_val=dataset_cfg["dset_val"],
-        dset_test=dataset_cfg["dset_test"],
-        logging_freq=logging_freq,
-        batch_size=batch_size,
-        T=T,
-        grad_clip=grad_clip,
-        w_lr=w_lr,
-        w_checkpoint_freq=w_checkpoint_freq,
-        grad_inner_loop_order=grad_inner_loop_order,
-        grad_outer_loop_order=grad_outer_loop_order,
-        hvp=hvp,
-        ihvp=ihvp,
-        inv_hess=inv_hess,
-        arch_train_data=arch_train_data,
-        normalize_a_lr=normalize_a_lr,
-        log_grad_norm=True,
-        log_alphas=True,
-        w_warm_start=w_warm_start,
-        extra_weight_decay=extra_weight_decay,
-        device=device,
-        train_arch=train_arch,
-        config=config,
-        mode=mode,
-        hessian_tracking=hessian_tracking,
-        optimizer_mode=optimizer_mode,
-        bilevel_w_steps=bilevel_w_steps,
-        debug=debug,
-        recurrent=recurrent
+        **{**config, **dataset_cfg}
         )
     
     if model_type in ["max_deg", "softmax_mult", "linear"]:
