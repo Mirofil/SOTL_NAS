@@ -412,13 +412,13 @@ a_scheduler=None
 features=None
 loss='mse'
 log_suffix = ""
-optimizer_mode = "manual"
+optimizer_mode = "autograd"
 bilevel_w_steps=None
 debug=False
 recurrent=True
 rand_seed=1
 adaptive_a_lr = False
-alpha_lr=0.001
+alpha_lr=None
 arch_update_frequency=1
 from copy import deepcopy
 config=locals()

@@ -131,6 +131,17 @@ def compute_train_loss(x, y, criterion, model, weight_buffer=None, weight_decay=
     else:
         return loss
 
+
+def record_parents(model, root=""):
+    children = dict(model.named_children())
+    for module_name, module in children.items():
+        first_part = (root + ".") if root != "" else ""
+        cur_path = first_part + module_name
+        module.parent_path = cur_path
+        record_parents(module, root = cur_path)
+    
+    pass
+
 def switch_weights(model, weight_buffer_elem, state_dict=False):
     if state_dict:
         old_weights = []

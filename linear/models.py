@@ -148,6 +148,7 @@ class RFFRegressionBag(Hypertrainable):
         self.embedding = EmbeddingCombiner(embeddings=[RFFEmbedding(d=d, input_dim=input_dim, renew=False, l=ls[i]) for i in range(emb_count)])
         self.fc1 = FlexibleLinear(d, num_classes)
 
+
     def forward(self, x, weight=None, *args, **kwargs):
             
         x = self.embedding(x)
