@@ -68,6 +68,7 @@ def train_bptt(
     T: int,
     w_checkpoint_freq: int,
     grad_clip: float,
+    grad_clip_bilevel:float,
     w_lr: float,
     logging_freq: int,
     grad_inner_loop_order: int,
@@ -293,7 +294,7 @@ def train_bptt(
                         for g, (w_name, w) in zip(grads, model.named_weight_params()):
                             w.grad = g
                     if grad_clip is not None:
-                        torch.nn.utils.clip_grad_norm_(model.weight_params(), 10)
+                        torch.nn.utils.clip_grad_norm_(model.weight_params(), grad_clip_bilevel)
 
                     # with torch.no_grad():
                     #     for (w_name, w), dw in zip(model.named_weight_params(), grads):
