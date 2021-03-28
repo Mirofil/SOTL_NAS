@@ -92,7 +92,7 @@ def calculate_weight_decay(model, alpha_w_order=None, w_order=1, adaptive_decay=
 
 def compute_train_loss(x, y, criterion, model, weight_buffer=None, weight_decay=True, 
     y_pred=None, alpha_w_order=None, w_order=None, adaptive_decay=False, 
-    a_order=None, a_coef=None, w_coef=None, return_acc=False, debug=False):
+    a_order=None, a_coef=None, w_coef=None, return_acc=False, debug=False, detailed=False):
     assert model is not None or y_pred is not None
     assert y_pred is None or weight_buffer is None
 
@@ -127,8 +127,13 @@ def compute_train_loss(x, y, criterion, model, weight_buffer=None, weight_decay=
             acc_top1 = obtain_accuracy(y_pred.cpu().data, y.cpu().data, topk=(1,))
         else:
             acc_top1 = None
-        return loss, acc_top1
+        if detailed:
+            return loss, acc_top1, param_norm
+        else:
+            return loss, acc_top1
     else:
+        if detailed:
+            return loss, param_norm
         return loss
 
 

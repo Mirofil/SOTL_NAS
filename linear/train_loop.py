@@ -154,11 +154,12 @@ def train_bptt(
                 
                 x, y = x.to(device), y.to(device)
 
-                loss, train_acc_top1 = train_step(x=x, y=y, criterion=criterion, model=model, 
+                loss, train_acc_top1, param_norm = train_step(x=x, y=y, criterion=criterion, model=model, 
                 w_optimizer=w_optimizer, weight_buffer=weight_buffer, grad_clip=grad_clip, 
-                    intra_batch_idx=intra_batch_idx, config=config, optimizer_mode=optimizer_mode, debug=debug)
-
+                    intra_batch_idx=intra_batch_idx, config=config, optimizer_mode=optimizer_mode, debug=debug, detailed=True)
                 losses.append(loss)
+                if (loss-param_norm).item() < 0.29:
+                    tqdm.write(f"Success at epoch {epoch}, true batch {true_batch_index}, in total: {epoch*len(train_loader)+true_batch_index}")
 
                 true_batch_index += 1
                 if mode == "joint":

@@ -112,7 +112,8 @@ def main(epochs = 50,
     alpha_lr = None
     ):
     if adaptive_a_lr is True:
-        a_lr = a_lr*(T**(1/2))
+        # a_lr = a_lr*(T**(1/2))
+        a_lr =a_lr * T
 
     config = locals()
     if dry_run:
@@ -146,14 +147,13 @@ def main(epochs = 50,
     optim_cfg = get_optimizers(model, config)
     w_optimizer, a_optimizer, a_scheduler, w_scheduler=optim_cfg["w_optimizer"], optim_cfg["a_optimizer"], optim_cfg["a_scheduler"], optim_cfg["w_scheduler"]
 
-    model, metrics = train_bptt(**{**dataset_cfg, **config, **optim_cfg}
-        )
+    model, metrics = train_bptt(**{**dataset_cfg, **config, **optim_cfg})
     
     if model_type in ["max_deg", "softmax_mult", "linear"]:
         # lapack_solution, res, eff_rank, sing_values = scipy.linalg.lstsq(dset_train[:][0], dset_train[:][1])
         # print(f"Cond number:{abs(sing_values.max()/sing_values.min())}")
 
-        val_meter, val_acc_meter = valid_func(model=model, dset_val=dset_val, criterion=criterion, device=device, print_results=True)
+        val_meter, val_acc_meter = valid_func(model=model, dset_val=dataset_cfg["dset_val"], criterion=criterion, device=device, print_results=True)
 
         # model.fc1.weight = torch.nn.Parameter(torch.tensor(lapack_solution).to(device))
         # model.fc1.to(device)
@@ -323,15 +323,15 @@ n_features = 18
 n_samples = 5000
 w_optim='SGD'
 w_decay_order=2
-w_lr = 1e-3
+w_lr = 1e-1
 w_momentum=0.0
 w_weight_decay=1e-4
 a_optim="SGD"
 a_decay_order=2
-a_lr = 0.001
+a_lr = 1e-5
 a_momentum = 0.0
 a_weight_decay = 0
-T = 25
+T = 50
 grad_clip = 1
 logging_freq = 200
 w_checkpoint_freq = 1
@@ -350,7 +350,7 @@ extra_weight_decay=0
 grad_inner_loop_order=-1
 grad_outer_loop_order=-1
 arch_train_data="sotl"
-model_type="log_reg"
+model_type="MLP2"
 dataset="MNIST"
 device = 'cuda'
 train_arch=True
@@ -370,8 +370,8 @@ bilevel_w_steps=None
 debug=False
 recurrent=True
 rand_seed=1
-adaptive_a_lr = False
-alpha_lr=0.001
+adaptive_a_lr = True
+alpha_lr=1e-4
 arch_update_frequency=1
 from copy import deepcopy
 config=locals()

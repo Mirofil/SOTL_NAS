@@ -9,49 +9,52 @@ from utils_train import switch_weights, record_parents
 from models_base import Hypertrainable
 
 class SoTLNet(Hypertrainable):
-    def __init__(self, num_features = None, model_type = "softmax_mult", task="whatever",
+    def __init__(self, n_features = None, model_type = "softmax_mult", task="whatever",
      extra_weight_decay=0, n_classes=1, cfg=None, alpha_lr=None, **kwargs):
         super().__init__(**kwargs)
         self.model_type = model_type
-        self.num_features = num_features
+        self.n_features = n_features
         self.n_classes = n_classes
         self.cfg = cfg
 
     
 
         if model_type == "softmax_mult":
-            self.fc1 = LinearSquash(num_features, n_classes, bias=False, squash_type="softmax", **kwargs)
+            self.fc1 = LinearSquash(n_features, n_classes, bias=False, squash_type="softmax", **kwargs)
             self.model = self.fc1
         elif model_type == "sigmoid":
-            self.fc1 = LinearSquash(num_features, n_classes, bias=False, squash_type="sigmoid", **kwargs)
+            self.fc1 = LinearSquash(n_features, n_classes, bias=False, squash_type="sigmoid", **kwargs)
 
             self.model = self.fc1
         elif model_type == "rff":
             l = cfg["l"] if "l" in cfg.keys() else 1
-            self.model = RFFRegression(1000, num_features, l, **kwargs)
+            self.model = RFFRegression(1000, n_features, l, **kwargs)
         elif model_type == "rff_bag":
-            self.model = RFFRegressionBag(1000, num_features, **kwargs)
+            self.model = RFFRegressionBag(1000, n_features, **kwargs)
         elif model_type == "max_deg":
-            self.fc1 = LinearMaxDeg(num_features, n_classes, bias=False, **kwargs)
+            self.fc1 = LinearMaxDeg(n_features, n_classes, bias=False, **kwargs)
 
             self.model = self.fc1
         elif model_type == "linear":
-            self.fc1 = FlexibleLinear(num_features, n_classes, bias=False)
+            self.fc1 = FlexibleLinear(n_features, n_classes, bias=False)
             self.model = self.fc1
         elif model_type == "MNIST" or model_type == "MLP":
-            self.model = MLP(input_dim=num_features,hidden_dim=1000,output_dim=n_classes, weight_decay=extra_weight_decay)
+            self.model = MLP(input_dim=n_features,hidden_dim=1000,output_dim=n_classes, weight_decay=extra_weight_decay)
+        elif model_type == "MLP2":
+            self.model = MLP2(input_dim=n_features,hidden_dim=1000,output_dim=n_classes, weight_decay=extra_weight_decay)
+        
         elif model_type == "pt_logistic_l1":
-            self.model = LogReg(input_dim=num_features, output_dim=n_classes)
+            self.model = LogReg(input_dim=n_features, output_dim=n_classes)
             print("Setting (overriding?) default decay values for logistic L1")
             self.config["w_decay_order"] = 1
             self.config["w_weight_decay"] = 1
             self.config["a_decay_order"] = 0
         elif model_type == "log_reg":
-            self.model = LogReg(input_dim=num_features, output_dim=n_classes)
+            self.model = LogReg(input_dim=n_features, output_dim=n_classes)
         elif model_type == "AE":
-            self.model = AE(input_dim=num_features)
+            self.model = AE(input_dim=n_features)
         elif model_type == "linearAE":
-            self.model = LinearAE(input_dim=num_features)
+            self.model = LinearAE(input_dim=n_features)
         else:
             raise NotImplementedError
         self.alphas = []
@@ -70,7 +73,7 @@ class SoTLNet(Hypertrainable):
 
     def forward(self, x, weight=None, alphas=None, feature_indices=None):
         orig_shape = x.shape
-        x = x.view(-1, self.num_features)
+        x = x.view(-1, self.n_features)
         if feature_indices is not None:
             for to_delete in range(x.shape[1]):
                 if to_delete not in feature_indices:
@@ -151,7 +154,23 @@ class LogReg(Hypertrainable, FeatureSelectableTrait):
     def squash(self, x, **kwargs):
         return x
 
-    
+class MLP2(Hypertrainable):
+    def __init__(self, input_dim=28*28, hidden_dim=1000, output_dim=10, weight_decay=0, dropout_p=0.2, **kwargs):
+        super(MLP2, self).__init__()
+        self._input_dim = input_dim
+        self.lin1 = FlexibleLinear(input_dim, hidden_dim)
+        self.lin2 = FlexibleLinear(hidden_dim, hidden_dim)
+        self.lin3 = FlexibleLinear(hidden_dim, output_dim)
+
+    def forward(self, x, weight=None, alphas=None):
+
+        x = x.view(-1, self._input_dim)
+
+        x = F.relu(self.lin1(x, weight, alphas))
+        x = F.relu(self.lin2(x, weight, alphas))
+        x = self.lin3(x, weight, alphas)
+
+        return x
 class MLP(Hypertrainable, FeatureSelectableTrait):
     def __init__(self, input_dim=28*28, hidden_dim=1000, output_dim=10, weight_decay=0, dropout_p=0.2, **kwargs):
         super(MLP, self).__init__()

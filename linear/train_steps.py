@@ -40,11 +40,11 @@ from utils_train import (calculate_weight_decay, compute_auc,
 from utils_metrics import (ValidAccEvaluator, obtain_accuracy, SumOfWhatever)
 
 def train_step(x, y, criterion, model, w_optimizer, weight_buffer, grad_clip, config,
-    intra_batch_idx, optimizer_mode, debug=False):
+    intra_batch_idx, optimizer_mode, debug=False, detailed=False):
     # We cannot use PyTorch optimizers for AutoGrad directly because the optimizers work inplace
     if optimizer_mode == "manual":
-        loss, train_acc_top1 = compute_train_loss(x=x, y=y, criterion=criterion, 
-            model=model, weight_buffer=weight_buffer, return_acc=True)
+        loss, train_acc_top1, param_norm = compute_train_loss(x=x, y=y, criterion=criterion, 
+            model=model, weight_buffer=weight_buffer, return_acc=True, detailed=True)
         grads = torch.autograd.grad(
             loss,
             weight_buffer[-1].values()
@@ -70,8 +70,8 @@ def train_step(x, y, criterion, model, w_optimizer, weight_buffer, grad_clip, co
         model_old_weights = switch_weights(model, weight_buffer[-1]) 
 
     elif optimizer_mode == "autograd":
-        loss, train_acc_top1 = compute_train_loss(x=x, y=y, criterion=criterion, 
-            weight_buffer=weight_buffer, model=model, return_acc=True)
+        loss, train_acc_top1, param_norm = compute_train_loss(x=x, y=y, criterion=criterion, 
+            weight_buffer=weight_buffer, model=model, return_acc=True, detailed=True)
         grads = torch.autograd.grad(
             loss,
             weight_buffer[-1].values(),
@@ -90,7 +90,10 @@ def train_step(x, y, criterion, model, w_optimizer, weight_buffer, grad_clip, co
 
         model_old_weights = switch_weights(model, weight_buffer[-1]) # This is useful for auxiliary tasks - but the actual grad evaluation happens by using the external WeightBuffer weights
 
-    return loss, train_acc_top1
+    if detailed:
+        return loss, train_acc_top1, param_norm
+    else:
+        return loss, train_acc_top1
 
 def arch_step(model, criterion, xs, ys, weight_buffer, w_lr, hvp, inv_hess, ihvp,
     grad_inner_loop_order, grad_outer_loop_order, T, 
