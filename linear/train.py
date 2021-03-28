@@ -135,8 +135,8 @@ def main(epochs = 50,
         prepare_seed(rand_seed)
 
     if adaptive_a_lr is True:
-        # a_lr = a_lr*(T**(1/2))
-        a_lr =a_lr * T
+        a_lr = a_lr*(T**(1/2))
+        # a_lr =a_lr * T
 
     dataset_cfg = get_datasets(**config)
 

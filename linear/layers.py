@@ -175,3 +175,16 @@ class FlexibleLinear(torch.nn.Linear, Hypertrainable):
         else:
             extracted_params = {k:weight[self.parent_path+"."+k] for k, v in self.named_weight_params()}
             return F.linear(input, **extracted_params)
+
+class HyperConv2d(torch.nn.Conv2d, Hypertrainable):
+    def __init__(self, in_channels, out_channels, kernel_size, **kwargs):
+        super().__init__(in_channels, out_channels, kernel_size, **kwargs)
+        self.alphas = None
+
+    def forward(self, input: Tensor, weight: Tensor = None, alphas: Tensor = None, **kwargs) -> Tensor:
+        if weight is None:
+            weight = self.weight
+            return F.linear(input, weight)
+        else:
+            extracted_params = {k:weight[self.parent_path+"."+k] for k, v in self.named_weight_params()}
+            return F.linear(input, **extracted_params)
