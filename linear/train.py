@@ -112,9 +112,6 @@ def main(epochs = 50,
     alpha_lr = None,
     w_threshold=None
     ):
-    if adaptive_a_lr is True:
-        # a_lr = a_lr*(T**(1/2))
-        a_lr =a_lr * T
 
     config = locals()
     if dry_run:
@@ -135,6 +132,10 @@ def main(epochs = 50,
 
     if rand_seed is not None:
         prepare_seed(rand_seed)
+
+    if adaptive_a_lr is True:
+        # a_lr = a_lr*(T**(1/2))
+        a_lr =a_lr * T
 
     dataset_cfg = get_datasets(**config)
 
@@ -315,68 +316,6 @@ if __name__ == "__main__":
         pass
     except:
         fire.Fire(main)
-
-
-epochs = 75
-steps_per_epoch=None
-batch_size = 128
-n_features = 18
-n_samples = 5000
-w_optim='SGD'
-w_decay_order=2
-w_lr = 1e-1
-w_momentum=0.0
-w_weight_decay=1e-4
-a_optim="SGD"
-a_decay_order=2
-a_lr = 1e-3
-a_momentum = 0.0
-a_weight_decay = 0
-T = 2
-grad_clip = None
-logging_freq = 200
-w_checkpoint_freq = 1
-n_informative=7
-noise=0.25
-featurize_type="fourier"
-initial_degree=1
-hvp="exact"
-ihvp ="exact"
-inv_hess="exact"
-normalize_a_lr=True
-w_warm_start=0
-log_grad_norm=True
-log_alphas=False
-extra_weight_decay=0
-grad_inner_loop_order=-1
-grad_outer_loop_order=-1
-arch_train_data="sotl"
-model_type="MLP2"
-dataset="MNIST"
-device = 'cuda'
-train_arch=True
-dry_run=False
-mode="bilevel"
-hessian_tracking=False
-smoke_test=True
-rand_seed = 1
-decay_scheduler=None
-w_scheduler=None
-a_scheduler=None
-features=None
-loss='ce'
-log_suffix = ""
-optimizer_mode = "autograd"
-bilevel_w_steps=None
-debug=False
-recurrent=True
-rand_seed=1
-adaptive_a_lr = True
-alpha_lr=1e-3
-arch_update_frequency=1
-loss_threshold=None
-from copy import deepcopy
-config=locals()
 
 
 T=3
