@@ -52,7 +52,7 @@ from utils import (data_generator, eval_features, featurize, hessian, jacobian,
 from utils_features import choose_features
 from utils_train import (calculate_weight_decay, compute_auc,
                          compute_train_loss, get_criterion, get_optimizers,
-                         hinge_loss, reconstruction_error, switch_weights)
+                         hinge_loss, reconstruction_error, switch_weights, inverse_softplus)
 from utils_metrics import (ValidAccEvaluator, obtain_accuracy, SumOfWhatever)
 from train_loop import valid_func, train_bptt
 
@@ -138,8 +138,9 @@ def main(epochs = 50,
         a_lr = a_lr*(T**(1/2))
         # a_lr =a_lr * T
 
+    if alpha_lr is not None:
+        config["alpha_lr"] = inverse_softplus(config["alpha_lr"])
     dataset_cfg = get_datasets(**config)
-
     model = SoTLNet(cfg=config,**{**config, **dataset_cfg})
     model = model.to(device)
 

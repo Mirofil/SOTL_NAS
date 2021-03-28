@@ -174,6 +174,8 @@ def hinge_loss(x,y, threshold):
     elif x < y:
         return y - x + threshold
 
+def inverse_softplus(x):
+    return np.log(np.exp(x)-1)
 
 def get_optimizers(model, config, grad = None):
     # Weight decay is realized only manually through compute_train_loss
