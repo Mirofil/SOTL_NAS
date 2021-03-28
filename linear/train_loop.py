@@ -253,7 +253,7 @@ def train_bptt(
                             norm = norm + g.data.norm(2).item()
                         to_log.update({"Arch grad norm": norm})
 
-                    if log_alphas and batch_idx % 100 == 0:
+                    if log_alphas and batch_idx % 25 == 0:
                         if hasattr(model, "fc1") and hasattr(model.fc1, "degree"):
                             running_degree_mismatch = running_degree_mismatch + hinge_loss(model.fc1.degree.item(), config["n_informative"]/2, config["hinge_loss"])
 
@@ -261,8 +261,9 @@ def train_bptt(
 
                         if hasattr(model,"alpha_weight_decay"):
                             to_log.update({"Alpha weight decay": model.alpha_weight_decay.item()})
-
-
+                        
+                        if hasattr(model, "alpha_lr"):
+                            to_log.update({"alpha_lr": model.alpha_lr.item()})
 
             if mode == "bilevel" and epoch >= w_warm_start and batch_idx % arch_update_frequency == 0:
 
