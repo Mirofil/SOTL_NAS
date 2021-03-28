@@ -61,7 +61,7 @@ def calculate_weight_decay(model, alpha_w_order=None, w_order=1, adaptive_decay=
     if adaptive_decay != None and adaptive_decay != False and hasattr(model, "adaptive_weight_decay"):
         param_norm = param_norm + model.adaptive_weight_decay()
     
-    if a_order is not None and model.config["train_arch"]:
+    if a_order is not None and model.cfg["train_arch"]:
         if model.model_type in ['sigmoid']:
             for arch_param in model.arch_params():
                 param_norm_a = param_norm_a + a_coef * torch.sum(torch.norm(torch.sigmoid(arch_param), a_order))
@@ -107,9 +107,9 @@ def compute_train_loss(x, y, criterion, model, weight_buffer=None, weight_decay=
         assert y_pred.shape == x.shape
 
     if weight_decay:
-        param_norm = calculate_weight_decay(model, alpha_w_order=alpha_w_order, w_order=model.config["w_decay_order"],
-            adaptive_decay=adaptive_decay, a_order=model.config["a_decay_order"], 
-            a_coef=model.config["a_weight_decay"], w_coef=model.config["w_weight_decay"])
+        param_norm = calculate_weight_decay(model, alpha_w_order=alpha_w_order, w_order=model.cfg["w_decay_order"],
+            adaptive_decay=adaptive_decay, a_order=model.cfg["a_decay_order"], 
+            a_coef=model.cfg["a_weight_decay"], w_coef=model.cfg["w_weight_decay"])
     else:
         param_norm = 0
 
@@ -205,7 +205,8 @@ def get_optimizers(model, config, grad = None):
         a_scheduler = None
 
 
-    return w_optimizer, a_optimizer, w_scheduler, a_scheduler
+    return {"w_optimizer":w_optimizer, "a_optimizer":a_optimizer, 
+        "w_scheduler":w_scheduler, "a_scheduler":a_scheduler}
 
 def vae_loss(recon_x, x, mu, log_var):
     BCE = F.binary_cross_entropy(recon_x, x.view(-1, 784), reduction='sum')

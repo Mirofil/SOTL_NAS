@@ -9,7 +9,7 @@ from utils_train import switch_weights, record_parents
 from models_base import Hypertrainable
 
 class SoTLNet(Hypertrainable):
-    def __init__(self, num_features = 2, model_type = "softmax_mult", task="whatever",
+    def __init__(self, num_features = None, model_type = "softmax_mult", task="whatever",
      extra_weight_decay=0, n_classes=1, cfg=None, alpha_lr=None, **kwargs):
         super().__init__(**kwargs)
         self.model_type = model_type

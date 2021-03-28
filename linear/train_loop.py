@@ -123,10 +123,10 @@ def train_bptt(
         val_iter = iter(val_loader) # Used to make sure we iterate through the whole val set with no repeats
 
         if decay_scheduler == 'linear':
-            model.config["a_decay_order"] = None if (epoch < w_warm_start) else orig_model_cfg['a_decay_order']
-            model.config["w_decay_order"] = None if (epoch < w_warm_start) else orig_model_cfg['w_decay_order']
-            model.config['a_weight_decay'] = orig_model_cfg['a_weight_decay']*(epoch/epochs)
-            model.config['w_weight_decay'] = orig_model_cfg['w_weight_decay']*(epoch/epochs)
+            model.cfg["a_decay_order"] = None if (epoch < w_warm_start) else orig_model_cfg['a_decay_order']
+            model.cfg["w_decay_order"] = None if (epoch < w_warm_start) else orig_model_cfg['w_decay_order']
+            model.cfg['a_weight_decay'] = orig_model_cfg['a_weight_decay']*(epoch/epochs)
+            model.cfg['w_weight_decay'] = orig_model_cfg['w_weight_decay']*(epoch/epochs)
         elif decay_scheduler is None or decay_scheduler == "None":
             pass
 
@@ -264,7 +264,8 @@ def train_bptt(
             if mode == "bilevel" and epoch >= w_warm_start and batch_idx % arch_update_frequency == 0:
 
                 weights_after_rollout = switch_weights(model, weight_buffer[0])
-                w_optimizer, a_optimizer, w_scheduler, a_scheduler = get_optimizers(model, config)
+                optims = get_optimizers(model, config)
+                w_optimizer, a_optimizer, w_scheduler, a_scheduler = optims["w_optimizer"], optims["a_optimizer"], optims["w_scheduler"], optims["a_scheduler"]
 
                 #TODO This doesnt work when recurrent=True.. wtf?
                 w_optimizer.load_state_dict(prerollout_w_optim_state_dict)

@@ -136,17 +136,17 @@ def main(epochs = 50,
 
     dataset_cfg = get_datasets(**config)
 
-    model = SoTLNet(cfg=config,**config)
+    model = SoTLNet(cfg=config,**{**config, **dataset_cfg})
     model = model.to(device)
 
     criterion = get_criterion(model_type, dataset_cfg, loss)
 
     if alpha_lr is not None:
         config["w_lr"] = model.alpha_lr
-    w_optimizer, a_optimizer, w_scheduler, a_scheduler = get_optimizers(model, config)
+    optim_cfg = get_optimizers(model, config)
+    w_optimizer, a_optimizer, a_scheduler, w_scheduler=optim_cfg["w_optimizer"], optim_cfg["a_optimizer"], optim_cfg["a_scheduler"], optim_cfg["w_scheduler"]
 
-    model, metrics = train_bptt(
-        **{**config, **dataset_cfg}
+    model, metrics = train_bptt(**{**dataset_cfg, **config, **optim_cfg}
         )
     
     if model_type in ["max_deg", "softmax_mult", "linear"]:
