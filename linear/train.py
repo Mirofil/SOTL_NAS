@@ -109,7 +109,8 @@ def main(epochs = 50,
     recurrent=True,
     l=1e5,
     adaptive_a_lr=False,
-    alpha_lr = None
+    alpha_lr = None,
+    w_threshold=None
     ):
     if adaptive_a_lr is True:
         # a_lr = a_lr*(T**(1/2))
@@ -328,7 +329,7 @@ w_momentum=0.0
 w_weight_decay=1e-4
 a_optim="SGD"
 a_decay_order=2
-a_lr = 1e-5
+a_lr = 1e-3
 a_momentum = 0.0
 a_weight_decay = 0
 T = 50
@@ -371,8 +372,9 @@ debug=False
 recurrent=True
 rand_seed=1
 adaptive_a_lr = True
-alpha_lr=1e-4
+alpha_lr=1e-3
 arch_update_frequency=1
+loss_threshold=0.29
 from copy import deepcopy
 config=locals()
 

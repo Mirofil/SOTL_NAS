@@ -94,6 +94,7 @@ def train_bptt(
     debug=False,
     recurrent=True,
     arch_update_frequency=1,
+    loss_threshold=None,
     **kwargs
 ):
     orig_model_cfg = model.cfg
@@ -158,7 +159,7 @@ def train_bptt(
                 w_optimizer=w_optimizer, weight_buffer=weight_buffer, grad_clip=grad_clip, 
                     intra_batch_idx=intra_batch_idx, config=config, optimizer_mode=optimizer_mode, debug=debug, detailed=True)
                 losses.append(loss)
-                if (loss-param_norm).item() < 0.29:
+                if loss_threshold is not None and (loss-param_norm).item() < loss_threshold:
                     tqdm.write(f"Success at epoch {epoch}, true batch {true_batch_index}, in total: {epoch*len(train_loader)+true_batch_index}")
 
                 true_batch_index += 1
