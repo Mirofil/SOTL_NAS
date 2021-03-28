@@ -293,7 +293,7 @@ def train_bptt(
                         for g, (w_name, w) in zip(grads, model.named_weight_params()):
                             w.grad = g
                     if grad_clip is not None:
-                        torch.nn.utils.clip_grad_norm_(model.weight_params(), grad_clip)
+                        torch.nn.utils.clip_grad_norm_(model.weight_params(), 10)
 
                     # with torch.no_grad():
                     #     for (w_name, w), dw in zip(model.named_weight_params(), grads):
