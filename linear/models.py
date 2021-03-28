@@ -1,5 +1,5 @@
 import torch
-from layers import LinearSquash, LinearMaxDeg, FlexibleLinear, FeatureSelection, RFFEmbedding, EmbeddingCombiner, HyperConv2d
+from layers import LinearSquash, LinearMaxDeg, FlexibleLinear, FeatureSelection, RFFEmbedding, EmbeddingCombiner, HyperConv2d, HyperBatchNorm2d
 import torch.nn as nn
 import torch.nn.functional as F
 import itertools

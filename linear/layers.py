@@ -186,8 +186,8 @@ class HyperConv2d(torch.nn.Conv2d, Hypertrainable):
             extracted_params = {k:weight[self.parent_path+"."+k] for k, v in self.named_weight_params()}
             return F.conv2d(input, padding=self.padding, stride=self.stride, **extracted_params)
 class HyperBatchNorm2d(torch.nn.BatchNorm2d, Hypertrainable):
-    def __init__(self, in_channels, out_channels, kernel_size, **kwargs):
-        super().__init__(in_channels, out_channels, kernel_size, **kwargs)
+    def __init__(self, *args,**kwargs):
+        super().__init__(*args, **kwargs)
 
     def forward(self, input: Tensor, weight: Tensor = None, alphas: Tensor = None, **kwargs) -> Tensor:
         if weight is None:
