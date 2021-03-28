@@ -207,4 +207,4 @@ class HyperBatchNorm2d(torch.nn.BatchNorm2d, Hypertrainable):
                         # If buffers are not to be tracked, ensure that they won't be updated
                         self.running_mean if not self.training or self.track_running_stats else None,
                         self.running_var if not self.training or self.track_running_stats else None,
-                        bn_training, exponential_average_factor, self.eps, **extracted_params)
+                        training=bn_training, momentum=exponential_average_factor, eps=self.eps, **extracted_params)
