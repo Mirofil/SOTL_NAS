@@ -3,7 +3,7 @@
 # python linear/train.py --model_type=sigmoid --dataset=gisette --arch_train_data sotl --grad_outer_loop_order=None --mode=bilevel --device=cuda --initial_degree 1 --hvp=finite_diff --epochs=100 --w_lr=0.001 --T=1 --a_lr=0.01 --hessian_tracking False --w_optim=Adam --a_optim=Adam --w_warm_start 3 --train_arch=True --a_weight_decay=0.00000001--smoke_test False --dry_run=True --w_weight_decay=0.001 --batch_size=64 --decay_scheduler None
 
 # python linear/train.py --model_type=max_deg --dataset=fourier --dry_run=True --T=1 --grad_outer_loop_order=1 --grad_inner_loop_order=1 --mode=bilevel --device=cpu --optimizer_mode=autograd --arch_train_data=val
-# python linear/train.py --model_type=MNIST --dataset=MNIST --dry_run=False --T=1 --w_warm_start=0 --grad_outer_loop_order=-1 --grad_inner_loop_order=-1 --mode=bilevel --device=cuda --extra_weight_decay=0.0001 --w_weight_decay=0 --arch_train_data=val --train_arch=True
+# python linear/train.py --model_type=log_reg --dataset=MNIST --dry_run=False --T=1 --w_warm_start=0 --grad_outer_loop_order=-1 --grad_inner_loop_order=-1 --mode=bilevel --device=cuda --extra_weight_decay=0.0001 --w_weight_decay=0 --arch_train_data=val --train_arch=True
 
 #pip install --force git+https://github.com/Mirofil/pytorch-hessian-eigenthings.git
 
@@ -96,11 +96,11 @@ def train_bptt(
     arch_update_frequency=1
 ):
     orig_model_cfg = deepcopy(model.config)
-    print(f"Starting with with train_arch={train_arch}")
+    print(f"Starting with with config={model.config}")
     train_loader = torch.utils.data.DataLoader(
-        dset_train, batch_size=batch_size * T, shuffle=True
+        dataset_cfg["dset_train"], batch_size=batch_size * T, shuffle=True
     )
-    val_loader = torch.utils.data.DataLoader(dset_val, batch_size=batch_size)
+    val_loader = torch.utils.data.DataLoader(dataset_cfg["dset_val"], batch_size=batch_size)
     grad_compute_speed = AverageMeter()
 
     suffixed_name = model.model_type + log_suffix
@@ -154,6 +154,8 @@ def train_bptt(
             sotl = 0
             losses = []
 
+            # model.alpha_lr = torch.nn.Parameter(model.alpha_lr.detach())
+
             for intra_batch_idx, (x, y) in enumerate(zip(xs, ys),1):
                 
                 x, y = x.to(device), y.to(device)
@@ -164,6 +166,8 @@ def train_bptt(
 
                 losses.append(loss)
                 sotl = loss
+
+
 
                 true_batch_index += 1
                 if mode == "joint":
@@ -350,17 +354,17 @@ def train_bptt(
 
         # Check performance of model on val/test sets for logging only
         val_results, val_acc_results = valid_func(
-            model=model, dset_val=dset_val, criterion=criterion, device=device, 
+            model=model, dset_val=dataset_cfg["dset_val"], criterion=criterion, device=device, 
             print_results=False, features=features
         )
 
         test_results, test_acc_results = valid_func(
-            model=model, dset_val=dset_test, criterion=criterion, device=device, 
+            model=model, dset_val=dataset_cfg["dset_test"], criterion=criterion, device=device, 
             print_results=False, features=features
         )
 
         # Doesnt do anything if not doing feature selection
-        auc, acc, mse, hessian_eigenvalue = eval_feature_selection(model, dset_train, dset_val, dataset_cfg)
+        auc, acc, mse, hessian_eigenvalue = eval_feature_selection(model, dataset_cfg["dset_train"], dataset_cfg["dset_val"], dataset_cfg)
 
         if hessian_tracking:
             eigenvals, eigenvecs = compute_hessian_eigenthings(model, train_loader,
@@ -451,69 +455,3 @@ def eval_feature_selection(model, dset_train, dset_val, dataset_cfg):
         else:
             mse, acc = reconstruction_error(model=model, k=50, x_train=x_train, y_train=y_train, x_test=x_val, y_test=y_val, mode="alphas")
     return auc, acc, mse, hessian_eigenvalue
-
-# lr = torch.tensor(0.1, dtype=torch.float32, requires_grad=True) # Learning rate is the architecture parameter
-
-# x = torch.tensor(8, requires_grad=True, dtype=torch.float32) # Weight parameter
-
-# y1 = 2*x # Loss function
-
-# grads_y1 = torch.autograd.grad(y1, x, create_graph=True, retain_graph=True)
-
-# x = x - lr*grads_y1[0]
-
-# y2 = 2*x
-
-# grads_y2 = torch.autograd.grad(y2, x, create_graph=True, retain_graph=True)
-
-# x = x - lr * grads_y2[0]
-
-# y3 = 2*x
-
-# grads_y3 = torch.autograd.grad(y3, lr, create_graph=True, retain_graph=True)
-
-# grads_sotl = torch.autograd.grad(y3+y2+y1, lr, create_graph=True, retain_graph=True)
-# print(grads_sotl)
-
-# # Symbolically, we want: d(2x + 2(x-2a) + 2(x-2a-2a))/da 
-# # In Wolfram, result is -12 (same as here)
-
-
-# ## More elaborate example with a linear layer
-
-# lr = torch.tensor(0.1, dtype=torch.float32, requires_grad=True) # Learning rate is the architecture parameter
-
-# # Our data points
-# x1 = torch.tensor([1., 2., 3., 4., 5.], requires_grad=False, dtype=torch.float32)
-# x2 = torch.tensor([2., 3., 4., 5., 6.], requires_grad=False, dtype=torch.float32)
-# x3 = torch.tensor([3., 4., 5., 6., 7.], requires_grad=False, dtype=torch.float32)
-
-# model = torch.nn.Linear(5, 1)
-# # We will keep copies of the model weights in a buffer as in the manual case. 
-# weight1 = model.weight
-# print(f"Model weight: {model.weight}")
-
-# y1 = 2*F.linear(x1, weight1) # Loss function
-
-# grads_y1 = torch.autograd.grad(y1, weight1, create_graph=True, retain_graph=True)
-
-# for p, dp in zip(model.parameters(), grads_y1):
-#     weight2 = weight1 - lr * dp
-
-# print(f"Model weight after 1st update: {model.weight}")
-
-# y2 = 2*F.linear(x2, weight2)
-
-# grads_y2 = torch.autograd.grad(y2, weight2, create_graph=True, retain_graph=True)
-
-# for p, dp in zip(model.parameters(), grads_y2):
-#     weight3 = weight2 - lr * dp
-
-# print(f"Model weight after 2nd update: {model.weight}")
-
-# y3 = 2*F.linear(x3, weight3)
-
-# grads_y3 = torch.autograd.grad(y3, lr, create_graph=True, retain_graph=True)
-
-# grads_sotl = torch.autograd.grad(y3+y2+y1, lr, create_graph=True, retain_graph=True)
-# print(grads_sotl)

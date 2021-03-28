@@ -247,3 +247,29 @@ def arch_step(model, criterion, xs, ys, weight_buffer, w_lr, hvp, inv_hess, ihvp
 
 # grads_sotl = torch.autograd.grad(y3+y2+y1, lr, create_graph=True, retain_graph=True)
 # print(grads_sotl)
+
+# lr = torch.tensor(0.1, dtype=torch.float32, requires_grad=True) # Learning rate is the architecture parameter
+
+# x = torch.tensor(8, requires_grad=True, dtype=torch.float32) # Weight parameter
+
+# y1 = 2*x # Loss function
+
+# grads_y1 = torch.autograd.grad(y1, x, create_graph=True, retain_graph=True)
+
+# x = x - lr*grads_y1[0]
+
+# y2 = 2*x
+
+# grads_y2 = torch.autograd.grad(y2, x, create_graph=True, retain_graph=True)
+
+# x = x - lr * grads_y2[0]
+
+# y3 = 2*x
+
+# grads_y3 = torch.autograd.grad(y3, lr, create_graph=True, retain_graph=True)
+
+# grads_sotl = torch.autograd.grad(y3+y2+y1, lr, create_graph=True, retain_graph=True)
+# print(grads_sotl)
+
+# # Symbolically, we want: d(2x + 2(x-2a) + 2(x-2a-2a))/da 
+# # In Wolfram, result is -12 (same as here)

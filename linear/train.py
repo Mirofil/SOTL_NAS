@@ -9,6 +9,9 @@
 # python linear/train.py --model_type=max_deg --epochs 20 --steps_per_epoch=1 --dataset=fourier --dry_run=True --grad_outer_loop_order=-1 --grad_inner_loop_order=-1 --mode=bilevel --device=cpu --ihvp=exact --inv_hess=exact --hvp=exact --rand_seed 1 --arch_train_data sotl --optimizer_mode=autograd --T=25 --recurrent True --w_lr=1e-1 --a_lr=1e-3 --adaptive_a_lr=False
 # python linear/train.py --model_type=rff_bag --epochs 50 --dataset=MNISTrff --dry_run=True --grad_outer_loop_order=-1 --grad_inner_loop_order=-1 --mode=bilevel --device=cpu --ihvp=exact --inv_hess=exact --hvp=exact --rand_seed 1 --arch_train_data sotl --optimizer_mode=autograd --loss=ce --T=2 --recurrent True --a_weight_decay 0 --a_lr=1500000000000 --w_weight_decay 0.0001 --train_arch=True --w_lr=1
 # python linear/train.py --model_type=rff_bag --epochs 300 --dataset=MNISTrff --dry_run=True --grad_outer_loop_order=-1 --grad_inner_loop_order=-1 --mode=bilevel --device=cuda --ihvp=exact --inv_hess=exact --hvp=exact --rand_seed 1 --arch_train_data sotl --optimizer_mode=autograd --loss=ce --T=2 --recurrent True --a_weight_decay 0 --a_lr=1 --w_weight_decay 0.01 --train_arch=True --w_lr=10
+
+# python linear/train.py --model_type=log_reg --dataset=MNIST --dry_run=False --T=2 --w_warm_start=0 --grad_outer_loop_order=-1 --grad_inner_loop_order=-1 --mode=bilevel --device=cpu --w_weight_decay=0 --arch_train_data=sotl --alpha_lr=0.001 --w_lr=1e-3 --a_lr=1e-2 --alpha_lr=1e-3 --optimizer_mode=autograd --loss=ce --a_weight_decay=0
+
 #pip install --force git+https://github.com/Mirofil/pytorch-hessian-eigenthings.git
 
 import itertools
@@ -68,7 +71,7 @@ def main(epochs = 50,
     a_decay_order=2,
     a_lr = 1e-2,
     a_momentum = 0.0,
-    a_weight_decay = 0.01,
+    a_weight_decay = 0,
     T = 10,
     grad_clip = None,
     logging_freq = 200,
@@ -135,16 +138,10 @@ def main(epochs = 50,
         n_informative=n_informative,
         noise=noise,
         featurize_type=featurize_type)
-    dset_train = dataset_cfg["dset_train"]
-    dset_val = dataset_cfg["dset_val"]
-    dset_test = dataset_cfg["dset_test"]
-    task = dataset_cfg["task"]
-    n_classes = dataset_cfg["n_classes"]
-    n_features = dataset_cfg["n_features"]
 
-    model = SoTLNet(num_features=int(len(dset_train[0][0])) if n_features is None else n_features, model_type=model_type, 
-        degree=initial_degree, weight_decay=extra_weight_decay, 
-        task=task, n_classes=n_classes, config=config, device=device, alpha_lr=alpha_lr)
+    model = SoTLNet(num_features=int(len(dataset_cfg["dset_train"][0][0])) if dataset_cfg["n_features"] is None else dataset_cfg["n_features"], 
+    model_type=model_type, degree=initial_degree, weight_decay=extra_weight_decay, 
+        task=dataset_cfg["task"], n_classes=dataset_cfg["n_classes"], config=config, device=device, alpha_lr=alpha_lr)
     model = model.to(device)
 
     criterion = get_criterion(model_type, dataset_cfg, loss)
@@ -165,9 +162,9 @@ def main(epochs = 50,
         decay_scheduler=decay_scheduler,
         dataset_cfg=dataset_cfg,
         dataset=dataset,
-        dset_train=dset_train,
-        dset_val=dset_val,
-        dset_test=dset_test,
+        dset_train=dataset_cfg["dset_train"],
+        dset_val=dataset_cfg["dset_val"],
+        dset_test=dataset_cfg["dset_test"],
         logging_freq=logging_freq,
         batch_size=batch_size,
         T=T,
@@ -364,21 +361,21 @@ if __name__ == "__main__":
 
 
 epochs = 75
-steps_per_epoch=5
-batch_size = 64
+steps_per_epoch=None
+batch_size = 128
 n_features = 18
 n_samples = 5000
 w_optim='SGD'
 w_decay_order=2
 w_lr = 1e-3
 w_momentum=0.0
-w_weight_decay=0
+w_weight_decay=1e-4
 a_optim="SGD"
 a_decay_order=2
-a_lr = 0.01
+a_lr = 0.001
 a_momentum = 0.0
 a_weight_decay = 0
-T = 3
+T = 25
 grad_clip = 1
 logging_freq = 200
 w_checkpoint_freq = 1
@@ -398,8 +395,8 @@ grad_inner_loop_order=-1
 grad_outer_loop_order=-1
 arch_train_data="sotl"
 model_type="log_reg"
-dataset="fourier"
-device = 'cpu'
+dataset="MNIST"
+device = 'cuda'
 train_arch=True
 dry_run=False
 mode="bilevel"
@@ -410,7 +407,7 @@ decay_scheduler=None
 w_scheduler=None
 a_scheduler=None
 features=None
-loss='mse'
+loss='ce'
 log_suffix = ""
 optimizer_mode = "autograd"
 bilevel_w_steps=None
@@ -422,3 +419,61 @@ alpha_lr=0.001
 arch_update_frequency=1
 from copy import deepcopy
 config=locals()
+
+
+T=3
+w_warm_start=0
+batch_size=64
+epochs=50
+steps_per_epoch=None
+grad_outer_loop_order=-1
+grad_inner_loop_order=-1
+mode="bilevel"
+device="cpu"
+dataset="MNIST"
+model_type="log_reg"
+w_weight_decay=0
+arch_train_data="sotl"
+alpha_lr=0.001
+w_lr=0.001
+a_lr=0.01
+optimizer_mode="autograd"
+loss="ce"
+a_weight_decay=0
+rand_seed=1
+extra_weight_decay=0
+bilevel_w_steps=None
+arch_update_frequency=1
+adaptive_a_lr=False
+debug=False
+dry_run=False
+
+n_samples=5
+n_informative=1
+noise=1
+n_classes=10
+task='cf'
+n_informative=5
+n_features=5
+noise=1
+w_optim='SGD'
+a_optim='SGD'
+a_momentum=0
+w_momentum=0
+w_scheduler=None
+a_scheduler=None
+train_arch=True
+log_suffix=""
+log_alphas=True
+decay_scheduler=None
+features=None
+w_checkpoint_freq=1
+grad_clip=1
+w_decay_order=2
+a_decay_order=2
+hvp="exact"
+ihvp="exact"
+inv_hess="exact"
+normalize_a_lr=True
+recurrent=True
+log_grad_norm=True
