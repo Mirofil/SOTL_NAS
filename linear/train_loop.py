@@ -263,6 +263,8 @@ def train_bptt(
                             to_log.update({"Alpha weight decay": model.alpha_weight_decay.item()})
                         
                         if hasattr(model, "alpha_lr"):
+                            print(config["w_lr"])
+                            print(model.alpha_lr.item())
                             to_log.update({"alpha_lr": config["w_lr"]})
 
             if mode == "bilevel" and epoch >= w_warm_start and batch_idx % arch_update_frequency == 0:
