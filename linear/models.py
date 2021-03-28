@@ -105,13 +105,13 @@ class SoTLNet(Hypertrainable):
                 if to_delete not in self.feature_indices:
                     x[:, to_delete] = 0
 
-        if weight is not None:
-            old_weights = switch_weights(self, weight)
+        # if weight is not None:
+        #     old_weights = switch_weights(self, weight)
 
         if 'AE' in self.model_type:
-            return self.model(x,).reshape(orig_shape)
+            return self.model(x, weight, alphas).reshape(orig_shape)
         else:
-            return self.model(x)
+            return self.model(x, weight, alphas)
 
     def adaptive_weight_decay(self):
         return torch.sum(torch.abs(self.fc1.weight*self.fc1.compute_deg_constants()))
@@ -163,7 +163,7 @@ class LogReg(Hypertrainable, FeatureSelectableTrait):
     def forward(self, x, weight=None, alphas=None):
 
         x = x.view(-1, self._input_dim)
-        x = self.fc1(x, weight=weight)
+        x = self.fc1(x, weight=weight, alphas=alphas)
         return x
 
     def alpha_feature_selectors(self):

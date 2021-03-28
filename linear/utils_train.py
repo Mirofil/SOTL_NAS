@@ -131,7 +131,7 @@ def compute_train_loss(x, y, criterion, model, weight_buffer=None, weight_decay=
     else:
         return loss
 
-def switch_weights(model, weight_buffer_elem, state_dict=True):
+def switch_weights(model, weight_buffer_elem, state_dict=False):
     if state_dict:
         old_weights = []
         for w_name, new_w in zip([k for k in model.state_dict().keys() if 'alpha' not in k], weight_buffer_elem):

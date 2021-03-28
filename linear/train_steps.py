@@ -86,12 +86,11 @@ def train_step(x, y, criterion, model, w_optimizer, weight_buffer, grad_clip, co
         new_weights = []
 
         for w, dw in zip(weight_buffer[-1], grads):
-            new_w = torch.nn.Parameter(w, requires_grad=True)
-            new_weights.append(new_w - config["w_lr"]*dw) # Manual SGD update that creates new nodes in the computational graph
+            new_weights.append(w - config["w_lr"]*dw) # Manual SGD update that creates new nodes in the computational graph
 
         weight_buffer.direct_add(new_weights)
 
-        model_old_weights = switch_weights(model, weight_buffer[-1]) # This is useful for auxiliary tasks - but the actual grad evaluation happens by using the external WeightBuffer weights
+        # model_old_weights = switch_weights(model, weight_buffer[-1]) # This is useful for auxiliary tasks - but the actual grad evaluation happens by using the external WeightBuffer weights
 
     return loss, train_acc_top1
 
