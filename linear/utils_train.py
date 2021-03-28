@@ -174,12 +174,12 @@ def hinge_loss(x,y, threshold):
     elif x < y:
         return y - x + threshold
 
-def inverse_softplus(x):
-    return np.log(np.exp(x)-1)
+def inverse_softplus(x, beta):
+    return np.log(np.exp(beta*x)-1)/beta
 
 def get_optimizers(model, config, grad = None):
     # Weight decay is realized only manually through compute_train_loss
-    true_w_lr = config["w_lr"] if type(config["w_lr"]) is float else abs(F.softplus(config["w_lr"]).item()) # NOTE when doing Architecture LR, this wont be used anyways
+    true_w_lr = config["w_lr"] if (type(config["w_lr"]) is float or not config["softplus_alpha_lr"]) else abs(F.softplus(config["w_lr"], config["softplus_beta"]).item()) # NOTE when doing Architecture LR, this wont be used anyways
     if config["w_optim"] == 'SGD':
         w_optimizer = SGD(model.weight_params(), lr=true_w_lr, momentum=config["w_momentum"])
     elif config ['w_optim'] =='Adam':

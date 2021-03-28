@@ -1,5 +1,5 @@
 import torch
-from layers import LinearSquash, LinearMaxDeg, FlexibleLinear, FeatureSelection, RFFEmbedding, EmbeddingCombiner
+from layers import LinearSquash, LinearMaxDeg, FlexibleLinear, FeatureSelection, RFFEmbedding, EmbeddingCombiner, HyperConv2d
 import torch.nn as nn
 import torch.nn.functional as F
 import itertools
@@ -7,6 +7,7 @@ from traits import FeatureSelectableTrait, AutoEncoder, Regressor, Classifier
 import numpy as np
 from utils_train import switch_weights, record_parents
 from models_base import Hypertrainable
+import math
 
 class SoTLNet(Hypertrainable):
     def __init__(self, n_features = None, model_type = "softmax_mult", task="whatever",
@@ -17,7 +18,6 @@ class SoTLNet(Hypertrainable):
         self.n_classes = n_classes
         self.cfg = cfg
 
-    
 
         if model_type == "softmax_mult":
             self.fc1 = LinearSquash(n_features, n_classes, bias=False, squash_type="softmax", **kwargs)
@@ -42,7 +42,8 @@ class SoTLNet(Hypertrainable):
             self.model = MLP(input_dim=n_features,hidden_dim=1000,output_dim=n_classes, weight_decay=extra_weight_decay)
         elif model_type == "MLP2":
             self.model = MLP2(input_dim=n_features,hidden_dim=1000,output_dim=n_classes, weight_decay=extra_weight_decay)
-        
+        elif model_type =="vgg":
+            self.model = VGG(make_layers(cfg['D'], batch_norm=True))
         elif model_type == "pt_logistic_l1":
             self.model = LogReg(input_dim=n_features, output_dim=n_classes)
             print("Setting (overriding?) default decay values for logistic L1")
@@ -171,6 +172,60 @@ class MLP2(Hypertrainable):
         x = self.lin3(x, weight, alphas)
 
         return x
+
+class VGG(nn.Module):
+    '''
+    VGG model
+    '''
+    def __init__(self, features):
+        super(VGG, self).__init__()
+        self.features = features
+        self.classifier = nn.Sequential(
+            nn.Dropout(),
+            FlexibleLinear(512, 512),
+            nn.ReLU(True),
+            nn.Dropout(),
+            FlexibleLinear(512, 512),
+            nn.ReLU(True),
+            FlexibleLinear(512, 10),
+        )
+         # Initialize weights
+        for m in self.modules():
+            if isinstance(m, HyperConv2d):
+                n = m.kernel_size[0] * m.kernel_size[1] * m.out_channels
+                m.weight.data.normal_(0, math.sqrt(2. / n))
+                m.bias.data.zero_()
+
+
+    def forward(self, x):
+        x = self.features(x)
+        x = x.view(x.size(0), -1)
+        x = self.classifier(x)
+        return x
+
+def make_layers(cfg, batch_norm=False):
+    layers = []
+    in_channels = 3
+    for v in cfg:
+        if v == 'M':
+            layers += [nn.MaxPool2d(kernel_size=2, stride=2)]
+        else:
+            conv2d = HyperConv2d(in_channels, v, kernel_size=3, padding=1)
+            if batch_norm:
+                layers += [conv2d, nn.BatchNorm2d(v), nn.ReLU(inplace=True)]
+            else:
+                layers += [conv2d, nn.ReLU(inplace=True)]
+            in_channels = v
+    return nn.Sequential(*layers)
+
+cfg = {
+    'A': [64, 'M', 128, 'M', 256, 256, 'M', 512, 512, 'M', 512, 512, 'M'],
+    'B': [64, 64, 'M', 128, 128, 'M', 256, 256, 'M', 512, 512, 'M', 512, 512, 'M'],
+    'D': [64, 64, 'M', 128, 128, 'M', 256, 256, 256, 'M', 512, 512, 512, 'M', 512, 512, 512, 'M'],
+    'E': [64, 64, 'M', 128, 128, 'M', 256, 256, 256, 256, 'M', 512, 512, 512, 512, 'M',
+          512, 512, 512, 512, 'M'],
+}
+
 class MLP(Hypertrainable, FeatureSelectableTrait):
     def __init__(self, input_dim=28*28, hidden_dim=1000, output_dim=10, weight_decay=0, dropout_p=0.2, **kwargs):
         super(MLP, self).__init__()

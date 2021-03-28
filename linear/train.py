@@ -112,6 +112,7 @@ def main(epochs = 50,
     adaptive_a_lr=False,
     alpha_lr = None,
     softplus_alpha_lr=True,
+    softplus_beta=100,
     w_threshold=None
     ):
 
@@ -140,7 +141,7 @@ def main(epochs = 50,
         a_lr =a_lr * T
 
     if alpha_lr is not None and softplus_alpha_lr:
-        config["alpha_lr"] = inverse_softplus(config["alpha_lr"])
+        config["alpha_lr"] = inverse_softplus(config["alpha_lr"], config["softplus_beta"])
     dataset_cfg = get_datasets(**config)
     model = SoTLNet(cfg=config,**{**config, **dataset_cfg})
     model = model.to(device)
