@@ -332,8 +332,8 @@ a_decay_order=2
 a_lr = 1e-3
 a_momentum = 0.0
 a_weight_decay = 0
-T = 50
-grad_clip = 1
+T = 2
+grad_clip = None
 logging_freq = 200
 w_checkpoint_freq = 1
 n_informative=7
@@ -374,7 +374,7 @@ rand_seed=1
 adaptive_a_lr = True
 alpha_lr=1e-3
 arch_update_frequency=1
-loss_threshold=0.29
+loss_threshold=None
 from copy import deepcopy
 config=locals()
 

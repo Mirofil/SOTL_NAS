@@ -177,12 +177,13 @@ def hinge_loss(x,y, threshold):
 
 def get_optimizers(model, config, grad = None):
     # Weight decay is realized only manually through compute_train_loss
+    true_w_lr = config["w_lr"] if type(config["w_lr"]) is float else abs(config["w_lr"].item()) # NOTE when doing Architecture LR, this wont be used anyways
     if config["w_optim"] == 'SGD':
-        w_optimizer = SGD(model.weight_params(), lr=config["w_lr"], momentum=config["w_momentum"])
+        w_optimizer = SGD(model.weight_params(), lr=true_w_lr, momentum=config["w_momentum"])
     elif config ['w_optim'] =='Adam':
-        w_optimizer = Adam(model.weight_params(), lr=config["w_lr"])
+        w_optimizer = Adam(model.weight_params(), lr=true_w_lr)
     elif config["w_optim"] == "HyperSGD":
-        w_optimizer = HyperSGD(model.weight_params(), lr=config["w_lr"], momentum=config["w_momentum"], grad=grad)
+        w_optimizer = HyperSGD(model.weight_params(), lr=true_w_lr, momentum=config["w_momentum"], grad=grad)
 
 
     if config['w_scheduler'] == "step":
