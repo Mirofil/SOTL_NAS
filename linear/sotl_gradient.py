@@ -72,24 +72,24 @@ inv_hess = "exact", ihvp="exact", recurrent=True, debug=False):
             j = i - j -1
         x = xs[j].to(device)
         y = ys[j].to(device)
-        for idx in range(len(weight_buffer)):
-            weight_buffer[idx][0] = weight_buffer[idx][0].detach()
-            weight_buffer[idx][0].requires_grad=True
+        # for idx in range(len(weight_buffer)):
+        #     weight_buffer[idx][0] = weight_buffer[idx][0].detach()
+        #     weight_buffer[idx][0].requires_grad=True
 
         loss2 = compute_train_loss(x, y, criterion, y_pred=model(x, weight_buffer[j]), model=model)
 
         if inv_hess == "ift":
             inv_hess_matrices_dwdw = [torch.inverse(hessian(
-                loss2 * 1, weight_buffer[i-j-1][idx], weight_buffer[i-j-1][idx]
+                loss2 * 1, weight_buffer[i-j-1][idx].values(), weight_buffer[i-j-1][idx].values()
             )) for idx in range(len(weight_buffer[i-j-1]))]
         elif inv_hess == "exact":
-            prods = [torch.eye(w.shape[1]) for w in weight_buffer[j]]
+            prods = [torch.eye(w.shape[1]) for w in weight_buffer[j].values()]
             for k in range(0, j, 1):
                 if not recurrent:
                     k = i-k
                 loss3 = compute_train_loss(x=xs[k].to(device), y=ys[k].to(device), criterion=criterion, 
                     y_pred=model(xs[k].to(device), weight_buffer[k]), model=model)
-                hess_matrices_dwdw = [hessian(loss3*1, w, w) for w in weight_buffer[k]]
+                hess_matrices_dwdw = [hessian(loss3*1, w, w) for w in weight_buffer[k].values()]
                 # hess_matrices_dwdw = [torch.autograd.functional.hessian(l, w).reshape((18,18)) for w in weight_buffer[i-k]]
                 # print(hess_matrices_dwdw[0].shape)
                 for idx, (prod, hess) in enumerate(zip(prods, hess_matrices_dwdw)):
@@ -98,7 +98,7 @@ inv_hess = "exact", ihvp="exact", recurrent=True, debug=False):
 
 
         elif inv_hess == "id":
-            inv_hess_matrices_dwdw = [torch.eye(w.shape[1]) for w in weight_buffer[j]] # TODO THERE SHOULD BE A RANGE TO ACCOMMODATE ALL TIMESTEPS
+            inv_hess_matrices_dwdw = [torch.eye(w.shape[1]) for w in weight_buffer[j].values()] # TODO THERE SHOULD BE A RANGE TO ACCOMMODATE ALL TIMESTEPS
             
 
         ihvp_vecs = [0 for _ in range(len(dw))]
@@ -122,7 +122,7 @@ inv_hess = "exact", ihvp="exact", recurrent=True, debug=False):
             # NOTE this exact pathway only makes sense for the linear model because we materialize the inverse Hessian. So playing with indexes for multiple arch/weight Hessian pairs here is not very meaningful either
 
             hessian_matrices_dadw = [hessian(
-                loss2 * 1, weight_buffer[j][idx], arch_param
+                loss2 * 1, list(weight_buffer[j].values())[idx], arch_param
             ) for arch_param in model.arch_params() for idx in range(len(weight_buffer[i-j-1]))]
 
 
@@ -199,11 +199,11 @@ inv_hess = "exact", ihvp="exact", recurrent=True, debug=False):
         #NOTE FOR LOGGING ONLY, DELETE LATER
         loss3 = compute_train_loss(x=xs[j].to(device), y=ys[j].to(device), criterion=criterion, 
             y_pred=model(xs[j].to(device), weight_buffer[j]), model=model)
-        inv_hess_matrices_dwdw = [hessian(loss3*1, w, w) for w in weight_buffer[j]]
+        inv_hess_matrices_dwdw = [hessian(loss3*1, w, w) for w in weight_buffer[j].values()]
 
         loss2 = compute_train_loss(xs[j], ys[j], criterion, y_pred=model(xs[j], weight_buffer[j]), model=model)
         hessian_matrices_dadw = [hessian(
-            loss2 * 1, weight_buffer[j][idx], arch_param
+            loss2 * 1, list(weight_buffer[j].values())[idx], arch_param
         ) for arch_param in model.arch_params() for idx in range(len(weight_buffer[j]))]
 
         debug_info["total_arch_gradient"][j] = total_arch_gradient_local
@@ -218,11 +218,11 @@ inv_hess = "exact", ihvp="exact", recurrent=True, debug=False):
             #     weight_buffer[idx][0].requires_grad=True
             # model.fc1.alphas = torch.nn.Parameter(model.fc1.alphas.detach(), requires_grad=True)
             loss = compute_train_loss(xs[j], ys[j], criterion, model=model, y_pred=model(xs[j], weight_buffer[j]))
-            inv_hess_matrices_dwdw = [hessian(loss*1, w, w) for w in weight_buffer[j]]
+            inv_hess_matrices_dwdw = [hessian(loss*1, w, w) for w in weight_buffer[j].values()]
 
             loss = compute_train_loss(xs[j], ys[j], criterion, model=model, y_pred=model(xs[j], weight_buffer[j]))
             hessian_matrices_dadw = [hessian(
-                loss * 1, weight_buffer[j][idx], arch_param
+                loss * 1, list(weight_buffer[j].values())[idx], arch_param
             ) for arch_param in model.arch_params() for idx in range(len(weight_buffer[j-1]))]
             total_arch_gradient = [(torch.eye(h_dwdw.shape[0]) - w_lr*h_dwdw) @ g - w_lr*h_dadw for g, h_dwdw, h_dadw in zip(total_arch_gradient, inv_hess_matrices_dwdw, hessian_matrices_dadw)]
 
@@ -286,7 +286,7 @@ def sotl_gradient(
             top_level_loss = compute_train_loss(top_level_x, top_level_y, criterion, y_pred=model(top_level_x, top_level_weights), model=model)
             
             da_direct = [y if y is not None else torch.zeros(x.size()).to(device) for x,y in zip(model.arch_params(), torch.autograd.grad(top_level_loss, model.arch_params(), retain_graph=True, allow_unused=True))]
-            dw = torch.autograd.grad(top_level_loss, top_level_weights)
+            dw = torch.autograd.grad(top_level_loss, top_level_weights.values())
 
             # no_longer_needed_weights = switch_weights(model, old_weights)
 

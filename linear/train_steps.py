@@ -47,7 +47,7 @@ def train_step(x, y, criterion, model, w_optimizer, weight_buffer, grad_clip, co
             model=model, weight_buffer=weight_buffer, return_acc=True)
         grads = torch.autograd.grad(
             loss,
-            weight_buffer[-1]
+            weight_buffer[-1].values()
         )
         # with torch.no_grad():
         #     for g, w in zip(grads, model.weight_params()):
@@ -55,17 +55,15 @@ def train_step(x, y, criterion, model, w_optimizer, weight_buffer, grad_clip, co
         if grad_clip is not None:
             torch.nn.utils.clip_grad_norm_(grads, grad_clip)
 
-        new_weights = []
         # w_optimizer.step()
         # w_optimizer.zero_grad()
         # weight_buffer.add(model, intra_batch_idx)
 
+        new_weights = {}
         with torch.no_grad():
-            for w, dw in zip(weight_buffer[-1], grads):
-                new_weight = w - config["w_lr"]*dw
-                # new_weight = new_weight.detach()
-                new_weight.requires_grad = True
-                new_weights.append(new_weight) # Manual SGD update that creates new nodes in the computational graph
+            for (w_name, w), dw in zip(weight_buffer[-1].items(), grads):
+                new_weights[w_name] = w - config["w_lr"]*dw
+                new_weights[w_name].requires_grad = True
 
         weight_buffer.direct_add(new_weights)
 

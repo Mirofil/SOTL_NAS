@@ -79,14 +79,11 @@ class EmbeddingCombiner(Hypertrainable):
     def forward(self, x):
         embs = [emb(x) for emb in self.embeddings]
         weights = self.softmax(self.alpha_lin_comb)
-
         # print(embs)
         # embs = torch.sum([emb*w for emb, w in zip(embs, weights)], dim=1)
         # for emb in embs:
         #     print(emb.shape)
-
         embs = sum([emb*w for emb, w in zip(embs, weights)])
-
         return embs
 
 class RFFEmbedding(Hypertrainable):
