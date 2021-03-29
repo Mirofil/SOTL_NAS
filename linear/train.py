@@ -104,6 +104,8 @@ def main(cfg=None, **kwargs):
 
     model, metrics = train_bptt(**{**dataset_cfg, **config, **optim_cfg}, model=model, criterion=criterion, dataset_cfg=dataset_cfg, config=config)
     
+
+
     if config["model_type"] in ["max_deg", "softmax_mult", "linear"]:
         # lapack_solution, res, eff_rank, sing_values = scipy.linalg.lstsq(dset_train[:][0], dset_train[:][1])
         # print(f"Cond number:{abs(sing_values.max()/sing_values.min())}")

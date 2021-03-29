@@ -2,7 +2,7 @@ from yacs.config import CfgNode as CN
 
 C = CN()
 
-C.epochs = 75
+C.epochs = 50
 C.steps_per_epoch=None
 C.batch_size = 128
 C.n_features = 18

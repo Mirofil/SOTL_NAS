@@ -374,6 +374,7 @@ def train_bptt(
         tqdm.write("Epoch: {}, Val Loss: {}, Test Loss: {}, Discretized AUC: {}, MSE: {}, Reconstruction Acc: {}, Hess: {}".format(epoch, val_results.avg, test_results.avg, auc, mse, acc, hessian_eigenvalue))
         to_log = {**to_log, "val_loss": val_results.avg, "val_acc": val_acc_results.avg, "test_loss": test_results.avg, "test_acc": test_acc_results.avg, "AUC_training": auc, "MSE training":mse, 
             "RecAcc training":acc, "Arch. Hessian domin. eigenvalue": hessian_eigenvalue, "epoch": epoch, "arch_update_idx": arch_update_idx}
+        to_log = {k:v for k,v in to_log.items() if v is not None}
         wandb.log({suffixed_name:{dataset:{**to_log}}})
         wandb.run.summary["Grad compute speed"] = grad_compute_speed.avg
 
@@ -385,11 +386,23 @@ def train_bptt(
         if a_scheduler is not None:
             a_scheduler.step()
 
-    for metric in primal_metrics:
-        if metric in metrics.keys():
-            metrics[metric+"E1"] = SumOfWhatever(measurements = metrics[metric], e=1).get_time_series(chunked=True)
-            metrics[metric+"Einf"] = SumOfWhatever(measurements = metrics[metric], e=1000).get_time_series(chunked=True)
-
+    try:
+        for metric in primal_metrics:
+            if metric in metrics.keys():
+                metrics[metric+"E1"] = SumOfWhatever(measurements = metrics[metric], e=1).get_time_series(chunked=True)
+                metrics[metric+"Einf"] = SumOfWhatever(measurements = metrics[metric], e=1000).get_time_series(chunked=True)
+        
+        for epoch in range(epochs):
+            for batch in range(len(train_loader)*T):
+                all_data = {}
+                for metric in metrics.keys():
+                    if not ("E1" in metric or "Einf" in metric) or batch >= len(metrics[metric][epoch]):
+                        continue
+                    all_data[metric] = metrics[metric][epoch][batch]
+                wandb.log({"epoch":epoch, "true_step":batch, **all_data})
+    except Exception as e:
+        print(e)
+        print(f"Final logging of SoTL-ish metrics failed")
 
     return model, metrics
 
