@@ -8,3 +8,4 @@ numpy
 fire
 matplotlib
 nats_bench
+yacs

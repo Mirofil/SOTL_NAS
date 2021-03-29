@@ -12,6 +12,7 @@
 
 # python linear/train.py --model_type=log_reg --dataset=MNIST --dry_run=False --T=2 --w_warm_start=0 --grad_outer_loop_order=-1 --grad_inner_loop_order=-1 --mode=bilevel --device=cpu --w_weight_decay=0 --arch_train_data=sotl --alpha_lr=0.001 --w_lr=1e-3 --a_lr=1e-2 --alpha_lr=1e-3 --optimizer_mode=autograd --loss=ce --a_weight_decay=0
 # python linear/train.py --cfg=linear/configs/max_deg/lin_reg.py
+# python linear/train.py --cfg=linear/configs/lr/mnist_mlp.py
 #pip install --force git+https://github.com/Mirofil/pytorch-hessian-eigenthings.git
 
 import itertools

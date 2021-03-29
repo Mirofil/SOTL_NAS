@@ -2,7 +2,7 @@ from yacs.config import CfgNode as CN
 
 C = CN()
 
-C.epochs = 75
+C.epochs = 30
 C.steps_per_epoch=None
 C.batch_size = 128
 C.n_features = 18
@@ -14,11 +14,11 @@ C.w_momentum=0.0
 C.w_weight_decay=1e-4
 C.a_optim="SGD"
 C.a_decay_order=2
-C.a_lr = 1e-2
+C.a_lr = 1e-3
 C.a_momentum = 0.0
 C.a_weight_decay = 0.
 C.T = 2
-C.grad_clip = 10
+C.grad_clip = 100
 C.grad_clip_bilevel=1000
 C.logging_freq = 200
 C.w_checkpoint_freq = 1
@@ -29,7 +29,7 @@ C.initial_degree=1
 C.hvp="exact"
 C.ihvp ="exact"
 C.inv_hess="exact"
-C.normalize_a_lr=True
+C.normalize_a_lr=False
 C.w_warm_start=0
 C.log_grad_norm=True
 C.log_alphas=True
