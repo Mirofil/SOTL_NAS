@@ -62,7 +62,6 @@ def main(cfg=None, **kwargs):
     if cfg is not None:
         config.merge_from_file(cfg)
     config.merge_from_list(list(itertools.chain.from_iterable(kwargs.items())))
-    print(config)
 
     if config["dry_run"]:
         os.environ['WANDB_MODE'] = 'dryrun'
