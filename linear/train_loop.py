@@ -121,7 +121,7 @@ def train_bptt(
         model.train()
 
         train_loss = AverageMeter()
-        true_batch_index = 0
+        true_batch_idx = 0
         val_iter = iter(val_loader) # Used to make sure we iterate through the whole val set with no repeats
 
         if decay_scheduler == 'linear':
@@ -161,9 +161,9 @@ def train_bptt(
                     intra_batch_idx=intra_batch_idx, config=config, optimizer_mode=optimizer_mode, debug=debug, detailed=True)
                 losses.append(loss)
                 if loss_threshold is not None and (loss-param_norm).item() < loss_threshold:
-                    tqdm.write(f"Success at epoch {epoch}, true batch {true_batch_index}, in total: {epoch*len(train_loader)+true_batch_index}")
+                    tqdm.write(f"Success at epoch {epoch}, true batch {true_batch_idx}, in total: {epoch*len(train_loader)+true_batch_idx}")
 
-                true_batch_index += 1
+                true_batch_idx += 1
                 if mode == "joint":
                     # The weight updates above were the real weight updates if using one-level optimization, so we can log them
                     metrics["train_loss"][epoch].append(-loss.item())
@@ -178,7 +178,7 @@ def train_bptt(
                     to_log.update({
                             "train_loss": train_loss.avg,
                             "Epoch": epoch,
-                            "Batch": true_batch_index,
+                            "Batch": true_batch_idx,
                             "arch_update_idx": arch_update_idx
                         })
 
@@ -253,7 +253,7 @@ def train_bptt(
                             norm = norm + g.data.norm(2).item()
                         to_log.update({"Arch grad norm": norm})
 
-                    if log_alphas and batch_idx % 25 == 0:
+                    if log_alphas and batch_idx % 3 == 0:
                         if hasattr(model, "fc1") and hasattr(model.fc1, "degree"):
                             running_degree_mismatch = running_degree_mismatch + hinge_loss(model.fc1.degree.item(), config["n_informative"]/2, config["hinge_loss"])
 
@@ -265,6 +265,9 @@ def train_bptt(
                         if hasattr(model, "alpha_lr"):
 
                             to_log.update({"alpha_lr": config["w_lr"].item()})
+                        
+                        if hasattr(model, "arch_reject_count"):
+                            to_log.update({"arch_reject": model.arch_reject_count/arch_update_idx})
 
             if mode == "bilevel" and epoch >= w_warm_start and batch_idx % arch_update_frequency == 0:
 
@@ -317,7 +320,7 @@ def train_bptt(
                     to_log.update({
                             "train_loss": train_loss.avg,
                             "Epoch": epoch,
-                            "Batch": true_batch_index,
+                            "Batch": true_batch_idx,
                             "arch_update_idx": arch_update_idx
                         })
 
@@ -333,7 +336,7 @@ def train_bptt(
         tqdm.write(
             "Epoch: {}, Batch: {}, Train loss: {}, Alphas: {}, Weights: {}".format(
                 epoch,
-                true_batch_index,
+                true_batch_idx,
                 train_loss.avg,
                 [x.data for x in model.arch_params()] if len(str([x.data for x in model.arch_params()])) < 20 else best_alphas,
                 [x.data for x in model.weight_params()] if len(str([x.data for x in model.weight_params()])) < 200 else f'Too long'
