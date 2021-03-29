@@ -225,10 +225,10 @@ def arch_step(model, criterion, xs, ys, weight_buffer, w_lr, hvp, inv_hess, ihvp
             if "alpha_lr" in w_name and (w-model.cfg["a_lr"]*da).item() < 0:
                 print(f"Override update! Instead of {(w-model.cfg['a_lr']*da).item()}, we get {w.item()/2}")
                 w.multiply_(1/2)
-            if not hasattr(model, "arch_reject_count"):
-                model.arch_reject_count = 0
-            else:
-                model.arch_reject_count += 1
+                if not hasattr(model, "arch_reject_count"):
+                    model.arch_reject_count = 0
+                else:
+                    model.arch_reject_count += 1
             else:
                 w.subtract_(other=da, alpha=model.cfg["a_lr"])
                 if (w.item()) < 0:
