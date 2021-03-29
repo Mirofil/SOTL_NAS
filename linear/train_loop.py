@@ -253,7 +253,7 @@ def train_bptt(
                             norm = norm + g.data.norm(2).item()
                         to_log.update({"Arch grad norm": norm})
 
-                    if log_alphas and batch_idx % 3 == 0:
+                    if log_alphas and batch_idx % 1 == 0:
                         if hasattr(model, "fc1") and hasattr(model.fc1, "degree"):
                             running_degree_mismatch = running_degree_mismatch + hinge_loss(model.fc1.degree.item(), config["n_informative"]/2, config["hinge_loss"])
 
