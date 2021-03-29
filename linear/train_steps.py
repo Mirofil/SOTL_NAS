@@ -216,7 +216,7 @@ def arch_step(model, criterion, xs, ys, weight_buffer, w_lr, hvp, inv_hess, ihvp
     if grad_clip is not None:
         # arch_coef = torch.nn.utils.clip_grad_norm_(model.arch_params(), grad_clip)
         arch_coef = clip_grad_raw(total_arch_gradient, grad_clip)
-        print(arch_coef)
+        # print(arch_coef)
 
     if not hasattr(model, "arch_reject_count"):
         model.arch_reject_count = 0
