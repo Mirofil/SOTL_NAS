@@ -103,7 +103,7 @@ def train_bptt(
     train_loader = torch.utils.data.DataLoader(
         dataset_cfg["dset_train"], batch_size=batch_size * T, shuffle=True
     )
-    val_loader = torch.utils.data.DataLoader(dataset_cfg["dset_val"], batch_size=batch_size)
+    val_loader = torch.utils.data.DataLoader(dataset_cfg["dset_val"], batch_size=batch_size) if dataset_cfg["dset_val"] is not None else [None]
     grad_compute_speed = AverageMeter()
 
     suffixed_name = model.model_type + log_suffix
@@ -167,10 +167,13 @@ def train_bptt(
                 if mode == "joint":
                     # The weight updates above were the real weight updates if using one-level optimization, so we can log them
                     metrics["train_loss"][epoch].append(-loss.item())
-                    val_acc_top1, val_acc_top5, val_loss = val_acc_evaluator.evaluate(model, criterion)
-                    metrics["val_loss"][epoch].append(-val_loss)
-                    if val_acc_top1 is not None:
-                        metrics["val"][epoch].append(val_acc_top1)
+                    if dataset_cfg["dset_val"] is not None:
+                        val_acc_top1, val_acc_top5, val_loss = val_acc_evaluator.evaluate(model, criterion)
+                    else:
+                        val_acc_top1, val_acc_top5, val_loss = None, None, None
+                        metrics["val_loss"][epoch].append(-val_loss)
+                        if val_acc_top1 is not None:
+                            metrics["val"][epoch].append(val_acc_top1)
                     if train_acc_top1 is not None:
                         metrics["train_acc"][epoch].append(train_acc_top1)
 
@@ -309,10 +312,13 @@ def train_bptt(
                     w_optimizer.zero_grad()
 
                     metrics["train_loss"][epoch].append(-loss.item())
-                    val_acc_top1, val_acc_top5, val_loss = val_acc_evaluator.evaluate(model, criterion)
-                    metrics["val_loss"][epoch].append(-val_loss)
-                    if val_acc_top1 is not None:
-                        metrics["val"][epoch].append(val_acc_top1)
+                    if dataset_cfg["dset_val"] is not None:
+                        val_acc_top1, val_acc_top5, val_loss = val_acc_evaluator.evaluate(model, criterion)
+                        metrics["val_loss"][epoch].append(-val_loss)
+                        if val_acc_top1 is not None:
+                            metrics["val"][epoch].append(val_acc_top1)
+                    else:
+                        val_acc_top1, val_acc_top5, val_loss = None, None, None
                     if train_acc_top1 is not None:
                         metrics["train_acc"][epoch].append(train_acc_top1)
 
@@ -355,7 +361,7 @@ def train_bptt(
         val_results, val_acc_results = valid_func(
             model=model, dset_val=dataset_cfg["dset_val"], criterion=criterion, device=device, 
             print_results=False, features=features
-        )
+        ) if dataset_cfg["dset_val"] is not None else (AverageMeter(), AverageMeter())
 
         test_results, test_acc_results = valid_func(
             model=model, dset_val=dataset_cfg["dset_test"], criterion=criterion, device=device, 
@@ -370,9 +376,9 @@ def train_bptt(
                                                     criterion, num_eigenthings=1, full_dataset=True)
             hessian_eigenvalue = eigenvals[0]              
 
-
+        val_results_loss, val_results_acc = val_results.avg if val_results is not None else None, val_acc_results.avg if val_acc_results is not None else None
         tqdm.write("Epoch: {}, Val Loss: {}, Test Loss: {}, Discretized AUC: {}, MSE: {}, Reconstruction Acc: {}, Hess: {}".format(epoch, val_results.avg, test_results.avg, auc, mse, acc, hessian_eigenvalue))
-        to_log = {**to_log, "val_loss": val_results.avg, "val_acc": val_acc_results.avg, "test_loss": test_results.avg, "test_acc": test_acc_results.avg, "AUC_training": auc, "MSE training":mse, 
+        to_log = {**to_log, "val_loss": val_results_loss, "val_acc": val_results_acc, "test_loss": test_results.avg, "test_acc": test_acc_results.avg, "AUC_training": auc, "MSE training":mse, 
             "RecAcc training":acc, "Arch. Hessian domin. eigenvalue": hessian_eigenvalue, "epoch": epoch, "arch_update_idx": arch_update_idx}
         to_log = {k:v for k,v in to_log.items() if v is not None}
         wandb.log({suffixed_name:{dataset:{**to_log}}})

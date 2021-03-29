@@ -401,7 +401,7 @@ def get_datasets(dataset, path=None, val_split=0.1, test_split=0.2, normalize=Tr
 
     dset_train, dset_val = torch.utils.data.random_split(
             dset_train, [int(len(dset_train) * (1-val_split)), len(dset_train) - int(len(dset_train) * (1-val_split))]
-        )
+        ) if val_split > 0 else (dset_train, None)
     if dataset in ['MNIST', 'CIFAR', "FashionMNIST", 'isolet', 'madelon', 'activity', 'coil']:
         task = 'multiclass'
     elif dataset in ['gisette', 'MNIST35']:
@@ -426,6 +426,6 @@ def get_datasets(dataset, path=None, val_split=0.1, test_split=0.2, normalize=Tr
     results['n_classes'] = n_classes
     results['n_features'] = n_features
 
-    assert all([elem != None for elem in results.values()])
+    assert all([elem != None or k == "dset_val" for k, elem in results.items()])
 
     return results

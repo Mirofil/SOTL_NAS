@@ -64,6 +64,7 @@ C.arch_update_frequency=1
 C.loss_threshold=None
 C.features=None
 C.log_suffix=""
+C.val_split = 0.01
 
 def cfg_defaults():
     return C.clone()
