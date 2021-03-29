@@ -27,3 +27,10 @@ class Hypertrainable(torch.nn.Module):
                 yield p
             else:
                 continue
+
+    def named_arch_params(self):
+        for n,p in self.named_parameters():
+            if 'alpha' in n and p.requires_grad:
+                yield (n, p)
+            else:
+                continue

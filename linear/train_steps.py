@@ -79,7 +79,6 @@ def train_step(x, y, criterion, model, w_optimizer, weight_buffer, grad_clip, co
             loss,
             weight_buffer[-1].values(),
             create_graph=True,
-            allow_unused=True
         )
         # TODO should there be retain_graph = True?
         if grad_clip is not None:
@@ -213,12 +212,18 @@ def arch_step(model, criterion, xs, ys, weight_buffer, w_lr, hvp, inv_hess, ihvp
 
     a_optimizer.zero_grad()
 
-    for g, w in zip(total_arch_gradient, model.arch_params()):
-        w.grad = g
-
     if grad_clip is not None:
-        arch_coef = torch.nn.utils.clip_grad_norm_(model.arch_params(), grad_clip)
-    a_optimizer.step()
+        arch_coef = torch.nn.utils.clip_grad_norm_(total_arch_gradient, grad_clip)
+
+    for (w_name, w), da in zip(model.named_arch_params(), total_arch_gradient):
+        if "alpha_lr" in w_name and (w-model.cfg["a_lr"]*da).item():
+            w.multiply(1/2)
+        else:
+            w.subtract_(da, -model.cfg["a_lr"])
+
+    # for g, w in zip(total_arch_gradient, model.arch_params()):
+    #     w.grad = g
+    # a_optimizer.step()
 
     return arch_gradients
 
