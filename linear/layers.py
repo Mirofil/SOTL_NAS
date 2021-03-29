@@ -124,8 +124,8 @@ class RFFEmbedding(Hypertrainable):
 
 
 class LinearMaxDeg(torch.nn.Linear, Hypertrainable):
-    def __init__(self, *args, degree=30, device='cuda' if torch.cuda.is_available() else 'cpu', **kwargs) -> None:
-        super().__init__(*args, **kwargs)
+    def __init__(self, in_features, out_features, bias=True, degree=30, device='cuda' if torch.cuda.is_available() else 'cpu', **kwargs) -> None:
+        super().__init__(in_features, out_features, bias)
         self.alphas = torch.nn.Parameter(torch.tensor([degree], dtype=torch.float32).unsqueeze(dim=0))
         constants = [0]
         for i in range(1,self.in_features+1):

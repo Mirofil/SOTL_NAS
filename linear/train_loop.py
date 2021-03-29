@@ -262,7 +262,7 @@ def train_bptt(
                         if hasattr(model,"alpha_weight_decay"):
                             to_log.update({"Alpha weight decay": model.alpha_weight_decay.item()})
                         
-                        if hasattr(model, "alpha_lr"):
+                        if hasattr(model, "alpha_lr") and type(config["w_lr"]) is not float:
 
                             to_log.update({"alpha_lr": config["w_lr"].item()})
                         

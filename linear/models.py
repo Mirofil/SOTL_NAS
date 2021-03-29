@@ -28,11 +28,11 @@ class SoTLNet(Hypertrainable):
             self.model = self.fc1
         elif model_type == "rff":
             l = cfg["l"] if "l" in cfg.keys() else 1
-            self.model = RFFRegression(1000, n_features, l, **kwargs)
+            self.model = RFFRegression(1000, n_features, l)
         elif model_type == "rff_bag":
-            self.model = RFFRegressionBag(1000, n_features, **kwargs)
+            self.model = RFFRegressionBag(1000, n_features)
         elif model_type == "max_deg":
-            self.fc1 = LinearMaxDeg(n_features, n_classes, bias=False, **kwargs)
+            self.fc1 = LinearMaxDeg(n_features, n_classes, bias=False, degree=cfg["initial_degree"], **kwargs)
 
             self.model = self.fc1
         elif model_type == "linear":

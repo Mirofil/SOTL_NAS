@@ -11,7 +11,7 @@
 # python linear/train.py --model_type=rff_bag --epochs 300 --dataset=MNISTrff --dry_run=True --grad_outer_loop_order=-1 --grad_inner_loop_order=-1 --mode=bilevel --device=cuda --ihvp=exact --inv_hess=exact --hvp=exact --rand_seed 1 --arch_train_data sotl --optimizer_mode=autograd --loss=ce --T=2 --recurrent True --a_weight_decay 0 --a_lr=1 --w_weight_decay 0.01 --train_arch=True --w_lr=10
 
 # python linear/train.py --model_type=log_reg --dataset=MNIST --dry_run=False --T=2 --w_warm_start=0 --grad_outer_loop_order=-1 --grad_inner_loop_order=-1 --mode=bilevel --device=cpu --w_weight_decay=0 --arch_train_data=sotl --alpha_lr=0.001 --w_lr=1e-3 --a_lr=1e-2 --alpha_lr=1e-3 --optimizer_mode=autograd --loss=ce --a_weight_decay=0
-
+# python linear/train.py --cfg=linear/configs/max_deg/lin_reg.py
 #pip install --force git+https://github.com/Mirofil/pytorch-hessian-eigenthings.git
 
 import itertools
@@ -55,71 +55,18 @@ from utils_train import (calculate_weight_decay, compute_auc,
                          hinge_loss, reconstruction_error, switch_weights, inverse_softplus)
 from utils_metrics import (ValidAccEvaluator, obtain_accuracy, SumOfWhatever)
 from train_loop import valid_func, train_bptt
+from configs.defaults import cfg_defaults
 
+def main(cfg=None, **kwargs):
+    config = cfg_defaults()
+    if cfg is not None:
+        config.merge_from_file(cfg)
+    config.merge_from_list(list(itertools.chain.from_iterable(kwargs.items())))
+    print(config)
 
-def main(epochs = 50,
-    steps_per_epoch=None,
-    batch_size = 64,
-    n_features = 18,
-    n_samples = 5000,
-    w_optim='SGD',
-    a_optim='SGD',
-    w_decay_order=2,
-    w_lr = 1e-2,
-    w_momentum=0.0,
-    w_weight_decay=0.001,
-    a_decay_order=2,
-    a_lr = 1e-2,
-    a_momentum = 0.0,
-    a_weight_decay = 0,
-    T = 10,
-    grad_clip = None,
-    grad_clip_bilevel = 50,
-    logging_freq = 200,
-    w_checkpoint_freq = 1,
-    n_informative=7,
-    noise=0.25,
-    featurize_type="fourier",
-    initial_degree=1,
-    hvp="exact",
-    ihvp="exact",
-    inv_hess="exact",
-    arch_train_data="sotl",
-    normalize_a_lr=False,
-    w_warm_start=0,
-    extra_weight_decay=0,
-    grad_inner_loop_order=-1,
-    grad_outer_loop_order=-1,
-    model_type="max_deg",
-    dataset="fourier",
-    device= 'cuda' if torch.cuda.is_available() else 'cpu',
-    train_arch=True,
-    dry_run=False,
-    hinge_loss=0.25,
-    mode = "bilevel",
-    hessian_tracking=False,
-    smoke_test:bool = False,
-    rand_seed:int = None,
-    a_scheduler:str = 'step',
-    w_scheduler:str = 'step',
-    decay_scheduler:str=None,
-    loss:str = None,
-    optimizer_mode="manual",
-    bilevel_w_steps=None,
-    debug=False,
-    recurrent=True,
-    l=1e5,
-    adaptive_a_lr=False,
-    alpha_lr = None,
-    softplus_alpha_lr=True,
-    softplus_beta=100,
-    w_threshold=None
-    ):
-
-    config = locals()
-    if dry_run:
+    if config["dry_run"]:
         os.environ['WANDB_MODE'] = 'dryrun'
-    if debug:
+    if config["debug"]:
         os.environ['WANDB_SILENT']="true"
     wandb_auth()
 
@@ -133,33 +80,33 @@ def main(epochs = 50,
     except:
         wandb.init(project="NAS", group=f"Linear_SOTL", config=config)
 
-    if rand_seed is not None:
-        prepare_seed(rand_seed)
+    if config["rand_seed"] is not None:
+        prepare_seed(config["rand_seed"])
 
-    if adaptive_a_lr is True:
-        # a_lr = a_lr*(T**(1/2))
-        a_lr =a_lr * T
+    if config["adaptive_a_lr"] is True:
+        config["a_lr"] = config["a_lr"]*(config["T"]**(1/2))
+        # config["a_lr"] = config["a_lr"] * config["T"]
 
-    if alpha_lr is not None and softplus_alpha_lr:
+    if config["alpha_lr"] is not None and config["softplus_alpha_lr"]:
         config["alpha_lr"] = inverse_softplus(config["alpha_lr"], config["softplus_beta"])
     dataset_cfg = get_datasets(**config)
     model = SoTLNet(cfg=config,**{**config, **dataset_cfg})
-    model = model.to(device)
+    model = model.to(config["device"])
 
-    criterion = get_criterion(model_type, dataset_cfg, loss)
+    criterion = get_criterion(config["model_type"], dataset_cfg, config["loss"])
 
-    if alpha_lr is not None:
+    if config["alpha_lr"] is not None:
         config["w_lr"] = model.alpha_lr
     optim_cfg = get_optimizers(model, config)
     w_optimizer, a_optimizer, a_scheduler, w_scheduler=optim_cfg["w_optimizer"], optim_cfg["a_optimizer"], optim_cfg["a_scheduler"], optim_cfg["w_scheduler"]
 
-    model, metrics = train_bptt(**{**dataset_cfg, **config, **optim_cfg})
+    model, metrics = train_bptt(**{**dataset_cfg, **config, **optim_cfg}, model=model, criterion=criterion, dataset_cfg=dataset_cfg, config=config)
     
-    if model_type in ["max_deg", "softmax_mult", "linear"]:
+    if config["model_type"] in ["max_deg", "softmax_mult", "linear"]:
         # lapack_solution, res, eff_rank, sing_values = scipy.linalg.lstsq(dset_train[:][0], dset_train[:][1])
         # print(f"Cond number:{abs(sing_values.max()/sing_values.min())}")
 
-        val_meter, val_acc_meter = valid_func(model=model, dset_val=dataset_cfg["dset_val"], criterion=criterion, device=device, print_results=True)
+        val_meter, val_acc_meter = valid_func(model=model, dset_val=dataset_cfg["dset_val"], criterion=criterion, device=config["device"], print_results=True)
 
         # model.fc1.weight = torch.nn.Parameter(torch.tensor(lapack_solution).to(device))
         # model.fc1.to(device)
