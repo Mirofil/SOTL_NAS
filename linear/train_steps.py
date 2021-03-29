@@ -36,7 +36,7 @@ from utils import (data_generator, eval_features, featurize, hessian, jacobian,
 from utils_features import choose_features
 from utils_train import (calculate_weight_decay, compute_auc,
                          compute_train_loss, get_criterion, get_optimizers,
-                         hinge_loss, reconstruction_error, switch_weights)
+                         hinge_loss, reconstruction_error, switch_weights, clip_grad_raw)
 from utils_metrics import (ValidAccEvaluator, obtain_accuracy, SumOfWhatever)
 
 def train_step(x, y, criterion, model, w_optimizer, weight_buffer, grad_clip, config,
@@ -211,18 +211,25 @@ def arch_step(model, criterion, xs, ys, weight_buffer, w_lr, hvp, inv_hess, ihvp
             arch_gradients["total_arch_gradient"] = total_arch_gradient
 
     a_optimizer.zero_grad()
-
+    for g, w in zip(total_arch_gradient, model.arch_params()):
+        w.grad = g
     if grad_clip is not None:
-        arch_coef = torch.nn.utils.clip_grad_norm_(total_arch_gradient, grad_clip)
+        # arch_coef = torch.nn.utils.clip_grad_norm_(model.arch_params(), grad_clip)
+        arch_coef = clip_grad_raw(total_arch_gradient, grad_clip)
+        print(arch_coef)
 
-    for (w_name, w), da in zip(model.named_arch_params(), total_arch_gradient):
-        if "alpha_lr" in w_name and (w-model.cfg["a_lr"]*da).item():
-            w.multiply(1/2)
-        else:
-            w.subtract_(da, -model.cfg["a_lr"])
+    with torch.no_grad():
+        for (w_name, w), da in zip(model.named_arch_params(), total_arch_gradient):
+            if "alpha_lr" in w_name and (w-model.cfg["a_lr"]*da).item() < 0:
+                print(f"Override update! Instead of {(w-model.cfg['a_lr']*da).item()}, we get {w.item()/2}")
+                w.multiply_(1/2)
+            else:
+                w.subtract_(other=da, alpha=model.cfg["a_lr"])
+                if (w.item()) < 0:
+                    print(f"WARNING! What went worng to get {w.item()}")
 
-    # for g, w in zip(total_arch_gradient, model.arch_params()):
-    #     w.grad = g
+
+
     # a_optimizer.step()
 
     return arch_gradients

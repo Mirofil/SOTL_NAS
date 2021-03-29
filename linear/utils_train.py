@@ -15,6 +15,8 @@ from utils_features import mcfs_ours, pfa_transform, lap_ours, pca, univariate_t
 from utils_metrics import obtain_accuracy
 from sotl_optimizers import HyperSGD
 import operator
+from torch._six import inf
+
 
 def reconstruction_error(model, k, x_train, y_train, x_test, 
     y_test, mode = "normalized"):
@@ -135,7 +137,23 @@ def compute_train_loss(x, y, criterion, model, weight_buffer=None, weight_decay=
         if detailed:
             return loss, param_norm
         return loss
-
+def clip_grad_raw(parameters, max_norm: float, norm_type: float = 2.0) -> torch.Tensor:
+    if isinstance(parameters, torch.Tensor):
+        parameters = [parameters]
+    max_norm = float(max_norm)
+    norm_type = float(norm_type)
+    if len(parameters) == 0:
+        return torch.tensor(0.)
+    device = parameters[0].device
+    if norm_type == inf:
+        total_norm = max(p.detach().abs().max().to(device) for p in parameters)
+    else:
+        total_norm = torch.norm(torch.stack([torch.norm(p.detach(), norm_type).to(device) for p in parameters]), norm_type)
+    clip_coef = max_norm / (total_norm + 1e-6)
+    if clip_coef < 1:
+        for p in parameters:
+            p.detach().mul_(clip_coef.to(p.device))
+    return total_norm
 
 def record_parents(model, root=""):
     children = dict(model.named_children())
