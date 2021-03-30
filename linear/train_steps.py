@@ -220,7 +220,12 @@ def arch_step(model, criterion, xs, ys, weight_buffer, w_lr, hvp, inv_hess, ihvp
             with torch.no_grad():
                 for (w_name, w), da in zip(model.named_arch_params(), total_arch_gradient):
                     if "alpha_lr" in w_name and (w-model.cfg["a_lr"]*da).item() < 0:
-                        w.multiply_(1/2)
+                        if model.cfg["alpha_lr_reject_strategy"] == "half":
+                            w.multiply_(1/2)
+                        elif model.cfg["alpha_lr_reject_strategy"] == "zero":
+                            w.multiply_(0)
+                        elif model.cfg["alpha_lr_reject_strategy"] == "None" or model.cfg["alpha_lr_reject_strategy"] is None:
+                            pass
                         model.arch_reject_count += 1
                     else:
                         w.subtract_(other=da, alpha=model.cfg["a_lr"])
@@ -238,8 +243,15 @@ def arch_step(model, criterion, xs, ys, weight_buffer, w_lr, hvp, inv_hess, ihvp
         a_optimizer.step()
         with torch.no_grad():
             if hasattr(model, "alpha_lr") and model.alpha_lr.item() < 0:
-                model.alpha_lr.copy_(torch.tensor(cur_alpha_lr/2))
+                if model.cfg["alpha_lr_reject_strategy"] == "half":
+                    model.alpha_lr.copy_(torch.tensor(cur_alpha_lr/2))
+                elif model.cfg["alpha_lr_reject_strategy"] == "zero":
+                    model.alpha_lr.copy_(torch.tensor(0))
+                elif model.cfg["alpha_lr_reject_strategy"] == "None" or model.cfg["alpha_lr_reject_strategy"] is None:
+                    pass
+
                 model.arch_reject_count += 1
+
 
 
     return arch_gradients
