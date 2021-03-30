@@ -63,6 +63,7 @@ C.softplus_beta=100
 C.alpha_lr=1e-3
 C.arch_update_frequency=1
 C.loss_threshold=None
+C.val_split=0.
 
 def get_cfg_defaults():
   """Get a yacs CfgNode object with default values for my_project."""

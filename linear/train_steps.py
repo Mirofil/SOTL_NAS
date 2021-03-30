@@ -137,9 +137,7 @@ def arch_step(model, criterion, xs, ys, weight_buffer, w_lr, hvp, inv_hess, ihvp
             arch_gradient_loss = sum(outers[-grad_outer_loop_order:])
         else:
             arch_gradient_loss = sum(outers)
-        
         total_arch_gradient = torch.autograd.grad(arch_gradient_loss, model.arch_params(), retain_graph=True if debug else False)
-        
         if debug:
             if val_xs is not None:
                 x, y = val_xs[0], val_ys[0]
@@ -209,33 +207,40 @@ def arch_step(model, criterion, xs, ys, weight_buffer, w_lr, hvp, inv_hess, ihvp
 
         else:
             arch_gradients["total_arch_gradient"] = total_arch_gradient
+    if not hasattr(model, "arch_reject_count"):
+        model.arch_reject_count = 0
+    if "hyper" in model.cfg["a_optim"].lower():
+        a_optimizer.zero_grad()
+        for g, w in zip(total_arch_gradient, model.arch_params()):
+            w.grad = g
+        if grad_clip is not None:
+            arch_coef = clip_grad_raw(total_arch_gradient, grad_clip)
 
-    a_optimizer.zero_grad()
-    for g, w in zip(total_arch_gradient, model.arch_params()):
-        w.grad = g
-    if grad_clip is not None:
-        # arch_coef = torch.nn.utils.clip_grad_norm_(model.arch_params(), grad_clip)
-        arch_coef = clip_grad_raw(total_arch_gradient, grad_clip)
-        # print(arch_coef)
+        if model.cfg["a_optim"].lower() == "hypersgd":
+            with torch.no_grad():
+                for (w_name, w), da in zip(model.named_arch_params(), total_arch_gradient):
+                    if "alpha_lr" in w_name and (w-model.cfg["a_lr"]*da).item() < 0:
+                        w.multiply_(1/2)
+                        model.arch_reject_count += 1
+                    else:
+                        w.subtract_(other=da, alpha=model.cfg["a_lr"])
+                        if (w.item()) < 0:
+                            print(f"WARNING! What went worng to get {w.item()}")
+    else:
+        cur_alpha_lr = None
+        if hasattr(model, "alpha_lr"):
+            cur_alpha_lr = model.alpha_lr.item()
+        a_optimizer.zero_grad()
+        for g, w in zip(total_arch_gradient, model.arch_params()):
+            w.grad = g
+        if grad_clip is not None:
+            arch_coef = torch.nn.utils.clip_grad_norm_(model.arch_params(), grad_clip)
+        a_optimizer.step()
+        with torch.no_grad():
+            if hasattr(model, "alpha_lr") and model.alpha_lr.item() < 0:
+                model.alpha_lr.copy_(torch.tensor(cur_alpha_lr/2))
+                model.arch_reject_count += 1
 
-
-
-    with torch.no_grad():
-        for (w_name, w), da in zip(model.named_arch_params(), total_arch_gradient):
-            if "alpha_lr" in w_name and (w-model.cfg["a_lr"]*da).item() < 0:
-                w.multiply_(1/2)
-                if not hasattr(model, "arch_reject_count"):
-                    model.arch_reject_count = 0
-                else:
-                    model.arch_reject_count += 1
-            else:
-                w.subtract_(other=da, alpha=model.cfg["a_lr"])
-                if (w.item()) < 0:
-                    print(f"WARNING! What went worng to get {w.item()}")
-
-
-
-    # a_optimizer.step()
 
     return arch_gradients
 
