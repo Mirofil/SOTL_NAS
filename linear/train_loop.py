@@ -111,7 +111,7 @@ def train_bptt(
 
     if device is None:
         device = 'cuda' if torch.cuda.is_available() else 'cpu'
-    primal_metrics = ["train_loss", "val_loss", "train_acc", "val"]
+    primal_metrics = ["train_loss", "val_loss", "train_acc", "val_acc"]
     metrics = defaultdict(lambda : [[] for _ in range(epochs)])
 
     val_acc_evaluator = ValidAccEvaluator(val_loader, device=device)
@@ -173,7 +173,7 @@ def train_bptt(
                         val_acc_top1, val_acc_top5, val_loss = None, None, None
                         metrics["val_loss"][epoch].append(-val_loss)
                         if val_acc_top1 is not None:
-                            metrics["val"][epoch].append(val_acc_top1)
+                            metrics["val_acc"][epoch].append(val_acc_top1)
                     if train_acc_top1 is not None:
                         metrics["train_acc"][epoch].append(train_acc_top1)
 
@@ -316,7 +316,7 @@ def train_bptt(
                         val_acc_top1, val_acc_top5, val_loss = val_acc_evaluator.evaluate(model, criterion)
                         metrics["val_loss"][epoch].append(-val_loss)
                         if val_acc_top1 is not None:
-                            metrics["val"][epoch].append(val_acc_top1)
+                            metrics["val_acc"][epoch].append(val_acc_top1)
                     else:
                         val_acc_top1, val_acc_top5, val_loss = None, None, None
                     if train_acc_top1 is not None:
