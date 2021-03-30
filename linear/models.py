@@ -70,6 +70,9 @@ class SoTLNet(Hypertrainable):
         else:
             self.alpha_lr = torch.tensor(0)
 
+        self.model_total_params = sum(p.numel() for p in self.model.parameters() if p.requires_grad)
+        print(f"Initiazed model {model_type} with {self.model_total_params} parameters!")
+
         record_parents(self, "")
 
     def forward(self, x, weight=None, alphas=None, feature_indices=None):

@@ -14,7 +14,8 @@
 # python linear/train.py --cfg=linear/configs/max_deg/lin_reg.py
 # python linear/train.py --cfg=linear/configs/lr/mnist_logreg.py
 # python linear/train.py --cfg=linear/configs/lr/mnist_mlp.py
-# python linear/train.py --cfg=linear/configs/lr/mnist_vgg.py --T=10
+# python linear/train.py --cfg=linear/configs/lr/mnist_vgg.py --T=1
+#python linear/train.py --cfg=linear/configs/lr/mnist_mlp.py --T=100 --a_lr=0.01 --a_optim=SGD --a_scheduler=step --grad_clip=10
 
 #pip install --force git+https://github.com/Mirofil/pytorch-hessian-eigenthings.git
 
