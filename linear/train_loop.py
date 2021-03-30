@@ -393,7 +393,6 @@ def train_bptt(
             a_scheduler.step()
 
     try:
-        print(metrics)
         for metric in primal_metrics:
             if metric in metrics.keys():
                 metrics[metric+"E1"] = SumOfWhatever(measurements = metrics[metric], e=1).get_time_series(chunked=True)
