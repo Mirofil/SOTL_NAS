@@ -43,7 +43,7 @@ def train_step(x, y, criterion, model, w_optimizer, weight_buffer, grad_clip, co
     intra_batch_idx, optimizer_mode, debug=False, detailed=False):
     # We cannot use PyTorch optimizers for AutoGrad directly because the optimizers work inplace
     if optimizer_mode == "manual":
-        loss, train_acc_top1, param_norm = compute_train_loss(x=x, y=y, criterion=criterion, 
+        loss, train_acc_top1, param_norm, unreg_loss = compute_train_loss(x=x, y=y, criterion=criterion, 
             model=model, weight_buffer=weight_buffer, return_acc=True, detailed=True)
         grads = torch.autograd.grad(
             loss,
@@ -73,7 +73,7 @@ def train_step(x, y, criterion, model, w_optimizer, weight_buffer, grad_clip, co
         model_old_weights = switch_weights(model, weight_buffer[-1]) 
 
     elif optimizer_mode == "autograd":
-        loss, train_acc_top1, param_norm = compute_train_loss(x=x, y=y, criterion=criterion, 
+        loss, train_acc_top1, param_norm, unreg_loss = compute_train_loss(x=x, y=y, criterion=criterion, 
             weight_buffer=weight_buffer, model=model, return_acc=True, detailed=True)
         grads = torch.autograd.grad(
             loss,
@@ -98,7 +98,7 @@ def train_step(x, y, criterion, model, w_optimizer, weight_buffer, grad_clip, co
         model_old_weights = switch_weights(model, weight_buffer[-1]) # This is useful for auxiliary tasks - but the actual grad evaluation happens by using the external WeightBuffer weights
 
     if detailed:
-        return loss, train_acc_top1, param_norm
+        return loss, train_acc_top1, param_norm, unreg_loss
     else:
         return loss, train_acc_top1
 

@@ -116,10 +116,11 @@ def compute_train_loss(x, y, criterion, model, weight_buffer=None, weight_decay=
         param_norm = 0
 
     if type(criterion) is torch.nn.modules.loss.MSELoss:
-        loss = criterion(y_pred, y) + param_norm
+        unreg_loss = criterion(y_pred, y)
 
     elif type(criterion) is torch.nn.CrossEntropyLoss:
-        loss = criterion(y_pred, y.long()) + param_norm
+        unreg_loss = criterion(y_pred, y.long())
+    loss = unreg_loss + param_norm
 
     if debug:
         print(f"Train loss: {loss}, param_norm: {param_norm}")
@@ -130,12 +131,12 @@ def compute_train_loss(x, y, criterion, model, weight_buffer=None, weight_decay=
         else:
             acc_top1 = None
         if detailed:
-            return loss, acc_top1[0].item(), param_norm
+            return loss, acc_top1[0].item(), param_norm, unreg_loss
         else:
             return loss, acc_top1[0].item()
     else:
         if detailed:
-            return loss, param_norm
+            return loss, param_norm, unreg_loss
         return loss
 def clip_grad_raw(parameters, max_norm: float, norm_type: float = 2.0) -> torch.Tensor:
     if isinstance(parameters, torch.Tensor):
