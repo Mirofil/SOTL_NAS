@@ -160,11 +160,12 @@ def train_bptt(
                     metrics["train_loss"][epoch].append(-loss.item())
                     if dataset_cfg["dset_val"] is not None:
                         val_acc_top1, val_acc_top5, val_loss = val_acc_evaluator.evaluate(model, criterion)
-                    else:
-                        val_acc_top1, val_acc_top5, val_loss = None, None, None
                         metrics["val_loss"][epoch].append(-val_loss)
                         if val_acc_top1 is not None:
                             metrics["val_acc"][epoch].append(val_acc_top1)
+                    else:
+                        val_acc_top1, val_acc_top5, val_loss = None, None, None
+
                     if train_acc_top1 is not None:
                         metrics["train_acc"][epoch].append(train_acc_top1)
 

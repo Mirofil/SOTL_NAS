@@ -14,7 +14,7 @@
 # python linear/train.py --cfg=linear/configs/max_deg/lin_reg.py
 # python linear/train.py --cfg=linear/configs/lr/mnist_logreg.py
 # python linear/train.py --cfg=linear/configs/lr/mnist_mlp.py --alpha_lr_reject_strategy=zero
-# python linear/train.py --cfg=linear/configs/lr/mnist_vgg.py --T=1 --train_arch=False --w_lr=0.001 --w_optim=Adam
+# python linear/train.py --cfg=linear/configs/lr/mnist_vgg.py --T=1 --train_arch=False --w_lr=0.001 --w_optim=Adam --alpha_lr=None --mode=joint
 #python linear/train.py --cfg=linear/configs/lr/mnist_mlp.py --T=100 --a_lr=0.01 --a_optim=SGD --a_scheduler=step --grad_clip=10
 
 #pip install --force git+https://github.com/Mirofil/pytorch-hessian-eigenthings.git
@@ -84,6 +84,9 @@ def main(cfg=None, **kwargs):
     except:
         wandb.init(project="NAS", group=f"Linear_SOTL", config=config)
 
+    if config["train_arch"] is False:
+        assert config["mode"] != "bilevel"
+
     if config["rand_seed"] is not None:
         prepare_seed(config["rand_seed"])
 
@@ -100,6 +103,7 @@ def main(cfg=None, **kwargs):
     criterion = get_criterion(config["model_type"], dataset_cfg, config["loss"])
 
     if config["alpha_lr"] is not None:
+        assert config["train_arch"] is True
         config["w_lr"] = model.alpha_lr
     optim_cfg = get_optimizers(model, config)
     w_optimizer, a_optimizer, a_scheduler, w_scheduler=optim_cfg["w_optimizer"], optim_cfg["a_optimizer"], optim_cfg["a_scheduler"], optim_cfg["w_scheduler"]
@@ -273,61 +277,3 @@ if __name__ == "__main__":
         pass
     except:
         fire.Fire(main)
-
-
-T=3
-w_warm_start=0
-batch_size=64
-epochs=50
-steps_per_epoch=None
-grad_outer_loop_order=-1
-grad_inner_loop_order=-1
-mode="bilevel"
-device="cpu"
-dataset="MNIST"
-model_type="log_reg"
-w_weight_decay=0
-arch_train_data="sotl"
-alpha_lr=0.001
-w_lr=0.001
-a_lr=0.01
-optimizer_mode="autograd"
-loss="ce"
-a_weight_decay=0
-rand_seed=1
-extra_weight_decay=0
-bilevel_w_steps=None
-arch_update_frequency=1
-adaptive_a_lr=False
-debug=False
-dry_run=False
-
-n_samples=5
-n_informative=1
-noise=1
-n_classes=10
-task='cf'
-n_informative=5
-n_features=5
-noise=1
-w_optim='SGD'
-a_optim='SGD'
-a_momentum=0
-w_momentum=0
-w_scheduler=None
-a_scheduler=None
-train_arch=True
-log_suffix=""
-log_alphas=True
-decay_scheduler=None
-features=None
-w_checkpoint_freq=1
-grad_clip=1
-w_decay_order=2
-a_decay_order=2
-hvp="exact"
-ihvp="exact"
-inv_hess="exact"
-normalize_a_lr=True
-recurrent=True
-log_grad_norm=True
