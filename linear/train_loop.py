@@ -1,12 +1,3 @@
-# python linear/train.py --model_type=AE --dataset=isolet --arch_train_data sotl --grad_outer_loop_order=None --mode=bilevel --device=cuda --initial_degree 1 --hvp=finite_diff --epochs=100 --w_lr=0.1 --T=1 --a_lr=0.1 --hessian_tracking False --w_optim=SGD --a_optim=Adam --w_warm_start 0 --train_arch=True --a_weight_decay=0.01 --smoke_test False --dry_run=True --w_weight_decay=0.01 --batch_size=2048 --decay_scheduler None --w_scheduler None
-# python linear/train.py --model_type=sigmoid --dataset=gisette --arch_train_data sotl --grad_outer_loop_order=None --mode=bilevel --device=cuda --initial_degree 1 --hvp=finite_diff --epochs=100 --w_lr=0.001 --T=1 --a_lr=0.01 --hessian_tracking False --w_optim=Adam --a_optim=Adam --w_warm_start 0 --train_arch=True --a_weight_decay=0.001 --a_decay_order 2 --smoke_test False --dry_run=True --w_weight_decay=0.001 --batch_size=64 --decay_scheduler None --loss ce
-# python linear/train.py --model_type=sigmoid --dataset=gisette --arch_train_data sotl --grad_outer_loop_order=None --mode=bilevel --device=cuda --initial_degree 1 --hvp=finite_diff --epochs=100 --w_lr=0.001 --T=1 --a_lr=0.01 --hessian_tracking False --w_optim=Adam --a_optim=Adam --w_warm_start 3 --train_arch=True --a_weight_decay=0.00000001--smoke_test False --dry_run=True --w_weight_decay=0.001 --batch_size=64 --decay_scheduler None
-
-# python linear/train.py --model_type=max_deg --dataset=fourier --dry_run=True --T=1 --grad_outer_loop_order=1 --grad_inner_loop_order=1 --mode=bilevel --device=cpu --optimizer_mode=autograd --arch_train_data=val
-# python linear/train.py --model_type=log_reg --dataset=MNIST --dry_run=False --T=1 --w_warm_start=0 --grad_outer_loop_order=-1 --grad_inner_loop_order=-1 --mode=bilevel --device=cuda --extra_weight_decay=0.0001 --w_weight_decay=0 --arch_train_data=val --train_arch=True
-
-#pip install --force git+https://github.com/Mirofil/pytorch-hessian-eigenthings.git
-
 import itertools
 import math
 import os
@@ -208,7 +199,17 @@ def train_bptt(
                     arch_update_idx += 1
 
                     if arch_train_data == "sotl":
-                        outers = losses
+                        if model.cfg["sotl_agg"] is None or model.cfg["sotl_agg"] == "sum":
+                            outers = losses
+                        elif model.cfg["sotl_agg"] == "below_avg": # TODO this will only work for Autograd I think
+                            outers = []
+                            for loss in losses:
+                                if loss.item() < train_loss.avg or train_loss.avg == 0:
+                                    outers.append(loss)
+                            if len(outers) == 0:
+                                outers = losses
+                        elif model.cfg["sotl_agg"] == "recent_bias":
+                            outers = [losses[i] * (1.05**i) for i in range(len(losses))]
                     else:
                         outers = [compute_train_loss(x=val_x.to(device), y=val_y.to(device), criterion=criterion, 
                             y_pred=model(val_x.to(device), weight=weight_buffer[-1]), model=model) for val_x, val_y in zip(val_xs, val_ys)]

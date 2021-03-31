@@ -66,6 +66,7 @@ C.features=None
 C.log_suffix=""
 C.val_split = 0.01
 C.alpha_lr_reject_strategy="half"
+C.sotl_agg = "sum"
 
 def cfg_defaults():
     return C.clone()

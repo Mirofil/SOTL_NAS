@@ -229,8 +229,7 @@ def arch_step(model, criterion, xs, ys, weight_buffer, w_lr, hvp, inv_hess, ihvp
                         model.arch_reject_count += 1
                     else:
                         w.subtract_(other=da, alpha=model.cfg["a_lr"])
-                        if (w.item()) < 0:
-                            print(f"WARNING! What went worng to get {w.item()}")
+
     else:
         cur_alpha_lr = None
         if hasattr(model, "alpha_lr"):
