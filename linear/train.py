@@ -15,7 +15,7 @@
 # python linear/train.py --cfg=linear/configs/lr/mnist_logreg.py
 # python linear/train.py --cfg=linear/configs/lr/mnist_mlp.py --alpha_lr_reject_strategy=zero
 # python linear/train.py --cfg=linear/configs/lr/mnist_vgg.py --T=1 --train_arch=False --w_lr=0.001 --w_optim=Adam --alpha_lr=None --mode=joint
-#python linear/train.py --cfg=linear/configs/lr/mnist_mlp.py --T=100 --a_lr=0.01 --a_optim=SGD --a_scheduler=step --grad_clip=10
+# python linear/train.py --cfg=linear/configs/lr/mnist_mlp.py --T=100 --a_lr=0.01 --a_optim=SGD --a_scheduler=step --grad_clip=10
 
 #pip install --force git+https://github.com/Mirofil/pytorch-hessian-eigenthings.git
 

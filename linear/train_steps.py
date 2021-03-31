@@ -49,28 +49,30 @@ def train_step(x, y, criterion, model, w_optimizer, weight_buffer, grad_clip, co
             loss,
             weight_buffer[-1].values()
         )
-        # with torch.no_grad():
-        #     for g, w in zip(grads, model.weight_params()):
-        #         w.grad = g
-        if grad_clip is not None:
-            torch.nn.utils.clip_grad_norm_(grads, grad_clip)
 
-        # w_optimizer.step()
-        # w_optimizer.zero_grad()
-        # weight_buffer.add(model, intra_batch_idx)
+        if grad_clip is not None:
+            torch.nn.utils.clip_grad_raw(grads, grad_clip)
 
         new_weights = {}
-        with torch.no_grad():
-            for (w_name, w), dw in zip(weight_buffer[-1].items(), grads):
-                if type(config["w_lr"]) is float or not config["softplus_alpha_lr"]:
-                    new_weights[w_name] = w - config["w_lr"]*dw # Manual SGD update that creates new nodes in the computational graph
-                else:
-                    new_weights[w_name] = w - F.softplus(config["w_lr"], config["softplus_beta"])*dw # Manual SGD update that creates new nodes in the computational graph
-                new_weights[w_name].requires_grad = True
+        if "hyper" in model.cfg["w_optim"]:
+            with torch.no_grad():
+                for (w_name, w), dw in zip(weight_buffer[-1].items(), grads):
+                    if type(config["w_lr"]) is float or not config["softplus_alpha_lr"]:
+                        new_weights[w_name] = w - config["w_lr"]*dw # Manual SGD update that creates new nodes in the computational graph
+                    else:
+                        new_weights[w_name] = w - F.softplus(config["w_lr"], config["softplus_beta"])*dw # Manual SGD update that creates new nodes in the computational graph
+                    new_weights[w_name].requires_grad = True
+            weight_buffer.direct_add(new_weights)
 
-        weight_buffer.direct_add(new_weights)
+            model_old_weights = switch_weights(model, weight_buffer[-1]) 
+        else:
+            with torch.no_grad():
+                for g, w in zip(grads, model.weight_params()):
+                    w.grad = g
+            w_optimizer.step()
+            w_optimizer.zero_grad()
+            weight_buffer.add(model, intra_batch_idx)
 
-        model_old_weights = switch_weights(model, weight_buffer[-1]) 
 
     elif optimizer_mode == "autograd":
         loss, train_acc_top1, param_norm, unreg_loss = compute_train_loss(x=x, y=y, criterion=criterion, 
@@ -78,7 +80,7 @@ def train_step(x, y, criterion, model, w_optimizer, weight_buffer, grad_clip, co
         grads = torch.autograd.grad(
             loss,
             weight_buffer[-1].values(),
-            create_graph=True,
+            create_graph=True if model.cfg["train_arch"] else False,
         )
         # TODO should there be retain_graph = True?
         if grad_clip is not None:

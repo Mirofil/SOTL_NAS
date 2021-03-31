@@ -131,9 +131,9 @@ def compute_train_loss(x, y, criterion, model, weight_buffer=None, weight_decay=
         else:
             acc_top1 = None
         if detailed:
-            return loss, acc_top1[0].item(), param_norm, unreg_loss
+            return loss, acc_top1[0].item() if acc_top1 is not None else None, param_norm, unreg_loss
         else:
-            return loss, acc_top1[0].item()
+            return loss, acc_top1[0].item() if acc_top1 is not None else None
     else:
         if detailed:
             return loss, param_norm, unreg_loss
