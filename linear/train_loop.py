@@ -201,10 +201,10 @@ def train_bptt(
                     if arch_train_data == "sotl":
                         if model.cfg["sotl_agg"] is None or model.cfg["sotl_agg"] == "sum":
                             outers = losses
-                        elif model.cfg["sotl_agg"] == "below_avg": # TODO this will only work for Autograd I think
+                        elif model.cfg["sotl_agg"] == "below_avg" or model.cfg["sotl_agg"] == "above_avg": # TODO this will only work for Autograd I think
                             outers = []
                             for loss in losses:
-                                if loss.item() < train_loss.avg or train_loss.avg == 0:
+                                if ((loss.item() < train_loss.avg and model.cfg["sotl_agg"] == "below_avg") or (loss.item() > train_loss.avg and model.cfg["sotl_agg"] == "above_avg")) or train_loss.avg == 0:
                                     outers.append(loss)
                             if len(outers) == 0:
                                 outers = losses
