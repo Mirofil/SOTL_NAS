@@ -51,10 +51,11 @@ def train_step(x, y, criterion, model, w_optimizer, weight_buffer, grad_clip, co
         )
 
         if grad_clip is not None:
-            torch.nn.utils.clip_grad_raw(grads, grad_clip)
+            clip_grad_raw(grads, grad_clip)
 
         new_weights = {}
-        if "hyper" in model.cfg["w_optim"]:
+        # if "hyper" in model.cfg["w_optim"].lower():
+        if True:
             with torch.no_grad():
                 for (w_name, w), dw in zip(weight_buffer[-1].items(), grads):
                     if type(config["w_lr"]) is float or not config["softplus_alpha_lr"]:

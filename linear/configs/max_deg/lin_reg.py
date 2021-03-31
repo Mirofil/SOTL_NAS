@@ -3,7 +3,9 @@ from yacs.config import CfgNode as CN
 C = CN()
 
 
-C.model_type="max_deg" 
+C.model_type="max_deg"
+C.a_optim = "SGD"
+C.w_optim = "SGD" 
 C.epochs =20 
 C.batch_size=64
 C.steps_per_epoch=1 
