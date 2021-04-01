@@ -42,6 +42,8 @@ class SoTLNet(Hypertrainable):
             self.model = MLP(input_dim=n_features,hidden_dim=1000,output_dim=n_classes, weight_decay=extra_weight_decay)
         elif model_type == "MLP2":
             self.model = MLP2(input_dim=n_features,hidden_dim=1000,output_dim=n_classes, weight_decay=extra_weight_decay)
+        elif model_type == "MLPLarge":
+            self.model = MLPLarge(input_dim=n_features,hidden_dim=1000,output_dim=n_classes, weight_decay=extra_weight_decay)
         elif model_type =="vgg":
             self.model = VGG(make_layers(vgg_cfg['D'], batch_norm=True))
         elif model_type == "pt_logistic_l1":
@@ -156,6 +158,32 @@ class LogReg(Hypertrainable, FeatureSelectableTrait):
         return torch.abs(self.lin1.weight).data.mean(dim=0)
     
     def squash(self, x, **kwargs):
+        return x
+
+class MLPLarge(Hypertrainable):
+    def __init__(self, input_dim=28*28, hidden_dim=1000, output_dim=10, weight_decay=0, dropout_p=0.2, **kwargs):
+        super(MLPLarge, self).__init__()
+        self._input_dim = input_dim
+        self.lin1 = FlexibleLinear(input_dim, hidden_dim)
+        self.lin2 = FlexibleLinear(hidden_dim, hidden_dim)
+        self.lin21 = FlexibleLinear(hidden_dim, hidden_dim)
+        self.lin22 = FlexibleLinear(hidden_dim, hidden_dim)
+        self.lin23 = FlexibleLinear(hidden_dim, hidden_dim)
+
+        self.lin3 = FlexibleLinear(hidden_dim, output_dim)
+
+    def forward(self, x, weight=None, alphas=None):
+
+        x = x.view(-1, self._input_dim)
+
+        x = F.relu(self.lin1(x, weight, alphas))
+        x = F.relu(self.lin2(x, weight, alphas))
+        x = F.relu(self.lin21(x, weight, alphas))
+        x = F.relu(self.lin22(x, weight, alphas))
+        x = F.relu(self.lin23(x, weight, alphas))
+
+        x = self.lin3(x, weight, alphas)
+
         return x
 
 class MLP2(Hypertrainable):

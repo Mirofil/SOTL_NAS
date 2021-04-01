@@ -142,40 +142,41 @@ def train_bptt(
             weight_buffer = WeightBuffer(T=T, checkpoint_freq=w_checkpoint_freq)
             weight_buffer.add(model, 0)
             losses = []
-            # model.alpha_lr = torch.nn.Parameter(model.alpha_lr.detach())
-            for intra_batch_idx, (x, y) in enumerate(zip(xs, ys),1):
-                
-                x, y = x.to(device), y.to(device)
 
-                loss, train_acc_top1, param_norm, unreg_loss = train_step(x=x, y=y, criterion=criterion, model=model, 
-                w_optimizer=w_optimizer, weight_buffer=weight_buffer, grad_clip=grad_clip_bilevel, 
-                    intra_batch_idx=intra_batch_idx, config=config, optimizer_mode=optimizer_mode, debug=debug, detailed=True)
-                losses.append(loss)
-                if loss_threshold is not None and (loss-param_norm).item() < loss_threshold:
-                    tqdm.write(f"Success at epoch {epoch}, true batch {true_batch_idx}, in total: {epoch*len(train_loader)+true_batch_idx}")
+            if mode == "bilevel":
+                for intra_batch_idx, (x, y) in enumerate(zip(xs, ys),1):
+                    
+                    x, y = x.to(device), y.to(device)
 
-                true_batch_idx += 1
-                if mode == "joint":
-                    # The weight updates above were the real weight updates if using one-level optimization, so we can log them
-                    metrics["train_loss"][epoch].append(-loss.item())
-                    if dataset_cfg["dset_val"] is not None:
-                        val_acc_top1, val_acc_top5, val_loss = val_acc_evaluator.evaluate(model, criterion)
-                        metrics["val_loss"][epoch].append(-val_loss)
-                        if val_acc_top1 is not None:
-                            metrics["val_acc"][epoch].append(val_acc_top1)
-                    else:
-                        val_acc_top1, val_acc_top5, val_loss = None, None, None
+                    loss, train_acc_top1, param_norm, unreg_loss = train_step(x=x, y=y, criterion=criterion, model=model, 
+                    w_optimizer=w_optimizer, weight_buffer=weight_buffer, grad_clip=grad_clip_bilevel, 
+                        intra_batch_idx=intra_batch_idx, config=config, optimizer_mode=optimizer_mode, debug=debug, detailed=True)
+                    losses.append(loss)
+                    if loss_threshold is not None and (loss-param_norm).item() < loss_threshold:
+                        tqdm.write(f"Success at epoch {epoch}, true batch {true_batch_idx}, in total: {epoch*len(train_loader)+true_batch_idx}")
 
-                    if train_acc_top1 is not None:
-                        metrics["train_acc"][epoch].append(train_acc_top1)
+                    true_batch_idx += 1
+                    if mode == "joint":
+                        # The weight updates above were the real weight updates if using one-level optimization, so we can log them
+                        metrics["train_loss"][epoch].append(-loss.item())
+                        if dataset_cfg["dset_val"] is not None:
+                            val_acc_top1, val_acc_top5, val_loss = val_acc_evaluator.evaluate(model, criterion)
+                            metrics["val_loss"][epoch].append(-val_loss)
+                            if val_acc_top1 is not None:
+                                metrics["val_acc"][epoch].append(val_acc_top1)
+                        else:
+                            val_acc_top1, val_acc_top5, val_loss = None, None, None
 
-                    train_loss.update(loss.item())
-                    to_log.update({
-                            "train_loss": train_loss.avg,
-                            "Epoch": epoch,
-                            "Batch": true_batch_idx,
-                            "arch_update_idx": arch_update_idx
-                        })
+                        if train_acc_top1 is not None:
+                            metrics["train_acc"][epoch].append(train_acc_top1)
+
+                        train_loss.update(loss.item())
+                        to_log.update({
+                                "train_loss": train_loss.avg,
+                                "Epoch": epoch,
+                                "Batch": true_batch_idx,
+                                "arch_update_idx": arch_update_idx
+                            })
 
             if train_arch:
                 val_xs = None
@@ -274,8 +275,8 @@ def train_bptt(
                         if hasattr(model, "arch_reject_count"):
                             to_log.update({"arch_reject": model.arch_reject_count/arch_update_idx})
 
-            if mode == "bilevel" and epoch >= w_warm_start and batch_idx % arch_update_frequency == 0:
-
+            if (mode == "bilevel" and epoch >= w_warm_start and batch_idx % arch_update_frequency == 0) or (mode == "joint" and train_arch == False):
+                # If there is no arch training, we use this branch as normal training of networks without any bells and whistles
                 weights_after_rollout = switch_weights(model, weight_buffer[0])
                 optims = get_optimizers(model, config)
                 w_optimizer, a_optimizer, w_scheduler, a_scheduler = optims["w_optimizer"], optims["a_optimizer"], optims["w_scheduler"], optims["a_scheduler"]
@@ -292,7 +293,7 @@ def train_bptt(
                     x = x.to(device)
                     y = y.to(device)
 
-                    loss = compute_train_loss(x=x,y=y,criterion=criterion, model=model)
+                    loss, train_acc_top1, param_norm, unreg_loss = compute_train_loss(x=x, y=y, criterion=criterion, model=model, return_acc=True, detailed=True)
                     train_loss.update(loss.item())
 
                     grads = torch.autograd.grad(
