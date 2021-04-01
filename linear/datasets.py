@@ -13,7 +13,7 @@ from urllib.request import urlopen
 import scipy.io
 from sklearn.model_selection import train_test_split
 import sklearn.datasets
-
+import random
 
 def get_datasets(dataset, path=None, val_split=0.1, test_split=0.2, normalize=True, **kwargs):
     n_classes = None
@@ -397,7 +397,6 @@ def get_datasets(dataset, path=None, val_split=0.1, test_split=0.2, normalize=Tr
         
         dset_train = torch.utils.data.TensorDataset(x_train, y_train)
         dset_test = torch.utils.data.TensorDataset(x_test, y_test)
-
 
     dset_train, dset_val = torch.utils.data.random_split(
             dset_train, [int(len(dset_train) * (1-val_split)), len(dset_train) - int(len(dset_train) * (1-val_split))]
