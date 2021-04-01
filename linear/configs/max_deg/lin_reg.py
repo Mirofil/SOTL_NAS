@@ -8,6 +8,7 @@ C.a_optim = "SGD"
 C.w_optim = "SGD" 
 C.epochs =20 
 C.batch_size=64
+C.n_samples = 5000
 C.steps_per_epoch=1 
 C.dataset="fourier" 
 C.dry_run=True 

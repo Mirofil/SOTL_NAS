@@ -89,14 +89,14 @@ def train_bptt(
     recurrent=True,
     arch_update_frequency=1,
     loss_threshold=None,
-    n_samples=None,
     **kwargs
 ):
     orig_model_cfg = model.cfg
     print(f"Starting with with config={model.cfg}")
     train_loader = torch.utils.data.DataLoader(
-        dataset_cfg["dset_train"], batch_size=batch_size * T, sampler=SubsetRandomSampler(random.choices(range(n_samples))) if n_samples is not None else SubsetRandomSampler(range(len(dataset_cfg["dset_train"])))
+        dataset_cfg["dset_train"], batch_size=batch_size * T, shuffle=True
     )
+    print(f"Training with datasets train(len={len(dset_train)}), val (len={len(dset_val) if dset_val is not None else 0}), test (len={len(dset_test)})")
     val_loader = torch.utils.data.DataLoader(dataset_cfg["dset_val"], batch_size=batch_size) if dataset_cfg["dset_val"] is not None else [None]
     grad_compute_speed = AverageMeter()
 
