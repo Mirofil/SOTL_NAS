@@ -11,7 +11,7 @@ import math
 
 class SoTLNet(Hypertrainable):
     def __init__(self, n_features = None, model_type = "softmax_mult", task="whatever",
-     extra_weight_decay=0, n_classes=1, cfg=None, alpha_lr=None, **kwargs):
+     alpha_weight_decay=0, n_classes=1, cfg=None, alpha_lr=None, **kwargs):
         super().__init__(**kwargs)
         self.model_type = model_type
         self.n_features = n_features
@@ -63,8 +63,8 @@ class SoTLNet(Hypertrainable):
         self.alphas = []
         self.feature_indices = None
         self.model.feature_indices = self.feature_indices
-        if extra_weight_decay > 0:
-            self.alpha_weight_decay = torch.nn.Parameter(torch.tensor([extra_weight_decay], dtype=torch.float32, requires_grad=True).unsqueeze(dim=0))
+        if alpha_weight_decay > 0:
+            self.alpha_weight_decay = torch.nn.Parameter(torch.tensor(alpha_weight_decay, dtype=torch.float32, requires_grad=True).unsqueeze(dim=0))
         else:
             self.alpha_weight_decay = torch.tensor(0)
         if alpha_lr is not None:

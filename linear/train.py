@@ -2,9 +2,6 @@
 # python linear/train.py --model_type=sigmoid --dataset=gisette --arch_train_data sotl --grad_outer_loop_order=None --mode=bilevel --device=cuda --initial_degree 1 --hvp=finite_diff --epochs=100 --w_lr=0.001 --T=1 --a_lr=0.01 --hessian_tracking False --w_optim=Adam --a_optim=Adam --w_warm_start 0 --train_arch=True --a_weight_decay=0.001 --a_decay_order 2 --smoke_test False --dry_run=True --w_weight_decay=0.001 --batch_size=64 --decay_scheduler None --loss ce
 # python linear/train.py --model_type=sigmoid --dataset=gisette --arch_train_data sotl --grad_outer_loop_order=None --mode=bilevel --device=cuda --initial_degree 1 --hvp=finite_diff --epochs=100 --w_lr=0.001 --T=1 --a_lr=0.01 --hessian_tracking False --w_optim=Adam --a_optim=Adam --w_warm_start 3 --train_arch=True --a_weight_decay=0.00000001--smoke_test False --dry_run=True --w_weight_decay=0.001 --batch_size=64 --decay_scheduler None
 
-# python linear/train.py --model_type=max_deg --dataset=fourier --dry_run=False --T=2 --grad_outer_loop_order=-1 --grad_inner_loop_order=-1 --mode=bilevel --device=cpu --optimizer_mode=manual --ihvp=exact --inv_hess=exact --hvp=exact
-# python linear/train.py --model_type=max_deg --dataset=sklearn_friedman1 --dry_run=False --T=1 --a_weight_decay=0.1 --grad_outer_loop_order=1 --grad_inner_loop_order=1 --mode=bilevel --device=cpu --optimizer_mode=autograd --n_samples=50000  --epochs=1
-
 # python linear/train.py --model_type=MNIST --dataset=MNIST --dry_run=False --T=1 --w_warm_start=0 --grad_outer_loop_order=-1 --grad_inner_loop_order=-1 --mode=bilevel --device=cuda --extra_weight_decay=0.0001 --w_weight_decay=0 --arch_train_data=val
 # python linear/train.py --model_type=max_deg --epochs 20 --steps_per_epoch=1 --dataset=fourier --dry_run=True --grad_outer_loop_order=-1 --grad_inner_loop_order=-1 --mode=bilevel --device=cpu --ihvp=exact --inv_hess=exact --hvp=exact --rand_seed 1 --arch_train_data sotl --optimizer_mode=autograd --T=25 --recurrent True --w_lr=1e-1 --a_lr=1e-3 --adaptive_a_lr=False
 # python linear/train.py --model_type=rff_bag --epochs 50 --dataset=MNISTrff --dry_run=True --grad_outer_loop_order=-1 --grad_inner_loop_order=-1 --mode=bilevel --device=cpu --ihvp=exact --inv_hess=exact --hvp=exact --rand_seed 1 --arch_train_data sotl --optimizer_mode=autograd --loss=ce --T=2 --recurrent True --a_weight_decay 0 --a_lr=1500000000000 --w_weight_decay 0.0001 --train_arch=True --w_lr=1
@@ -12,10 +9,12 @@
 
 # python linear/train.py --model_type=log_reg --dataset=MNIST --dry_run=False --T=2 --w_warm_start=0 --grad_outer_loop_order=-1 --grad_inner_loop_order=-1 --mode=bilevel --device=cpu --w_weight_decay=0 --arch_train_data=sotl --alpha_lr=0.001 --w_lr=1e-3 --a_lr=1e-2 --alpha_lr=1e-3 --optimizer_mode=autograd --loss=ce --a_weight_decay=0
 # python linear/train.py --cfg=linear/configs/max_deg/lin_reg.py
-# python linear/train.py --cfg=linear/configs/lr/mnist_logreg.py
+# python linear/train.py --cfg=linear/configs/lr/mnist_logreg.py --
 # python linear/train.py --cfg=linear/configs/lr/mnist_mlp.py --alpha_lr_reject_strategy=zero --T=1 --train_arch=False --w_lr=0.01 --w_optim=SGD --alpha_lr=None --mode=joint --n_samples=4000
-# python linear/train.py --cfg=linear/configs/lr/mnist_vgg.py --T=1 --train_arch=False --w_lr=0.001 --w_optim=Adam --alpha_lr=None --mode=joint
-# python linear/train.py --cfg=linear/configs/lr/mnist_mlp.py --T=100 --a_lr=0.01 --a_optim=SGD --a_scheduler=step --grad_clip=10
+# python linear/train.py --cfg=linear/configs/lr/mnist_mlp.py --alpha_lr_reject_strategy=zero --T=1 --train_arch=False --w_lr=0.01 --w_optim=SGD --alpha_lr=None --mode=joint --n_samples=4000
+
+# python linear/train.py --cfg=linear/configs/lr/mnist_vgg.py --T=1 --alpha_weight_decay=0.001
+# python linear/train.py --cfg=linear/configs/lr/mnist_mlp.py --T=50 --a_lr=0.01 --a_optim=SGD --a_scheduler=step --grad_clip=10 --model_type="MLPLarge"
 
 #pip install --force git+https://github.com/Mirofil/pytorch-hessian-eigenthings.git
 
@@ -67,7 +66,6 @@ def main(cfg=None, **kwargs):
     if cfg is not None:
         config.merge_from_file(cfg)
     config.merge_from_list(list(itertools.chain.from_iterable(kwargs.items())))
-
     if config["dry_run"]:
         os.environ['WANDB_MODE'] = 'dryrun'
     if config["debug"]:
@@ -92,7 +90,6 @@ def main(cfg=None, **kwargs):
 
     if config["adaptive_a_lr"] is True:
         config["a_lr"] = config["a_lr"]*(config["T"]**(1/2))
-        # config["a_lr"] = config["a_lr"] * config["T"]
 
     if config["alpha_lr"] is not None and config["softplus_alpha_lr"]:
         config["alpha_lr"] = inverse_softplus(config["alpha_lr"], config["softplus_beta"])
@@ -105,13 +102,14 @@ def main(cfg=None, **kwargs):
     if config["alpha_lr"] is not None:
         assert config["train_arch"] is True
         config["w_lr"] = model.alpha_lr
+    if config["alpha_weight_decay"] is not None and config["alpha_weight_decay"] != 0:
+        assert config["train_arch"] is True
+        config["alpha_weight_decay"] = model.alpha_weight_decay
     optim_cfg = get_optimizers(model, config)
     w_optimizer, a_optimizer, a_scheduler, w_scheduler=optim_cfg["w_optimizer"], optim_cfg["a_optimizer"], optim_cfg["a_scheduler"], optim_cfg["w_scheduler"]
 
     model, metrics = train_bptt(**{**dataset_cfg, **config, **optim_cfg}, model=model, criterion=criterion, dataset_cfg=dataset_cfg, config=config)
     
-
-
     if config["model_type"] in ["max_deg", "softmax_mult", "linear"]:
         # lapack_solution, res, eff_rank, sing_values = scipy.linalg.lstsq(dset_train[:][0], dset_train[:][1])
         # print(f"Cond number:{abs(sing_values.max()/sing_values.min())}")

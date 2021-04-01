@@ -74,7 +74,7 @@ def train_bptt(
     log_grad_norm:bool,
     log_alphas:bool,
     w_warm_start:int,
-    extra_weight_decay:float,
+    alpha_weight_decay:float,
     train_arch:bool,
     device:str,
     config: Dict,

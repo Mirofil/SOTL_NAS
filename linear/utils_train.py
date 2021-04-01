@@ -46,22 +46,23 @@ def compute_auc(model, k, raw_x, raw_y, test_x, test_y, mode ="F", verbose=True)
 
     return auc_score, acc
 
-def calculate_weight_decay(model, alpha_w_order=None, w_order=1, adaptive_decay=None, 
+def calculate_weight_decay(model, alpha_w_order=None, w_order=1,
     a_order=1, a_coef=1, w_coef=0.001):
-    param_norm=0
-    param_norm_a = 0
-    param_norm_w = 0
-    D_a = 0
-    D_w = 0
-    # TODO think about how to do param_norms in this alpha_weight_decay and adaptive_decay setting
-    if model.alpha_weight_decay != 0 and alpha_w_order is not None:
-        for n,weight in model.named_weight_params():
-            if 'weight' in n:
-                param_norm = param_norm + torch.pow(weight.norm(alpha_w_order), alpha_w_order)
-        param_norm = torch.multiply(model.alpha_weight_decay, param_norm)
+    param_norm, param_norm_a, param_norm_w = 0, 0, 0
+    D_a, D_w = 0, 0
 
-    if adaptive_decay != None and adaptive_decay != False and hasattr(model, "adaptive_weight_decay"):
-        param_norm = param_norm + model.adaptive_weight_decay()
+    if model.cfg["alpha_weight_decay"] != 0:
+        assert w_coef == 0 or w_order == 0
+        if alpha_w_order is None:
+            alpha_w_order = 2
+        for n, weight in model.named_weight_params():
+            if 'weight' in n:
+                param_norm_w = param_norm_w + torch.pow(weight.norm(alpha_w_order), alpha_w_order)
+        param_norm_w = torch.multiply(model.cfg["alpha_weight_decay"], param_norm)
+
+    # TODO wtf is this branch
+    # if adaptive_decay != None and adaptive_decay != False and hasattr(model, "adaptive_weight_decay"):
+    #     param_norm = param_norm + model.adaptive_weight_decay()
     
     if a_order is not None and model.cfg["train_arch"]:
         if model.model_type in ['sigmoid']:
@@ -88,12 +89,11 @@ def calculate_weight_decay(model, alpha_w_order=None, w_order=1, adaptive_decay=
             D_w = D_w + torch.numel(w_param)
     param_norm = param_norm_a/max(D_a, 1) + param_norm_w/max(D_w, 1)
     # param_norm = param_norm_a + param_norm_w
-
     return param_norm
 
 
 def compute_train_loss(x, y, criterion, model, weight_buffer=None, weight_decay=True, 
-    y_pred=None, alpha_w_order=None, w_order=None, adaptive_decay=False, 
+    y_pred=None, alpha_w_order=None, w_order=None,
     a_order=None, a_coef=None, w_coef=None, return_acc=False, debug=False, detailed=False):
     assert model is not None or y_pred is not None
     assert y_pred is None or weight_buffer is None
@@ -110,7 +110,7 @@ def compute_train_loss(x, y, criterion, model, weight_buffer=None, weight_decay=
 
     if weight_decay:
         param_norm = calculate_weight_decay(model, alpha_w_order=alpha_w_order, w_order=model.cfg["w_decay_order"],
-            adaptive_decay=adaptive_decay, a_order=model.cfg["a_decay_order"], 
+            a_order=model.cfg["a_decay_order"], 
             a_coef=model.cfg["a_weight_decay"], w_coef=model.cfg["w_weight_decay"])
     else:
         param_norm = 0
