@@ -39,11 +39,11 @@ class SoTLNet(Hypertrainable):
             self.fc1 = FlexibleLinear(n_features, n_classes, bias=False)
             self.model = self.fc1
         elif model_type == "MNIST" or model_type == "MLP":
-            self.model = MLP(input_dim=n_features,hidden_dim=1000,output_dim=n_classes, weight_decay=extra_weight_decay)
+            self.model = MLP(input_dim=n_features,hidden_dim=1000,output_dim=n_classes)
         elif model_type == "MLP2":
-            self.model = MLP2(input_dim=n_features,hidden_dim=1000,output_dim=n_classes, weight_decay=extra_weight_decay)
+            self.model = MLP2(input_dim=n_features,hidden_dim=1000,output_dim=n_classes)
         elif model_type == "MLPLarge":
-            self.model = MLPLarge(input_dim=n_features,hidden_dim=1000,output_dim=n_classes, weight_decay=extra_weight_decay)
+            self.model = MLPLarge(input_dim=n_features,hidden_dim=1000,output_dim=n_classes)
         elif model_type =="vgg":
             self.model = VGG(make_layers(vgg_cfg['D'], batch_norm=True))
         elif model_type == "pt_logistic_l1":
@@ -63,11 +63,11 @@ class SoTLNet(Hypertrainable):
         self.alphas = []
         self.feature_indices = None
         self.model.feature_indices = self.feature_indices
-        if alpha_weight_decay > 0:
+        if alpha_weight_decay is not None and alpha_weight_decay > 0:
             self.alpha_weight_decay = torch.nn.Parameter(torch.tensor(alpha_weight_decay, dtype=torch.float32, requires_grad=True).unsqueeze(dim=0))
         else:
             self.alpha_weight_decay = torch.tensor(0)
-        if alpha_lr is not None:
+        if alpha_lr is not None and alpha_lr > 0:
             self.alpha_lr = torch.nn.Parameter(torch.tensor(alpha_lr, dtype=torch.float32, requires_grad=True).unsqueeze(dim=0))
         else:
             self.alpha_lr = torch.tensor(0)

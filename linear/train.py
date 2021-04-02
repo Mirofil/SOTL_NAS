@@ -9,11 +9,11 @@
 
 # python linear/train.py --model_type=log_reg --dataset=MNIST --dry_run=False --T=2 --w_warm_start=0 --grad_outer_loop_order=-1 --grad_inner_loop_order=-1 --mode=bilevel --device=cpu --w_weight_decay=0 --arch_train_data=sotl --alpha_lr=0.001 --w_lr=1e-3 --a_lr=1e-2 --alpha_lr=1e-3 --optimizer_mode=autograd --loss=ce --a_weight_decay=0
 # python linear/train.py --cfg=linear/configs/max_deg/lin_reg.py
-# python linear/train.py --cfg=linear/configs/lr/mnist_logreg.py --
+# python linear/train.py --cfg=linear/configs/lr/mnist_logreg.py --alpha_weight_decay=0.001 --alpha_lr=None --w_decay_order=0
 # python linear/train.py --cfg=linear/configs/lr/mnist_mlp.py --alpha_lr_reject_strategy=zero --T=1 --train_arch=False --w_lr=0.01 --w_optim=SGD --alpha_lr=None --mode=joint --n_samples=4000
 # python linear/train.py --cfg=linear/configs/lr/mnist_mlp.py --alpha_lr_reject_strategy=zero --T=1 --train_arch=False --w_lr=0.01 --w_optim=SGD --alpha_lr=None --mode=joint --n_samples=4000
 
-# python linear/train.py --cfg=linear/configs/lr/mnist_vgg.py --T=1 --alpha_weight_decay=0.001
+# python linear/train.py --cfg=linear/configs/lr/mnist_vgg.py --T=2 
 # python linear/train.py --cfg=linear/configs/lr/mnist_mlp.py --T=50 --a_lr=0.01 --a_optim=SGD --a_scheduler=step --grad_clip=10 --model_type="MLPLarge"
 
 #pip install --force git+https://github.com/Mirofil/pytorch-hessian-eigenthings.git

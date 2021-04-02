@@ -217,7 +217,7 @@ def train_bptt(
                             outers = [losses[i] * (1.05**i) for i in range(len(losses))]
                     else:
                         outers = [compute_train_loss(x=val_x.to(device), y=val_y.to(device), criterion=criterion, 
-                            y_pred=model(val_x.to(device), weight=weight_buffer[-1]), model=model) for val_x, val_y in zip(val_xs, val_ys)]
+                            y_pred=model(val_x.to(device), weight=weight_buffer[-1]), model=model, weight_decay=False) for val_x, val_y in zip(val_xs, val_ys)]
 
                     arch_gradients = arch_step(model=model,
                             criterion=criterion,
@@ -302,6 +302,9 @@ def train_bptt(
                         loss,
                         model.weight_params()
                     )
+                    # print(len(list(model.weight_params())))
+                    # print(list(model.weight_params())[1])
+                    # print(grads[1])
 
                     with torch.no_grad():
                         for g, (w_name, w) in zip(grads, model.named_weight_params()):

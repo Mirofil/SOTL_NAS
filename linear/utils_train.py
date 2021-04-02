@@ -56,9 +56,9 @@ def calculate_weight_decay(model, alpha_w_order=None, w_order=1,
         if alpha_w_order is None:
             alpha_w_order = 2
         for n, weight in model.named_weight_params():
-            if 'weight' in n:
+            if 'alpha' not in n:
                 param_norm_w = param_norm_w + torch.pow(weight.norm(alpha_w_order), alpha_w_order)
-        param_norm_w = torch.multiply(model.cfg["alpha_weight_decay"], param_norm)
+        param_norm_w = model.alpha_weight_decay*param_norm_w
 
     # TODO wtf is this branch
     # if adaptive_decay != None and adaptive_decay != False and hasattr(model, "adaptive_weight_decay"):
@@ -83,7 +83,7 @@ def calculate_weight_decay(model, alpha_w_order=None, w_order=1,
                 for arch_param in model.arch_params():
                     param_norm_a = param_norm_a + a_coef * torch.sum(torch.norm(arch_param, a_order))
                     D_a = D_a + torch.numel(arch_param)
-    if w_order is not None:
+    if w_order is not None and w_order != 0 and (model.cfg["alpha_weight_decay"] == 0 or model.cfg["alpha_weight_decay"] is None):
         for w_param in model.weight_params():
             param_norm_w = param_norm_w + w_coef * torch.pow(torch.norm(w_param, w_order), w_order)
             D_w = D_w + torch.numel(w_param)
