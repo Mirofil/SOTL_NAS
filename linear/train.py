@@ -11,7 +11,7 @@
 # python linear/train.py --cfg=linear/configs/max_deg/lin_reg.py
 # python linear/train.py --cfg=linear/configs/lr/mnist_logreg.py --alpha_weight_decay=0.001 --alpha_lr=None --w_decay_order=0
 # python linear/train.py --cfg=linear/configs/lr/mnist_mlp.py --alpha_lr_reject_strategy=half --T=2 --train_arch=False --w_lr=0.01 --w_optim=SGD --alpha_lr=None --mode=joint --n_samples=2000 --batch_size=16
-# python linear/train.py --cfg=linear/configs/lr/mnist_mlp.py --alpha_lr_reject_strategy=half --T=2 --train_arch=True --w_lr=0.01 --w_optim=SGD --alpha_lr=0.01 --mode=bilevel --model_type=MLP_sigmoid_relu
+# python linear/train.py --cfg=linear/configs/lr/mnist_mlp.py --alpha_lr_reject_strategy=half --T=50 --train_arch=True --w_lr=0.01 --w_optim=SGD --alpha_lr=0.01 --mode=bilevel --model_type=MLP_sigmoid_relu --a_lr=0.01
 
 # python linear/train.py --cfg=linear/configs/lr/mnist_vgg.py --T=2 
 # python linear/train.py --cfg=linear/configs/lr/mnist_mlp.py --T=50 --a_lr=0.01 --a_optim=SGD --a_scheduler=step --grad_clip=10 --model_type="MLPLarge"

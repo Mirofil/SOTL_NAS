@@ -385,7 +385,7 @@ def train_bptt(
             hessian_eigenvalue = eigenvals[0]              
 
         val_results_loss, val_results_acc = val_results.avg if val_results is not None else None, val_acc_results.avg if val_acc_results is not None else None
-        tqdm.write("Epoch: {}, Val Loss: {}, Test Loss: {}, Discretized AUC: {}, MSE: {}, Reconstruction Acc: {}, Hess: {}".format(epoch, val_results.avg, test_results.avg, auc, mse, acc, hessian_eigenvalue))
+        tqdm.write("Epoch: {}, Val Loss: {}, Val Acc: {}, Test Loss: {}, Test Acc: {}, Discretized AUC: {}, MSE: {}, Reconstruction Acc: {}, Hess: {}".format(epoch, val_results.avg, val_acc_results.avg, test_results.avg, test_acc_results.avg, auc, mse, acc, hessian_eigenvalue))
         to_log = {**to_log, "val_loss": val_results_loss, "val_acc": val_results_acc, "test_loss": test_results.avg, "test_acc": test_acc_results.avg, "AUC_training": auc, "MSE training":mse, 
             "RecAcc training":acc, "Arch. Hessian domin. eigenvalue": hessian_eigenvalue, "epoch": epoch, "arch_update_idx": arch_update_idx}
         to_log = {k:v for k,v in to_log.items() if v is not None}
