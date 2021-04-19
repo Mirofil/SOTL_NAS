@@ -163,16 +163,35 @@ class LinearMaxDeg(torch.nn.Linear, Hypertrainable):
     def squash(self, *args, **kwargs):
         return self.squished_tanh(*args, **kwargs)
 
-class FlexibleLinear(torch.nn.Linear, Hypertrainable):
-    def __init__(self, in_features, out_features, bias=True, **kwargs):
+
+
+class HyperLinear(torch.nn.Linear, Hypertrainable):
+    def __init__(self, in_features, out_features, bias=True, act=None, **kwargs):
         super().__init__(in_features, out_features, bias=bias)
+        if act is None or act == "id":
+            self.act = self.id
+        elif act == "sigmoid_relu":
+            self.act = self.act_sigmoid_relu
+            self.alpha_sigmoid_relu_param = torch.nn.Parameter(torch.tensor(0, dtype=torch.float32), requires_grad=True)
 
     def forward(self, input: Tensor, weight: Tensor = None, alphas: Tensor = None, **kwargs) -> Tensor:
         if weight is None:
-            return F.linear(input, self.weight, bias=self.bias)
+            return self.act(F.linear(input, self.weight, bias=self.bias))
         else:
             extracted_params = {k:weight[self.parent_path+"."+k] for k, v in self.named_weight_params()}
-            return F.linear(input, weight=extracted_params["weight"], bias=extracted_params["bias"])
+            return self.act(F.linear(input, weight=extracted_params["weight"], bias=extracted_params["bias"]))
+
+    def act_sigmoid_relu(self, x):
+        # Interpolates between ReLU and sigmoid
+        a = torch.sigmoid(self.alpha_sigmoid_relu_param) # need to squish the a parameter into [0, 1]
+        numerator = 2*a+(1-a)*(x+torch.sqrt(torch.pow(x, 2) + torch.pow(a, 2)))
+        denominator = 2 + 2*a*torch.exp(-x)
+        return numerator/denominator
+
+    @staticmethod
+    def id(x):
+        return x
+
 
 class HyperConv2d(torch.nn.Conv2d, Hypertrainable):
     def __init__(self, in_channels, out_channels, kernel_size, **kwargs):

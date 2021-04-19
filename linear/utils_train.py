@@ -18,6 +18,19 @@ import operator
 from torch._six import inf
 
 
+def f(n=None, k=None):
+    import scipy.special
+    import math
+    import numpy as np
+
+    if k is not None:
+        n = 4**k
+        print(n)
+        return 1/scipy.special.binom(n, k)-1/n**4/4
+    
+    if n is not None:
+        return 1/scipy.special.binom(n, math.ceil(math.sqrt(np.log(n))))-1/n**4/4
+
 def reconstruction_error(model, k, x_train, y_train, x_test, 
     y_test, mode = "normalized"):
     # Used to compute reconstruction errors from Concrete Autoencoder paper

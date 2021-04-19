@@ -114,7 +114,7 @@ def train_bptt(
     for epoch in tqdm(range(epochs), desc='Iterating over epochs', total = epochs):
         model.train()
 
-        train_loss = AverageMeter()
+        train_loss, train_acc = AverageMeter(), AverageMeter()
         true_batch_idx = 0
         val_iter = iter(val_loader) # Used to make sure we iterate through the whole val set with no repeats
 
@@ -297,14 +297,12 @@ def train_bptt(
 
                     loss, train_acc_top1, param_norm, unreg_loss = compute_train_loss(x=x, y=y, criterion=criterion, model=model, return_acc=True, detailed=True)
                     train_loss.update(loss.item())
+                    train_acc.update(train_acc_top1)
 
                     grads = torch.autograd.grad(
                         loss,
                         model.weight_params()
                     )
-                    # print(len(list(model.weight_params())))
-                    # print(list(model.weight_params())[1])
-                    # print(grads[1])
 
                     with torch.no_grad():
                         for g, (w_name, w) in zip(grads, model.named_weight_params()):
@@ -333,6 +331,7 @@ def train_bptt(
 
                     to_log.update({
                             "train_loss": train_loss.avg,
+                            "train_acc": train_acc.avg,
                             "Epoch": epoch,
                             "Batch": true_batch_idx,
                             "arch_update_idx": arch_update_idx
@@ -348,10 +347,11 @@ def train_bptt(
         except:
             best_alphas = "No arch params"
         tqdm.write(
-            "Epoch: {}, Batch: {}, Train loss: {}, Alphas: {}, Weights: {}".format(
+            "Epoch: {}, Batch: {}, Train loss: {}, Train acc: {}, Alphas: {}, Weights: {}".format(
                 epoch,
                 true_batch_idx,
                 train_loss.avg,
+                train_acc.avg,
                 [x.data for x in model.arch_params()] if len(str([x.data for x in model.arch_params()])) < 20 else best_alphas,
                 [x.data for x in model.weight_params()] if len(str([x.data for x in model.weight_params()])) < 200 else f'Too long'
             )

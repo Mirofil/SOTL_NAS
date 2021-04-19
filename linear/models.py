@@ -1,5 +1,5 @@
 import torch
-from layers import LinearSquash, LinearMaxDeg, FlexibleLinear, FeatureSelection, RFFEmbedding, EmbeddingCombiner, HyperConv2d, HyperBatchNorm2d
+from layers import LinearSquash, LinearMaxDeg, HyperLinear, FeatureSelection, RFFEmbedding, EmbeddingCombiner, HyperConv2d, HyperBatchNorm2d
 import torch.nn as nn
 import torch.nn.functional as F
 import itertools
@@ -36,12 +36,14 @@ class SoTLNet(Hypertrainable):
 
             self.model = self.fc1
         elif model_type == "linear":
-            self.fc1 = FlexibleLinear(n_features, n_classes, bias=False)
+            self.fc1 = HyperLinear(n_features, n_classes, bias=False)
             self.model = self.fc1
         elif model_type == "MNIST" or model_type == "MLP":
             self.model = MLP(input_dim=n_features,hidden_dim=1000,output_dim=n_classes)
         elif model_type == "MLP2":
             self.model = MLP2(input_dim=n_features,hidden_dim=1000,output_dim=n_classes)
+        elif model_type == "MLP_sigmoid_relu":
+            self.model = MLP_sigmoid_relu(input_dim=n_features,hidden_dim=1000,output_dim=n_classes)
         elif model_type == "MLPLarge":
             self.model = MLPLarge(input_dim=n_features,hidden_dim=1000,output_dim=n_classes)
         elif model_type =="vgg":
@@ -115,7 +117,7 @@ class RFFRegression(Hypertrainable):
     def __init__(self, d, input_dim, l, num_classes=2, device='cuda' if torch.cuda.is_available() else 'cpu', **kwargs):
         super().__init__()
         self.embedding = RFFEmbedding(d=d, input_dim=input_dim, l=l, device=device)
-        self.fc1 = FlexibleLinear(d, num_classes)
+        self.fc1 = HyperLinear(d, num_classes)
 
     def forward(self, x, weight=None, *args, **kwargs):
             
@@ -130,7 +132,7 @@ class RFFRegressionBag(Hypertrainable):
         print(f"Generating {emb_count} RFF embeddings with lengthscales {ls}")
         # ls=[1e5,1e7,1e9,1e11,1e13]
         self.embedding = EmbeddingCombiner(embeddings=[RFFEmbedding(d=d, input_dim=input_dim, renew=False, l=ls[i]) for i in range(emb_count)])
-        self.fc1 = FlexibleLinear(d, num_classes)
+        self.fc1 = HyperLinear(d, num_classes)
 
 
     def forward(self, x, weight=None, *args, **kwargs):
@@ -143,7 +145,7 @@ class LogReg(Hypertrainable, FeatureSelectableTrait):
     def __init__(self, input_dim=28*28, output_dim=10):
         super(LogReg, self).__init__()
         self._input_dim = input_dim
-        self.fc1 = FlexibleLinear(input_dim, output_dim)
+        self.fc1 = HyperLinear(input_dim, output_dim)
 
     def forward(self, x, weight=None, alphas=None):
 
@@ -164,13 +166,13 @@ class MLPLarge(Hypertrainable):
     def __init__(self, input_dim=28*28, hidden_dim=1000, output_dim=10, weight_decay=0, dropout_p=0.2, **kwargs):
         super(MLPLarge, self).__init__()
         self._input_dim = input_dim
-        self.lin1 = FlexibleLinear(input_dim, hidden_dim)
-        self.lin2 = FlexibleLinear(hidden_dim, hidden_dim)
-        self.lin21 = FlexibleLinear(hidden_dim, hidden_dim)
-        self.lin22 = FlexibleLinear(hidden_dim, hidden_dim)
-        self.lin23 = FlexibleLinear(hidden_dim, hidden_dim)
+        self.lin1 = HyperLinear(input_dim, hidden_dim)
+        self.lin2 = HyperLinear(hidden_dim, hidden_dim)
+        self.lin21 = HyperLinear(hidden_dim, hidden_dim)
+        self.lin22 = HyperLinear(hidden_dim, hidden_dim)
+        self.lin23 = HyperLinear(hidden_dim, hidden_dim)
 
-        self.lin3 = FlexibleLinear(hidden_dim, output_dim)
+        self.lin3 = HyperLinear(hidden_dim, output_dim)
 
     def forward(self, x, weight=None, alphas=None):
 
@@ -190,9 +192,9 @@ class MLP2(Hypertrainable):
     def __init__(self, input_dim=28*28, hidden_dim=1000, output_dim=10, weight_decay=0, dropout_p=0.2, **kwargs):
         super(MLP2, self).__init__()
         self._input_dim = input_dim
-        self.lin1 = FlexibleLinear(input_dim, hidden_dim)
-        self.lin2 = FlexibleLinear(hidden_dim, hidden_dim)
-        self.lin3 = FlexibleLinear(hidden_dim, output_dim)
+        self.lin1 = HyperLinear(input_dim, hidden_dim)
+        self.lin2 = HyperLinear(hidden_dim, hidden_dim)
+        self.lin3 = HyperLinear(hidden_dim, output_dim)
 
     def forward(self, x, weight=None, alphas=None):
 
@@ -200,6 +202,24 @@ class MLP2(Hypertrainable):
 
         x = F.relu(self.lin1(x, weight, alphas))
         x = F.relu(self.lin2(x, weight, alphas))
+        x = self.lin3(x, weight, alphas)
+
+        return x
+
+class MLP_sigmoid_relu(Hypertrainable):
+    def __init__(self, input_dim=28*28, hidden_dim=1000, output_dim=10, weight_decay=0, dropout_p=0.2, **kwargs):
+        super(MLP_sigmoid_relu, self).__init__()
+        self._input_dim = input_dim
+        self.lin1 = HyperLinear(input_dim, hidden_dim, act="sigmoid_relu")
+        self.lin2 = HyperLinear(hidden_dim, hidden_dim, act="sigmoid_relu")
+        self.lin3 = HyperLinear(hidden_dim, output_dim)
+
+    def forward(self, x, weight=None, alphas=None):
+
+        x = x.view(-1, self._input_dim)
+
+        x = self.lin1(x, weight, alphas)
+        x = self.lin2(x, weight, alphas)
         x = self.lin3(x, weight, alphas)
 
         return x
@@ -225,12 +245,12 @@ class VGG(nn.Module):
         self.features = features
         self.classifier = HyperSequential(
             nn.Dropout(),
-            FlexibleLinear(512, 512),
+            HyperLinear(512, 512),
             nn.ReLU(True),
             nn.Dropout(),
-            FlexibleLinear(512, 512),
+            HyperLinear(512, 512),
             nn.ReLU(True),
-            FlexibleLinear(512, 10),
+            HyperLinear(512, 10),
         )
          # Initialize weights
         for m in self.modules():
