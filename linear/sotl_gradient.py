@@ -25,6 +25,13 @@ class WeightBuffer:
             start = math.floor(intra_batch_idx / self.checkpoint_freq)
             end = min(start + self.checkpoint_freq, self.T - 1)
             self.weight_buffer.append((start, end))
+
+    def grad_add(self, model, clone=True):
+        """Useful for HyperOptimizers to construct Momentum buffers on named param basis. """
+        if clone is True:
+            self.weight_buffer.append({w_name:w.clone().grad for w_name, w in model.named_weight_params()})
+        else:
+            self.weight_buffer.append(dict(model.named_weight_params()))
     
     def direct_add(self, weights):
         self.weight_buffer.append(weights)

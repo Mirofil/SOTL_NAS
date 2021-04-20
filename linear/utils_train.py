@@ -224,7 +224,7 @@ def get_optimizers(model, config, grad = None):
     elif config ['w_optim'] =='Adam':
         w_optimizer = Adam(model.weight_params(), lr=true_w_lr)
     elif config["w_optim"] == "HyperSGD":
-        w_optimizer = HyperSGD(model.weight_params(), lr=true_w_lr, momentum=config["w_momentum"], grad=grad)
+        w_optimizer = HyperSGD(model.weight_params(), dict(model.named_weight_params()), lr=true_w_lr, momentum=config["w_momentum"], grad=grad, T = config["T"])
 
 
     if config['w_scheduler'] == "step":

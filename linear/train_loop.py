@@ -137,16 +137,15 @@ def train_bptt(
             if features is not None:
                 xs = [x[:, features] for x in xs]
             if mode == "bilevel":
-                
                 prerollout_w_optim_state_dict = w_optimizer.state_dict()
-
                 w_scheduler2 = None
 
             weight_buffer = WeightBuffer(T=T, checkpoint_freq=w_checkpoint_freq)
-            weight_buffer.add(model, 0)
+            weight_buffer.add(model, 0) # NOTE this simultaenously detaches the weights from the computational graph (which is hidden inside the .add())
             losses = []
 
             if mode == "bilevel":
+                # w_optimizer_rollout = deepcopy(w_optimizer)
                 for intra_batch_idx, (x, y) in enumerate(zip(xs, ys),1):
                     
                     x, y = x.to(device), y.to(device)
@@ -280,6 +279,7 @@ def train_bptt(
             if (mode == "bilevel" and epoch >= w_warm_start and batch_idx % arch_update_frequency == 0) or (mode == "joint" and train_arch == False):
                 # If there is no arch training, we use this branch as normal training of networks without any bells and whistles
                 weights_after_rollout = switch_weights(model, weight_buffer[0])
+                # Making new optimizers should assure no state is shared across rollouts. TODO but last momentum should be shared?
                 optims = get_optimizers(model, config)
                 w_optimizer, a_optimizer, w_scheduler, a_scheduler = optims["w_optimizer"], optims["a_optimizer"], optims["w_scheduler"], optims["a_scheduler"]
 
@@ -313,9 +313,16 @@ def train_bptt(
                     # with torch.no_grad():
                     #     for (w_name, w), dw in zip(model.named_weight_params(), grads):
                     #         w.subtract_(config["w_lr"]*dw)
+                    if "hyper" in model.cfg["w_optim"].lower():
+                        new_weights = w_optimizer.step(grads=grads, weight_buffer=weight_buffer, config=config)
+                        with torch.no_grad():
+                            for old_w, new_w in zip(model.weight_params(), new_weights.values()):
+                                old_w.copy_(new_w)
 
-                    w_optimizer.step()
-                    w_optimizer.zero_grad()
+                    else:
+
+                        w_optimizer.step()
+                        w_optimizer.zero_grad()
 
                     metrics["train_loss"][epoch].append(-loss.item())
                     if dataset_cfg["dset_val"] is not None:
