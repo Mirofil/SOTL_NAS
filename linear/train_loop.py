@@ -126,7 +126,7 @@ def train_bptt(
         elif decay_scheduler is None or decay_scheduler == "None":
             pass
 
-        for batch_idx, (batch, val_batch) in tqdm(enumerate(zip(train_loader, itertools.cycle(val_loader))), desc = "Iterating over batches", total = len(train_loader), disable=True):
+        for batch_idx, (batch, val_batch) in tqdm(enumerate(zip(train_loader, itertools.cycle(val_loader))), desc = "Iterating over batches", total = len(train_loader), disable = not config["progress_bar"]):
             if steps_per_epoch is not None and batch_idx > steps_per_epoch:
                 break
 
