@@ -105,8 +105,8 @@ class HyperSGD(SGD):
                     new_momentum[w_name] = None
                 else:
                     # equation from https://stats.stackexchange.com/questions/179915/whats-the-difference-between-momentum-based-gradient-descent-and-nesterovs-acc
-                    if momentum_buffer[self.i-1][w_name] is not None:
-                        momentum_update = momentum * (momentum * momentum_buffer[self.i-1][w_name] - config["w_lr"]*dw) - config["w_lr"]*dw
+                    if momentum_buffer[(self.i-1) % self.T][w_name] is not None:
+                        momentum_update = momentum * (momentum * momentum_buffer[(self.i-1) % self.T][w_name] - config["w_lr"]*dw) - config["w_lr"]*dw
                     else:
                         momentum_update = -config["w_lr"]*dw
                     new_weights[w_name] = w + momentum_update

@@ -150,6 +150,8 @@ def train_bptt(
                             except:
                                 # It can happen that there are some other type(v) is list == True, but none of those that I put in while developing the HyperOptimizers
                                 continue
+                        if torch.is_tensor(v):
+                            param_group[k] = v.detach()
 
                 w_scheduler2 = None
 
@@ -296,7 +298,7 @@ def train_bptt(
                 w_optimizer, a_optimizer, w_scheduler, a_scheduler = optims["w_optimizer"], optims["a_optimizer"], optims["w_scheduler"], optims["a_scheduler"]
                 
                 # TODO should load the state dict or no? The momentum etc. are kind of outdated after the arch params are updated so perhaps it is the same as having to recalculate batch norm stats in one-shot NAS?
-                w_optimizer.load_state_dict(prerollout_w_optim_state_dict)
+                # w_optimizer.load_state_dict(prerollout_w_optim_state_dict)
 
                 #NOTE this train step should be identical to the loop above apart from WeightBuffer management! But it is difficult to abstract this in pure PyTorch, although it could be hacked with kwargs forwarding?
                 if bilevel_w_steps is None or bilevel_w_steps == "None":

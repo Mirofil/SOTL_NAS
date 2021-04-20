@@ -53,7 +53,7 @@ def train_step(x, y, criterion, model, w_optimizer, weight_buffer, grad_clip, co
         if grad_clip is not None:
             clip_grad_raw(grads, grad_clip)
 
-        new_weights = {}
+        # new_weights = {}
         if "hyper" in model.cfg["w_optim"].lower():
             new_weights = w_optimizer.step(grads, config, weight_buffer)
             # with torch.no_grad():
@@ -87,13 +87,14 @@ def train_step(x, y, criterion, model, w_optimizer, weight_buffer, grad_clip, co
         if grad_clip is not None:
             grad_coef=torch.nn.utils.clip_grad_norm_(grads, grad_clip)
 
-        new_weights = {}
+        new_weights = w_optimizer.step(grads, config, weight_buffer)
 
-        for (w_name, w), dw in zip(weight_buffer[-1].items(), grads):
-            if type(config["w_lr"]) is float or not config["softplus_alpha_lr"]:
-                new_weights[w_name] = w - config["w_lr"]*dw # Manual SGD update that creates new nodes in the computational graph
-            else:
-                new_weights[w_name] = w - F.softplus(config["w_lr"], config["softplus_beta"])*dw # Manual SGD update that creates new nodes in the computational graph
+        # new_weights = {}
+        # for (w_name, w), dw in zip(weight_buffer[-1].items(), grads):
+        #     if type(config["w_lr"]) is float or not config["softplus_alpha_lr"]:
+        #         new_weights[w_name] = w - config["w_lr"]*dw # Manual SGD update that creates new nodes in the computational graph
+        #     else:
+        #         new_weights[w_name] = w - F.softplus(config["w_lr"], config["softplus_beta"])*dw # Manual SGD update that creates new nodes in the computational graph
 
 
         weight_buffer.direct_add(new_weights)

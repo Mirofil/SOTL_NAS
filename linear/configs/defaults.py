@@ -58,6 +58,7 @@ C.recurrent=True
 C.l=1e5
 C.adaptive_a_lr=False
 C.alpha_lr = None
+C.alpha_w_momentum = None
 C.softplus_alpha_lr=True
 C.softplus_beta=100
 C.arch_update_frequency=1

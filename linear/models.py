@@ -11,7 +11,7 @@ import math
 
 class SoTLNet(Hypertrainable):
     def __init__(self, n_features = None, model_type = "softmax_mult", task="whatever",
-     alpha_weight_decay=0, n_classes=1, cfg=None, alpha_lr=None, **kwargs):
+     alpha_weight_decay=0, n_classes=1, cfg=None, alpha_lr=None, alpha_w_momentum=None, **kwargs):
         super().__init__(**kwargs)
         self.model_type = model_type
         self.n_features = n_features
@@ -73,6 +73,10 @@ class SoTLNet(Hypertrainable):
             self.alpha_lr = torch.nn.Parameter(torch.tensor(alpha_lr, dtype=torch.float32, requires_grad=True).unsqueeze(dim=0))
         else:
             self.alpha_lr = torch.tensor(0)
+        if alpha_w_momentum is not None and alpha_w_momentum > 0:
+            self.alpha_w_momentum = torch.nn.Parameter(torch.tensor(alpha_w_momentum, dtype=torch.float32, requires_grad=True).unsqueeze(dim=0))
+        else:
+            self.alpha_w_momentum = torch.tensor(0)
 
         self.model_total_params = sum(p.numel() for p in self.model.parameters() if p.requires_grad)
         print(f"Initiazed model {model_type} with {self.model_total_params} parameters!")

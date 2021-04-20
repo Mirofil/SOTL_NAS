@@ -11,7 +11,7 @@
 # python linear/train.py --cfg=linear/configs/max_deg/lin_reg.py
 # python linear/train.py --cfg=linear/configs/lr/mnist_logreg.py --alpha_weight_decay=0.001 --alpha_lr=None --w_decay_order=0
 # python linear/train.py --cfg=linear/configs/lr/mnist_mlp.py --alpha_lr_reject_strategy=half --T=2 --train_arch=False --w_lr=0.01 --w_optim=SGD --alpha_lr=None --mode=joint --n_samples=2000 --batch_size=16
-# python linear/train.py --cfg=linear/configs/lr/mnist_mlp.py --alpha_lr_reject_strategy=half --T=5 --train_arch=True --w_lr=0.01 --w_momentum=0.9 --w_optim=HyperSGD --alpha_lr=0.01 --mode=bilevel --model_type=MLP2 --a_lr=0.01
+# python linear/train.py --cfg=linear/configs/lr/mnist_mlp.py --alpha_lr_reject_strategy=half --T=5 --train_arch=True --w_lr=0.01 --w_momentum=0.9 --w_optim=HyperSGD --alpha_lr=0.01 --alpha_w_momentum=0.9 --mode=bilevel --model_type=MLP2 --a_lr=0.01
 
 # python linear/train.py --cfg=linear/configs/lr/mnist_vgg.py --T=3 --w_momentum=0.9 --w_optim=HyperSGD --a_lr=0.05
 # python linear/train.py --cfg=linear/configs/lr/mnist_mlp.py --T=50 --a_lr=0.01 --a_optim=SGD --a_scheduler=step --grad_clip=10 --model_type="MLPLarge"
@@ -103,6 +103,8 @@ def main(cfg=None, **kwargs):
     if config["alpha_lr"] is not None:
         assert config["train_arch"] is True
         config["w_lr"] = model.alpha_lr
+    if config["alpha_w_momentum"] is not None:
+        config["w_momentum"] = model.alpha_w_momentum
     if config["alpha_weight_decay"] is not None and config["alpha_weight_decay"] != 0:
         assert config["train_arch"] is True
         config["alpha_weight_decay"] = model.alpha_weight_decay
