@@ -66,16 +66,19 @@ class FeatureSelection(Hypertrainable):
         elif self.squash_type == "sigmoid":
             return torch.sigmoid(*args, **kwargs)
 
+class Supernetwork(Hypertrainable):
+    def __init__(self, embeddings, model):
+        super().__init__()
 
 class EmbeddingCombiner(Hypertrainable):
-    def __init__(self, embeddings, device='cuda' if torch.cuda.is_available() else 'cpu', **kwargs) -> None:
+    def __init__(self, embeddings, device='cuda' if torch.cuda.is_available() else 'cpu', trainable=True, **kwargs) -> None:
         super().__init__()
-        #NOTE embeddings should be in a Python list (NOT ParameterList) so that they are not seen as Parameters by NN.module! 
-        # The parameters of each embedding should not be optimized!
+        # NOTE embeddings should be in a Python list (NOT ParameterList) so that they are not seen as Parameters by NN.module! The parameters of each embedding should not be optimized!
         self.embeddings = [emb.to(device) for emb in embeddings]
-        self.alpha_lin_comb = torch.nn.Parameter(torch.tensor([0 for _ in range(len(embeddings))], dtype=torch.float32))
+        self.alpha_lin_comb = torch.nn.Parameter(torch.tensor([0 for _ in range(len(embeddings))], dtype=torch.float32), requires_grad = trainable)
         self.softmax = torch.nn.Softmax(dim=0)
         self.device=device
+
     def forward(self, x):
         embs = [emb(x) for emb in self.embeddings]
         weights = self.softmax(self.alpha_lin_comb)

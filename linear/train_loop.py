@@ -138,6 +138,19 @@ def train_bptt(
                 xs = [x[:, features] for x in xs]
             if mode == "bilevel":
                 prerollout_w_optim_state_dict = w_optimizer.state_dict()
+
+                # for param_group_idx, param_group in enumerate(prerollout_w_optim_state_dict["param_groups"]):
+                #     for k, v in param_group.items():
+                #         if type(v) is list: # The momentum buffer for HyperSGD is a list at this point
+                #             try:
+                #                 for nested_dict in v:
+                #                     for k2, v2 in nested_dict.items():
+                #                         if torch.is_tensor(v2):
+                #                             nested_dict[k2] = nested_dict[k2].detach()
+                #             except:
+                #                 # It can happen that there are some other type(v) is list == True, but none of those that I put in while developing the HyperOptimizers
+                #                 continue
+
                 w_scheduler2 = None
 
             weight_buffer = WeightBuffer(T=T, checkpoint_freq=w_checkpoint_freq)
@@ -145,7 +158,6 @@ def train_bptt(
             losses = []
 
             if mode == "bilevel":
-                # w_optimizer_rollout = deepcopy(w_optimizer)
                 for intra_batch_idx, (x, y) in enumerate(zip(xs, ys),1):
                     
                     x, y = x.to(device), y.to(device)
@@ -282,8 +294,8 @@ def train_bptt(
                 # Making new optimizers should assure no state is shared across rollouts. TODO but last momentum should be shared?
                 optims = get_optimizers(model, config)
                 w_optimizer, a_optimizer, w_scheduler, a_scheduler = optims["w_optimizer"], optims["a_optimizer"], optims["w_scheduler"], optims["a_scheduler"]
-
-                #TODO We should use new LR when doing alpha_lr setting I guess, but otherwise use the same setting I guess.. how to fix?
+                
+                # TODO should load the state dict or no? The momentum etc. are kind of outdated after the arch params are updated so perhaps it is the same as having to recalculate batch norm stats in one-shot NAS?
                 # w_optimizer.load_state_dict(prerollout_w_optim_state_dict)
 
                 #NOTE this train step should be identical to the loop above apart from WeightBuffer management! But it is difficult to abstract this in pure PyTorch, although it could be hacked with kwargs forwarding?
