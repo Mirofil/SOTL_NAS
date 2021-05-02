@@ -93,6 +93,7 @@ def train_bptt(
     loss_threshold=None,
     **kwargs
 ):
+    assert train_arch is False or 'hyper' in model.cfg["w_optim"].lower(), 'Training architecture without the HyperOptimizers can give misleading results at best!'
     orig_model_cfg = model.cfg
     print(f"Starting with with config={model.cfg}")
     train_loader = torch.utils.data.DataLoader(
@@ -334,9 +335,7 @@ def train_bptt(
                         with torch.no_grad():
                             for old_w, new_w in zip(model.weight_params(), new_weights.values()):
                                 old_w.copy_(new_w)
-
                     else:
-
                         w_optimizer.step()
                         w_optimizer.zero_grad()
 

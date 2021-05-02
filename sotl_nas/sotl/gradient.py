@@ -66,9 +66,9 @@ def approx_inverse_hvp(v, f, w, lr, steps = 5):
     return lr * p
 
 def dw_da(model, criterion, xs, ys, i, dw, weight_buffer: Sequence, w_lr:float,
-grad_inner_loop_order=1, hvp="exact", val_xs=None,val_ys=None, 
-device = 'cuda' if torch.cuda.is_available() else 'cpu',
-inv_hess = "exact", ihvp="exact", recurrent=True, debug=False):
+    grad_inner_loop_order=1, hvp="exact", val_xs=None,val_ys=None, 
+    device = 'cuda' if torch.cuda.is_available() else 'cpu',
+    inv_hess = "exact", ihvp="exact", recurrent=True, debug=False):
     total_arch_gradient, hessian_matrices_dadw, inv_hess_matrices_dwdw = None, None, None
     debug_info = defaultdict(dict)
 
@@ -153,7 +153,6 @@ inv_hess = "exact", ihvp="exact", recurrent=True, debug=False):
             norm = torch.cat([w.view(-1) for w in dw]).norm()
             eps = 0.0001 / norm
 
-
             # w+ = w_{t-1} + eps*dL(w_t,alpha)dw
             with torch.no_grad():
                 for p, d in zip(weight_buffer[j], dw):
@@ -218,8 +217,11 @@ inv_hess = "exact", ihvp="exact", recurrent=True, debug=False):
         debug_info["hess_dadw"][j] = hessian_matrices_dadw
         debug_info["inv_hess_dwdw"][j] = [h[0] for h in inv_hess_matrices_dwdw]
         debug_info["second_order_terms"][j] = second_order_terms
-    
+    if not recurrent:
+        # print("NOT RECURRENT BITCHES")
+        pass
     if recurrent:
+        # print("RECURRENT BITCHES")
         for j in range(1, i):
             # for idx in range(len(weight_buffer)):
             #     weight_buffer[idx][0] = weight_buffer[idx][0].detach()
