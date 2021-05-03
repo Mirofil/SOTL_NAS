@@ -78,14 +78,16 @@ def dw_da(model, criterion, xs, ys, i, dw, weight_buffer: Sequence, w_lr:float,
 
     for j in range(0, i if not recurrent else min(1, i), 1):
         if not recurrent:
-            j = i - j
-        x = xs[j].to(device)
-        y = ys[j].to(device)
+            true_j = i - j -1
+        else:
+            true_j = j
+        x = xs[true_j].to(device)
+        y = ys[true_j].to(device)
         # for idx in range(len(weight_buffer)):
         #     weight_buffer[idx][0] = weight_buffer[idx][0].detach()
         #     weight_buffer[idx][0].requires_grad=True
-        loss2 = compute_train_loss(x, y, criterion, y_pred=model(x, weight_buffer[j]), model=model)
-
+        loss2 = compute_train_loss(x, y, criterion, y_pred=model(x, weight_buffer[true_j]), model=model)
+        print(f"X top level at j={j}:", x)
         if inv_hess == "ift":
             inv_hess_matrices_dwdw = [torch.inverse(hessian(
                 loss2 * 1, weight_buffer[i-j-1][idx].values(), weight_buffer[i-j-1][idx].values()
@@ -94,9 +96,9 @@ def dw_da(model, criterion, xs, ys, i, dw, weight_buffer: Sequence, w_lr:float,
             prods = [torch.eye(w.shape[1]) for w in weight_buffer[j].values()]
             for k in range(0, j, 1):
                 if not recurrent:
-                    k = i-k
-                print(k)
-                print("X:", xs[k])
+                    k = i-k-1
+                print(f"k={k}")
+                print(f"X inner at j={j}, k = {k}:", xs[k])
                 print("WEIGHT:", weight_buffer[k])
                 loss3 = compute_train_loss(x=xs[k], y=ys[k], criterion=criterion, 
                     y_pred=model(xs[k], weight_buffer[k]), model=model)
@@ -106,7 +108,7 @@ def dw_da(model, criterion, xs, ys, i, dw, weight_buffer: Sequence, w_lr:float,
                 # hess_matrices_dwdw = [torch.autograd.functional.hessian(l, w).reshape((18,18)) for w in weight_buffer[i-k]]
                 # print(hess_matrices_dwdw[0].shape)
                 for idx, (prod, hess) in enumerate(zip(prods, hess_matrices_dwdw)):
-                    prods[idx] = torch.matmul(prods[idx], torch.eye(hess.shape[1]) - hess)
+                    prods[idx] = torch.matmul(prods[idx], torch.eye(hess.shape[1]) - w_lr*hess)
             inv_hess_matrices_dwdw = prods
         elif inv_hess == "id":
             inv_hess_matrices_dwdw = [torch.eye(w.shape[1]) for w in weight_buffer[j].values()] # TODO THERE SHOULD BE A RANGE TO ACCOMMODATE ALL TIMESTEPS
@@ -134,16 +136,16 @@ def dw_da(model, criterion, xs, ys, i, dw, weight_buffer: Sequence, w_lr:float,
 
             # NOTE this exact pathway only makes sense for the linear model because we materialize the inverse Hessian. 
             # So playing with indexes for multiple arch/weight Hessian pairs here is not very meaningful either
-            x = xs[i-j].to(device)
-            y = ys[i-j].to(device)
-            # for idx in range(len(weight_buffer)):
-            #     weight_buffer[idx][0] = weight_buffer[idx][0].detach()
-            #     weight_buffer[idx][0].requires_grad=True
-            loss4 = compute_train_loss(x, y, criterion, y_pred=model(x, weight_buffer[i-j]), model=model)
+            # x = xs[i-j].to(device)
+            # y = ys[i-j].to(device)
+            # # for idx in range(len(weight_buffer)):
+            # #     weight_buffer[idx][0] = weight_buffer[idx][0].detach()
+            # #     weight_buffer[idx][0].requires_grad=True
+            # loss4 = compute_train_loss(x, y, criterion, y_pred=model(x, weight_buffer[i-j]), model=model)
 
             
             hessian_matrices_dadw = [hessian(
-                loss4 * 1, list(weight_buffer[i-j].values())[idx], arch_param
+                loss2 * 1, list(weight_buffer[true_j].values())[idx], arch_param
             ) for arch_param in model.arch_params() for idx in range(len(weight_buffer[i-j-1]))]
             if j == 1:
                 print("DADW:", hessian_matrices_dadw)
@@ -208,7 +210,7 @@ def dw_da(model, criterion, xs, ys, i, dw, weight_buffer: Sequence, w_lr:float,
         else:
             for g1, g2 in zip(total_arch_gradient, total_arch_gradient_local):
                 g1.add_(g2, alpha=-w_lr)
-
+        print(f"TOTAL ARCH GRAD at j={j}:", total_arch_gradient)
         if debug:
             #NOTE FOR LOGGING ONLY, DELETE LATER
             loss3 = compute_train_loss(x=xs[j].to(device), y=ys[j].to(device), criterion=criterion, 
@@ -234,7 +236,7 @@ def dw_da(model, criterion, xs, ys, i, dw, weight_buffer: Sequence, w_lr:float,
             #     weight_buffer[idx][0] = weight_buffer[idx][0].detach()
             #     weight_buffer[idx][0].requires_grad=True
             print(j)
-            print("X:",xs[j])
+            print(f"X at j={j}:",xs[j])
             print("WEIGHTS:", weight_buffer[j])
             loss = compute_train_loss(xs[j], ys[j], criterion, model=model, y_pred=model(xs[j], weight_buffer[j]))
             print(loss)
@@ -248,6 +250,7 @@ def dw_da(model, criterion, xs, ys, i, dw, weight_buffer: Sequence, w_lr:float,
             # This total_arch_gradient carries through the previous computations and is always updated to the most recent results
             # (I-eta*dL/dwdw)*dw/da - eta*dL/dwda
             total_arch_gradient = [(torch.eye(h_dwdw.shape[0]) - w_lr*h_dwdw) @ g - w_lr*h_dadw for g, h_dwdw, h_dadw in zip(total_arch_gradient, inv_hess_matrices_dwdw, hessian_matrices_dadw)]
+            print(f"TOTAL ARCH GRAD at j={j}:", total_arch_gradient)
 
             if debug:
                 debug_info["total_arch_gradient"][j] = total_arch_gradient

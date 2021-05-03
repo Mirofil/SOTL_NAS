@@ -82,6 +82,7 @@ def train_step(x, y, criterion, model, w_optimizer, weight_buffer, grad_clip, co
             loss,
             weight_buffer[-1].values(),
             create_graph=True if model.cfg["train_arch"] else False,
+            retain_graph=True
         )
         # TODO should there be retain_graph = True?
         if grad_clip is not None:
@@ -98,7 +99,6 @@ def train_step(x, y, criterion, model, w_optimizer, weight_buffer, grad_clip, co
             w_optimizer.step()
             # w_optimizer.zero_grad()
             weight_buffer.add(model, intra_batch_idx)
-
         model_old_weights = switch_weights(model, weight_buffer[-1]) # This is useful for auxiliary tasks - but the actual grad evaluation happens by using the external WeightBuffer weights
 
     if detailed:
