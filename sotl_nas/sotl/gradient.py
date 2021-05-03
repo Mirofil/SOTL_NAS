@@ -73,7 +73,11 @@ def dw_da(model, criterion, xs, ys, i, dw, weight_buffer: Sequence, w_lr:float,
     debug_info = defaultdict(dict)
     if i == 0:
         # Return immediately with zero hypergradients
-        total_arch_gradient, hessian_matrices_dadw, inv_hess_matrices_dwdw = [torch.zeros(w.shape).t() for w in dw], [torch.zeros(w.shape).t() for w in dw], [torch.zeros(w.shape).t() for w in dw]
+        if dw is not None:
+            total_arch_gradient, hessian_matrices_dadw, inv_hess_matrices_dwdw = [torch.zeros(w.shape).t() for w in model.arch_params()], [torch.zeros(w.shape).t() for w in dw], [torch.zeros(w.shape).t() for w in dw]
+        else:
+            total_arch_gradient, hessian_matrices_dadw, inv_hess_matrices_dwdw = [torch.zeros(w.shape).t() for w in model.arch_params()], [torch.zeros(w.shape).t() for w in dw], [torch.zeros(w.shape).t() for w in dw]
+
 
     for j in range(0, i if not recurrent else min(1, i), 1):
         if not recurrent:
@@ -113,14 +117,14 @@ def dw_da(model, criterion, xs, ys, i, dw, weight_buffer: Sequence, w_lr:float,
         # if j == 1:
         #     print(inv_hess_matrices_dwdw)
 
-        ihvp_vecs = [1 for _ in range(len(dw))]
+        ihvp_vecs = [1 for _ in range(len(weight_buffer[j]))]
         for idx, (grad_w, inverse_hess_dwdw) in enumerate(zip(dw, inv_hess_matrices_dwdw)):
-
             if inv_hess != "id":
                 if ihvp == "ift":
                     ihvp_vec = torch.matmul(grad_w, inverse_hess_dwdw)
                 elif ihvp == "exact":
-                    ihvp_vec = inverse_hess_dwdw
+                    ihvp_vec = torch.matmul(grad_w, inverse_hess_dwdw)
+
                 elif ihvp == "neumann":
                     dL_train_dw = torch.autograd.grad(loss2, model.weight_params(), create_graph=True)
                     ihvp_vec = approx_inverse_hvp(v=grad_w, f=dL_train_dw, w=list(model.weight_params()), lr=w_lr, steps=500)
@@ -196,17 +200,17 @@ def dw_da(model, criterion, xs, ys, i, dw, weight_buffer: Sequence, w_lr:float,
         else:
             raise NotImplementedError
 
-
         total_arch_gradient_local = [
             da1 for da1 in second_order_terms
         ]
+
         if total_arch_gradient is None:
-
             total_arch_gradient = [-w_lr*g for g in total_arch_gradient_local]
-
         else:
-            for g1, g2 in zip(total_arch_gradient, total_arch_gradient_local):
+            for idx, (g1, g2) in enumerate(zip(total_arch_gradient, total_arch_gradient_local)):
                 g1.add_(g2, alpha=-w_lr)
+
+
 
         if debug:
             print(f"TOTAL ARCH GRAD at j={j}:", total_arch_gradient)
@@ -254,6 +258,7 @@ def dw_da(model, criterion, xs, ys, i, dw, weight_buffer: Sequence, w_lr:float,
                 debug_info["inv_hess_dwdw"][j] = [h[0] for h in inv_hess_matrices_dwdw]
                 debug_info["second_order_terms"][j] = second_order_terms
 
+
     return {"total_arch_gradient":total_arch_gradient, 
         "debug_info":debug_info}
 
@@ -261,7 +266,7 @@ def sotl_gradient(
     model, criterion, xs, ys, weight_buffer: Sequence, w_lr:float, T:int, outers, 
     grad_outer_loop_order=1,grad_inner_loop_order=1, hvp="exact", 
     normalize_a_lr=False, weight_decay_term=0, val_xs = None, val_ys=None, device = 'cuda' if torch.cuda.is_available() else 'cpu',
-    mode="joint", inv_hess = "exact", ihvp="exact", recurrent=True, debug=False
+    mode="joint", inv_hess = "exact", ihvp="exact", recurrent=True, debug=False, dw_multiply_outside=False
 ) -> Sequence:
 
     total_arch_gradient, loss, da_direct, dw, dominant_eigenvalues = None, None, None, None, None
@@ -322,14 +327,17 @@ def sotl_gradient(
             
             total_arch_gradient = hypergrads["total_arch_gradient"]
 
-            final_grad = [0 for _ in range(len(total_arch_gradient))]
+            final_grad = [None for _ in range(len(total_arch_gradient))]
             if total_arch_gradient is None: # Corresponds to only single-step gradients (ie. first-order approximations typically) since there are no hypergradients
                 total_arch_gradient = da_direct
                 final_grad = da_direct
             else:
                 # This executes the matmul in dL(w_t,alpha)/dw * -eta sum_{i=t-inner_loop_order}^t d^2L(w_i, alpha)dadw
                 for idx, (arch_grad, direct_grad) in enumerate(zip(total_arch_gradient, da_direct)):
-                    final_grad[idx] = torch.matmul(dw[idx], total_arch_gradient[idx])
+                    if dw_multiply_outside:
+                        final_grad[idx] = torch.matmul(dw[idx], total_arch_gradient[idx])
+                    else:
+                        final_grad[idx] = total_arch_gradient[idx]
                     final_grad[idx] = final_grad[idx] + direct_grad
 
             if combined_outer_grads is None:
