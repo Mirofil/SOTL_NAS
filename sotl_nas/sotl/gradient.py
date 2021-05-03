@@ -154,12 +154,39 @@ def dw_da(model, criterion, xs, ys, i, dw, weight_buffer: Sequence, w_lr:float,
                     jvp = torch.matmul(ihvp_vec, hess_dadw)
                     second_order_terms.append(jvp)
 
+            # print(second_order_terms)
+
             if debug:
                 print("DADW:", hessian_matrices_dadw)
         elif hvp == "autograd":
             # loss2 = compute_train_loss(x, y, criterion, y_pred=model(x, weight_buffer[true_j]), model=model)
-            loss_fun = lambda w: compute_train_loss(x, y, criterion, y_pred = model(x, w), model = model)
-            print(torch.autograd.functional.vjp(loss_fun, tuple(weight_buffer[true_j].values()), torch.ones(list(weight_buffer[true_j].values())[0].shape)))
+            second_order_terms = []
+            for idx in range(len(weight_buffer[i-j-1])):
+                for arch_param in model.arch_params():
+                    for ihvp_vec in ihvp_vecs:
+                        # print(ihvp_vec)
+                        # print(torch.autograd.grad(compute_train_loss(x, y, criterion, y_pred = model(x, weight_buffer[true_j]), model = model), weight_buffer[true_j].values()))
+                        l = compute_train_loss(x, y, criterion, y_pred = model(x, {k:v for k,v in zip(weight_buffer[true_j].keys(), tuple(weight_buffer[true_j].values()))}), model = model)
+                        loss_fun = lambda w: torch.autograd.grad(compute_train_loss(x, y, criterion, 
+                            y_pred = model(x, {k:v for k,v in zip(weight_buffer[true_j].keys(), w)}), model = model), list(weight_buffer[true_j].values()), create_graph=True)
+                        
+                        g = torch.autograd.grad(loss_fun(list(weight_buffer[true_j].values()))[idx], arch_param, ihvp_vec)
+                        # print(l)
+                        # print(ihvp_vec.T.shape)
+                        # print(loss_fun(list(weight_buffer[true_j].values())))
+                        # print(g)
+                        # print("MATMUL", torch.matmul(g[0], ihvp_vec.T))
+                        # print(torch.autograd.grad(l, list(weight_buffer[true_j].values())[idx], ihvp_vec.T))
+                        # print("LETS GOOO")
+                        # prod = torch.autograd.grad(compute_train_loss(x, y, criterion, 
+                        #     y_pred = model(x, weight_buffer[true_j]), model = model), list(weight_buffer[true_j].values()), ihvp_vec)
+                        # print(prod)
+                        # print(loss_fun(tuple(weight_buffer[true_j].values())))
+                        # print(torch.matmul(loss_fun(tuple(weight_buffer[true_j].values()))[0], ihvp_vec.T))
+                        # all_terms = torch.autograd.functional.vjp(loss_fun, tuple(weight_buffer[true_j].values()))
+                        for term in g:
+                            second_order_terms.append(term)
+                print(second_order_terms)
         elif hvp == "finite_diff":
             # INNER LOOP
             # DARTS footnotes suggest to divide by L2 norm of the gradient

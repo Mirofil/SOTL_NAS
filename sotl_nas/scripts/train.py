@@ -98,7 +98,6 @@ def main(cfg=None, **kwargs):
     dataset_cfg = get_datasets(**config)
     model = SoTLNet(cfg=config,**{**config, **dataset_cfg})
     model = model.to(config["device"])
-    print(model.arch_params())
 
     criterion = get_criterion(config["model_type"], dataset_cfg, config["loss"])
 

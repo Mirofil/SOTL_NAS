@@ -110,7 +110,10 @@ class SoTLNet(Hypertrainable):
         if 'AE' in self.model_type:
             return self.model(x.reshape(orig_shape), weight, alphas).reshape(orig_shape)
         else:
-            return self.model(x.reshape(orig_shape), weight, alphas)
+            if type(weight) is dict:
+                return self.model(x.reshape(orig_shape), weight, alphas)
+            else:
+                return self.model(x.reshape(orig_shape))
 
     def adaptive_weight_decay(self):
         return torch.sum(torch.abs(self.fc1.weight*self.fc1.compute_deg_constants()))

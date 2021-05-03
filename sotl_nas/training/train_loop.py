@@ -137,8 +137,7 @@ def train_bptt(
             xs, ys = torch.split(batch[0], batch_size), torch.split(
                 batch[1], batch_size
             )
-            if len(xs) != T:
-                continue
+
             if features is not None:
                 xs = [x[:, features] for x in xs]
             if mode == "bilevel":
