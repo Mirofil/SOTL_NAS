@@ -156,6 +156,10 @@ def dw_da(model, criterion, xs, ys, i, dw, weight_buffer: Sequence, w_lr:float,
 
             if debug:
                 print("DADW:", hessian_matrices_dadw)
+        elif hvp == "autograd":
+            # loss2 = compute_train_loss(x, y, criterion, y_pred=model(x, weight_buffer[true_j]), model=model)
+            loss_fun = lambda w: compute_train_loss(x, y, criterion, y_pred = model(x, w), model = model)
+            print(torch.autograd.functional.vjp(loss_fun, tuple(weight_buffer[true_j].values()), torch.ones(list(weight_buffer[true_j].values())[0].shape)))
         elif hvp == "finite_diff":
             # INNER LOOP
             # DARTS footnotes suggest to divide by L2 norm of the gradient
@@ -164,12 +168,11 @@ def dw_da(model, criterion, xs, ys, i, dw, weight_buffer: Sequence, w_lr:float,
 
             # w+ = w_{t-1} + eps*dL(w_t,alpha)dw
             with torch.no_grad():
-                for p, d in zip(weight_buffer[j], dw):
+                for p, d in zip(weight_buffer[j].values(), dw):
                     p.add_(eps * d)
 
             old_weights = switch_weights(model, weight_buffer[j])
             loss_pos = compute_train_loss(x, y, criterion, y_pred=model(x, weight_buffer[j]), model=model)
-
             
             dalpha_pos = [a if (a is not None) else torch.zeros(list(model.arch_params())[i].size()).to(device) for i, a in enumerate(torch.autograd.grad(
                 loss_pos, model.arch_params(), allow_unused=True
@@ -178,7 +181,7 @@ def dw_da(model, criterion, xs, ys, i, dw, weight_buffer: Sequence, w_lr:float,
 
             # w- = w_{t-1} - eps*dL(w_t,alpha)dw
             with torch.no_grad():
-                for p, d in zip(weight_buffer[j], dw):
+                for p, d in zip(weight_buffer[j].values(), dw):
                     p.subtract_(2.0 * eps * d)
 
             old_weights = switch_weights(model, weight_buffer[j])
@@ -191,7 +194,7 @@ def dw_da(model, criterion, xs, ys, i, dw, weight_buffer: Sequence, w_lr:float,
 
             # recover w
             with torch.no_grad():
-                for p, d in zip(weight_buffer[j], dw):
+                for p, d in zip(weight_buffer[j].values(), dw):
                     p.add_(eps * d)
 
             second_order_terms = [
@@ -336,7 +339,7 @@ def sotl_gradient(
                 for idx, (arch_grad, direct_grad) in enumerate(zip(total_arch_gradient, da_direct)):
                     if dw_multiply_outside:
                         final_grad[idx] = torch.matmul(dw[idx], total_arch_gradient[idx])
-                    else:
+                    else: # The multiplication by dw was already done inside the sotl_gradient function - this is necessary when doing IHVP approximations, for example
                         final_grad[idx] = total_arch_gradient[idx]
                     final_grad[idx] = final_grad[idx] + direct_grad
 
