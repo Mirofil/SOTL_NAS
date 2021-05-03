@@ -71,7 +71,6 @@ def dw_da(model, criterion, xs, ys, i, dw, weight_buffer: Sequence, w_lr:float,
     inv_hess = "exact", ihvp="exact", recurrent=True, debug=False):
     total_arch_gradient, hessian_matrices_dadw, inv_hess_matrices_dwdw = None, None, None
     debug_info = defaultdict(dict)
-    print(f"RECCURENT: {recurrent}")
     if i == 0:
         # Return immediately with zero hypergradients
         total_arch_gradient, hessian_matrices_dadw, inv_hess_matrices_dwdw = [torch.zeros(w.shape).t() for w in dw], [torch.zeros(w.shape).t() for w in dw], [torch.zeros(w.shape).t() for w in dw]
@@ -83,11 +82,9 @@ def dw_da(model, criterion, xs, ys, i, dw, weight_buffer: Sequence, w_lr:float,
             true_j = j
         x = xs[true_j].to(device)
         y = ys[true_j].to(device)
-        # for idx in range(len(weight_buffer)):
-        #     weight_buffer[idx][0] = weight_buffer[idx][0].detach()
-        #     weight_buffer[idx][0].requires_grad=True
         loss2 = compute_train_loss(x, y, criterion, y_pred=model(x, weight_buffer[true_j]), model=model)
-        print(f"X top level at j={j}:", x)
+        if debug:
+            print(f"X top level at j={j}:", x)
         if inv_hess == "ift":
             inv_hess_matrices_dwdw = [torch.inverse(hessian(
                 loss2 * 1, weight_buffer[i-j-1][idx].values(), weight_buffer[i-j-1][idx].values()
@@ -97,18 +94,18 @@ def dw_da(model, criterion, xs, ys, i, dw, weight_buffer: Sequence, w_lr:float,
             for k in range(0, j, 1):
                 if not recurrent:
                     k = i-k-1
-                print(f"k={k}")
-                print(f"X inner at j={j}, k = {k}:", xs[k])
-                print("WEIGHT:", weight_buffer[k])
+
                 loss3 = compute_train_loss(x=xs[k], y=ys[k], criterion=criterion, 
                     y_pred=model(xs[k], weight_buffer[k]), model=model)
-                print(loss3)
                 hess_matrices_dwdw = [hessian(loss3*1, w, w) for w in weight_buffer[k].values()]
-                print(hess_matrices_dwdw)
-                # hess_matrices_dwdw = [torch.autograd.functional.hessian(l, w).reshape((18,18)) for w in weight_buffer[i-k]]
-                # print(hess_matrices_dwdw[0].shape)
                 for idx, (prod, hess) in enumerate(zip(prods, hess_matrices_dwdw)):
                     prods[idx] = torch.matmul(prods[idx], torch.eye(hess.shape[1]) - w_lr*hess)
+                if debug:
+                    print(f"k={k}")
+                    print(f"X inner at j={j}, k = {k}:", xs[k])
+                    print("WEIGHT:", weight_buffer[k])
+                    print(loss3)
+                    print(hess_matrices_dwdw)
             inv_hess_matrices_dwdw = prods
         elif inv_hess == "id":
             inv_hess_matrices_dwdw = [torch.eye(w.shape[1]) for w in weight_buffer[j].values()] # TODO THERE SHOULD BE A RANGE TO ACCOMMODATE ALL TIMESTEPS
@@ -147,14 +144,14 @@ def dw_da(model, criterion, xs, ys, i, dw, weight_buffer: Sequence, w_lr:float,
             hessian_matrices_dadw = [hessian(
                 loss2 * 1, list(weight_buffer[true_j].values())[idx], arch_param
             ) for arch_param in model.arch_params() for idx in range(len(weight_buffer[i-j-1]))]
-            if j == 1:
-                print("DADW:", hessian_matrices_dadw)
             second_order_terms = []
             for hess_dadw in hessian_matrices_dadw:
                 for ihvp_vec in ihvp_vecs:
                     jvp = torch.matmul(ihvp_vec, hess_dadw)
                     second_order_terms.append(jvp)
 
+            if debug:
+                print("DADW:", hessian_matrices_dadw)
         elif hvp == "finite_diff":
             # INNER LOOP
             # DARTS footnotes suggest to divide by L2 norm of the gradient
@@ -210,8 +207,9 @@ def dw_da(model, criterion, xs, ys, i, dw, weight_buffer: Sequence, w_lr:float,
         else:
             for g1, g2 in zip(total_arch_gradient, total_arch_gradient_local):
                 g1.add_(g2, alpha=-w_lr)
-        print(f"TOTAL ARCH GRAD at j={j}:", total_arch_gradient)
+
         if debug:
+            print(f"TOTAL ARCH GRAD at j={j}:", total_arch_gradient)
             #NOTE FOR LOGGING ONLY, DELETE LATER
             loss3 = compute_train_loss(x=xs[j].to(device), y=ys[j].to(device), criterion=criterion, 
                 y_pred=model(xs[j].to(device), weight_buffer[j]), model=model)
@@ -231,28 +229,26 @@ def dw_da(model, criterion, xs, ys, i, dw, weight_buffer: Sequence, w_lr:float,
         # Execute the hypergradient computation as in forward-mode autodiff. j=0 case was computed above
         # NOTE this involves materializing hessians and using exact computations for everything! Need to implement the rest
         for j in range(1, i):
-            print(f"EXEC {i}")
-            # for idx in range(len(weight_buffer)):
-            #     weight_buffer[idx][0] = weight_buffer[idx][0].detach()
-            #     weight_buffer[idx][0].requires_grad=True
-            print(j)
-            print(f"X at j={j}:",xs[j])
-            print("WEIGHTS:", weight_buffer[j])
             loss = compute_train_loss(xs[j], ys[j], criterion, model=model, y_pred=model(xs[j], weight_buffer[j]))
-            print(loss)
             inv_hess_matrices_dwdw = [hessian(loss*1, w, w) for w in weight_buffer[j].values()]
-            print(inv_hess_matrices_dwdw)
             loss = compute_train_loss(xs[j], ys[j], criterion, model=model, y_pred=model(xs[j], weight_buffer[j]))
             hessian_matrices_dadw = [hessian(
                 loss * 1, list(weight_buffer[j].values())[idx], arch_param
             ) for arch_param in model.arch_params() for idx in range(len(weight_buffer[j-1]))]
-            print("DADW:", hessian_matrices_dadw)
             # This total_arch_gradient carries through the previous computations and is always updated to the most recent results
             # (I-eta*dL/dwdw)*dw/da - eta*dL/dwda
             total_arch_gradient = [(torch.eye(h_dwdw.shape[0]) - w_lr*h_dwdw) @ g - w_lr*h_dadw for g, h_dwdw, h_dadw in zip(total_arch_gradient, inv_hess_matrices_dwdw, hessian_matrices_dadw)]
-            print(f"TOTAL ARCH GRAD at j={j}:", total_arch_gradient)
 
             if debug:
+                print(f"EXEC {i}")
+                print(j)
+                print(f"X at j={j}:",xs[j])
+                print("WEIGHTS:", weight_buffer[j])
+                print(loss)
+                print(inv_hess_matrices_dwdw)
+                print("DADW:", hessian_matrices_dadw)
+                print(f"TOTAL ARCH GRAD at j={j}:", total_arch_gradient)
+
                 debug_info["total_arch_gradient"][j] = total_arch_gradient
                 debug_info["hess_dadw"][j] = hessian_matrices_dadw
                 debug_info["inv_hess_dwdw"][j] = [h[0] for h in inv_hess_matrices_dwdw]
