@@ -77,8 +77,8 @@ def dw_da(model, criterion, xs, ys, i, dw, weight_buffer: Sequence, w_lr:float,
         total_arch_gradient, hessian_matrices_dadw, inv_hess_matrices_dwdw = [torch.zeros(w.shape).t() for w in dw], [torch.zeros(w.shape).t() for w in dw], [torch.zeros(w.shape).t() for w in dw]
 
     for j in range(0, i if not recurrent else min(1, i), 1):
-        # if not recurrent:
-        #     j = i - j -1
+        if not recurrent:
+            j = i - j
         x = xs[j].to(device)
         y = ys[j].to(device)
         # for idx in range(len(weight_buffer)):
@@ -95,9 +95,14 @@ def dw_da(model, criterion, xs, ys, i, dw, weight_buffer: Sequence, w_lr:float,
             for k in range(0, j, 1):
                 if not recurrent:
                     k = i-k
-                loss3 = compute_train_loss(x=xs[k].to(device), y=ys[k].to(device), criterion=criterion, 
-                    y_pred=model(xs[k].to(device), weight_buffer[k]), model=model)
+                print(k)
+                print("X:", xs[k])
+                print("WEIGHT:", weight_buffer[k])
+                loss3 = compute_train_loss(x=xs[k], y=ys[k], criterion=criterion, 
+                    y_pred=model(xs[k], weight_buffer[k]), model=model)
+                print(loss3)
                 hess_matrices_dwdw = [hessian(loss3*1, w, w) for w in weight_buffer[k].values()]
+                print(hess_matrices_dwdw)
                 # hess_matrices_dwdw = [torch.autograd.functional.hessian(l, w).reshape((18,18)) for w in weight_buffer[i-k]]
                 # print(hess_matrices_dwdw[0].shape)
                 for idx, (prod, hess) in enumerate(zip(prods, hess_matrices_dwdw)):
@@ -105,9 +110,11 @@ def dw_da(model, criterion, xs, ys, i, dw, weight_buffer: Sequence, w_lr:float,
             inv_hess_matrices_dwdw = prods
         elif inv_hess == "id":
             inv_hess_matrices_dwdw = [torch.eye(w.shape[1]) for w in weight_buffer[j].values()] # TODO THERE SHOULD BE A RANGE TO ACCOMMODATE ALL TIMESTEPS
-            
 
-        ihvp_vecs = [0 for _ in range(len(dw))]
+        # if j == 1:
+        #     print(inv_hess_matrices_dwdw)
+
+        ihvp_vecs = [1 for _ in range(len(dw))]
         for idx, (grad_w, inverse_hess_dwdw) in enumerate(zip(dw, inv_hess_matrices_dwdw)):
 
             if inv_hess != "id":
@@ -127,10 +134,19 @@ def dw_da(model, criterion, xs, ys, i, dw, weight_buffer: Sequence, w_lr:float,
 
             # NOTE this exact pathway only makes sense for the linear model because we materialize the inverse Hessian. 
             # So playing with indexes for multiple arch/weight Hessian pairs here is not very meaningful either
-            hessian_matrices_dadw = [hessian(
-                loss2 * 1, list(weight_buffer[j].values())[idx], arch_param
-            ) for arch_param in model.arch_params() for idx in range(len(weight_buffer[i-j-1]))]
+            x = xs[i-j].to(device)
+            y = ys[i-j].to(device)
+            # for idx in range(len(weight_buffer)):
+            #     weight_buffer[idx][0] = weight_buffer[idx][0].detach()
+            #     weight_buffer[idx][0].requires_grad=True
+            loss4 = compute_train_loss(x, y, criterion, y_pred=model(x, weight_buffer[i-j]), model=model)
 
+            
+            hessian_matrices_dadw = [hessian(
+                loss4 * 1, list(weight_buffer[i-j].values())[idx], arch_param
+            ) for arch_param in model.arch_params() for idx in range(len(weight_buffer[i-j-1]))]
+            if j == 1:
+                print("DADW:", hessian_matrices_dadw)
             second_order_terms = []
             for hess_dadw in hessian_matrices_dadw:
                 for ihvp_vec in ihvp_vecs:
@@ -186,6 +202,7 @@ def dw_da(model, criterion, xs, ys, i, dw, weight_buffer: Sequence, w_lr:float,
             da1 for da1 in second_order_terms
         ]
         if total_arch_gradient is None:
+
             total_arch_gradient = [-w_lr*g for g in total_arch_gradient_local]
 
         else:
@@ -212,18 +229,22 @@ def dw_da(model, criterion, xs, ys, i, dw, weight_buffer: Sequence, w_lr:float,
         # Execute the hypergradient computation as in forward-mode autodiff. j=0 case was computed above
         # NOTE this involves materializing hessians and using exact computations for everything! Need to implement the rest
         for j in range(1, i):
+            print(f"EXEC {i}")
             # for idx in range(len(weight_buffer)):
             #     weight_buffer[idx][0] = weight_buffer[idx][0].detach()
             #     weight_buffer[idx][0].requires_grad=True
-
+            print(j)
+            print("X:",xs[j])
+            print("WEIGHTS:", weight_buffer[j])
             loss = compute_train_loss(xs[j], ys[j], criterion, model=model, y_pred=model(xs[j], weight_buffer[j]))
+            print(loss)
             inv_hess_matrices_dwdw = [hessian(loss*1, w, w) for w in weight_buffer[j].values()]
-
+            print(inv_hess_matrices_dwdw)
             loss = compute_train_loss(xs[j], ys[j], criterion, model=model, y_pred=model(xs[j], weight_buffer[j]))
             hessian_matrices_dadw = [hessian(
                 loss * 1, list(weight_buffer[j].values())[idx], arch_param
             ) for arch_param in model.arch_params() for idx in range(len(weight_buffer[j-1]))]
-
+            print("DADW:", hessian_matrices_dadw)
             # This total_arch_gradient carries through the previous computations and is always updated to the most recent results
             # (I-eta*dL/dwdw)*dw/da - eta*dL/dwda
             total_arch_gradient = [(torch.eye(h_dwdw.shape[0]) - w_lr*h_dwdw) @ g - w_lr*h_dadw for g, h_dwdw, h_dadw in zip(total_arch_gradient, inv_hess_matrices_dwdw, hessian_matrices_dadw)]
@@ -245,7 +266,7 @@ def sotl_gradient(
 ) -> Sequence:
 
     total_arch_gradient, loss, da_direct, dw, dominant_eigenvalues = None, None, None, None, None
-
+    print(len(xs))
     assert len(outers) == 1 or len(outers) == len(xs)
 
     if grad_outer_loop_order is not None and grad_outer_loop_order > 0:
