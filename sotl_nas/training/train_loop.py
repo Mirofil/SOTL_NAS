@@ -84,7 +84,8 @@ def train_bptt(
     hessian_tracking:bool=True,
     log_suffix:str="",
     features:Sequence=None,
-    decay_scheduler:str = 'linear',
+    a_decay_scheduler: str = None,
+    w_decay_scheduler: str = None,
     optimizer_mode="manual",
     bilevel_w_steps=None,
     debug=False,
@@ -94,7 +95,7 @@ def train_bptt(
     **kwargs
 ):
     assert train_arch is False or 'hyper' in model.cfg["w_optim"].lower(), 'Training architecture without the HyperOptimizers can give misleading results at best!'
-    orig_model_cfg = model.cfg
+    orig_model_cfg = deepcopy(model.cfg)
     print(f"Starting with with config={model.cfg}")
     train_loader = torch.utils.data.DataLoader(
         dataset_cfg["dset_train"], batch_size=batch_size * T, shuffle=True
@@ -121,13 +122,20 @@ def train_bptt(
         true_batch_idx = 0
         val_iter = iter(val_loader) # Used to make sure we iterate through the whole val set with no repeats
 
-        if decay_scheduler == 'linear':
-            model.cfg["a_decay_order"] = None if (epoch < w_warm_start) else orig_model_cfg['a_decay_order']
+        if w_decay_scheduler == 'linear':
             model.cfg["w_decay_order"] = None if (epoch < w_warm_start) else orig_model_cfg['w_decay_order']
-            model.cfg['a_weight_decay'] = orig_model_cfg['a_weight_decay']*(epoch/epochs)
             model.cfg['w_weight_decay'] = orig_model_cfg['w_weight_decay']*(epoch/epochs)
-        elif decay_scheduler is None or decay_scheduler == "None":
+        elif w_decay_scheduler is None or w_decay_scheduler == "None":
             pass
+
+        if a_decay_scheduler == "linear":
+            model.cfg["a_decay_order"] = None if (epoch < w_warm_start) else orig_model_cfg['a_decay_order']
+            model.cfg['a_weight_decay'] = orig_model_cfg['a_weight_decay']*(epoch/epochs)
+        elif a_decay_scheduler is None or a_decay_scheduler == "None":
+            pass
+
+        if epoch % 10 == 0:
+            print(f"Current values of decay: a={model.cfg['a_weight_decay']}, w={model.cfg['w_weight_decay']}")
 
         for batch_idx, (batch, val_batch) in tqdm(enumerate(zip(train_loader, itertools.cycle(val_loader))), desc = "Iterating over batches", total = len(train_loader), disable = not config["progress_bar"]):
             if steps_per_epoch is not None and batch_idx > steps_per_epoch:
@@ -599,7 +607,6 @@ def train_supernet_rff(
                 loss, train_acc_top1, param_norm, unreg_loss = compute_train_loss(x=x, y=y, criterion=criterion, model=model, return_acc=True, detailed=True)
 
                 train_loss.update(loss.item())
-                print(loss.item())
                 train_acc.update(train_acc_top1)
 
                 grads = torch.autograd.grad(
