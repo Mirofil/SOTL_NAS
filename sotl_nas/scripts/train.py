@@ -13,7 +13,7 @@
 # python sotl_nas/scripts/train.py --cfg=sotl_nas/configs/lr/mnist_mlp.py --alpha_lr_reject_strategy=half --T=2 --train_arch=False --w_lr=0.01 --w_optim=SGD --alpha_lr=None --mode=joint --n_samples=2000 --batch_size=16
 # python sotl_nas/scripts/train.py --cfg=sotl_nas/configs/lr/mnist_mlp.py --alpha_lr_reject_strategy=half --T=3 --train_arch=True --w_lr=0.01 --w_momentum=0.9 --w_optim=HyperSGD --alpha_lr=0.01--mode=bilevel --model_type=MLP2 --a_lr=0.01 --decay_scheduler=linear --a_weight_decay=0.1
 
-# python sotl_nas/scripts/train.py --cfg=sotl_nas/configs/lr/mnist_vgg.py --T=3 --w_momentum=0.9 --w_optim=HyperSGD --a_lr=0.05 --alpha_lr=0.1
+# python sotl_nas/scripts/train.py --cfg=sotl_nas/configs/lr/mnist_vgg.py --T=3 --w_momentum=0.9 --w_optim=HyperSGD --a_lr=0.05 --alpha_lr=0.1 --a_decay_schedule=linear --a_weight_decay=0.1
 # python sotl_nas/scripts/train.py --cfg=sotl_nas/configs/lr/mnist_mlp.py --T=50 --a_lr=0.01 --a_optim=SGD --a_scheduler=step --grad_clip=10 --model_type="MLPLarge"
 
 #pip install --force git+https://github.com/Mirofil/pytorch-hessian-eigenthings.git

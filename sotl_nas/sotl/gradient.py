@@ -78,7 +78,7 @@ def dw_da(model, criterion, xs, ys, i, dw, weight_buffer: Sequence, w_lr:float,
         else:
             total_arch_gradient, hessian_matrices_dadw, inv_hess_matrices_dwdw = [torch.zeros(w.shape).t() for w in model.arch_params()], [torch.zeros(w.shape).t() for w in dw], [torch.zeros(w.shape).t() for w in dw]
     
-    if ivhp == "neumann":
+    if ihvp == "neumann":
         pass
     
     for j in range(0, i if not recurrent else min(1, i), 1):
@@ -97,6 +97,8 @@ def dw_da(model, criterion, xs, ys, i, dw, weight_buffer: Sequence, w_lr:float,
             )) for idx in range(len(weight_buffer[i-j-1]))]
         elif inv_hess == "neumann":
             inv_hess_matrices_dwdw = [None for w in weight_buffer[j].values()] # Just placeholder - we never materialize any Hessians here and the required vector-inv-Hessian products are computed in a later branch
+        elif inv_hess == "autograd":
+            inv_hess_matrices_dwdw = [None for w in weight_buffer[j].values()] # Will only get the vector-Hessian products
         elif inv_hess == "exact":
             prods = [torch.eye(w.shape[1]) for w in weight_buffer[j].values()]
             for k in range(0, j, 1):
@@ -114,14 +116,20 @@ def dw_da(model, criterion, xs, ys, i, dw, weight_buffer: Sequence, w_lr:float,
                     print(loss3)
                     print(hess_matrices_dwdw)
             inv_hess_matrices_dwdw = prods
+        elif inv_hess == "fisher":
+            pass
         elif inv_hess == "id":
             inv_hess_matrices_dwdw = [torch.eye(w.shape[1]) for w in weight_buffer[j].values()] # TODO THERE SHOULD BE A RANGE TO ACCOMMODATE ALL TIMESTEPS
 
         ihvp_vecs = [1 for _ in range(len(weight_buffer[j]))]
-        for idx, (grad_w, inverse_hess_dwdw) in enumerate(zip(dw, inv_hess_matrices_dwdw)):
+        for idx, (grad_w, inv_hess_dwdw) in enumerate(zip(dw, inv_hess_matrices_dwdw)):
             if inv_hess != "id":
                 if ihvp == "exact":
-                    ihvp_vec = torch.matmul(grad_w, inverse_hess_dwdw)
+                    assert inv_hess == "exact"
+                    ihvp_vec = torch.matmul(grad_w, inv_hess_dwdw)
+                elif ihvp == "autograd":
+                    pass
+
                 elif ihvp == "neumann":
                     dL_train_dw = torch.autograd.grad(loss2, model.weight_params(), create_graph=True)
                     ihvp_vec = approx_inverse_hvp(v=grad_w, f=dL_train_dw, w=list(model.weight_params()), lr=w_lr, steps=500)
@@ -145,6 +153,7 @@ def dw_da(model, criterion, xs, ys, i, dw, weight_buffer: Sequence, w_lr:float,
                     second_order_terms.append(jvp)
             if debug:
                 print("DADW:", hessian_matrices_dadw)
+
         elif hvp == "autograd":
             # loss2 = compute_train_loss(x, y, criterion, y_pred=model(x, weight_buffer[true_j]), model=model)
             second_order_terms = []
@@ -157,6 +166,7 @@ def dw_da(model, criterion, xs, ys, i, dw, weight_buffer: Sequence, w_lr:float,
                         g = torch.autograd.grad(loss_fun(list(weight_buffer[true_j].values()))[idx], arch_param, ihvp_vec)
                         for term in g:
                             second_order_terms.append(term)
+
         elif hvp == "finite_diff":
             # INNER LOOP
             # DARTS footnotes suggest to divide by L2 norm of the gradient
