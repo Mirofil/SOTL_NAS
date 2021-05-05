@@ -110,7 +110,8 @@ class SoTLNet(Hypertrainable):
         if 'AE' in self.model_type:
             return self.model(x.reshape(orig_shape), weight, alphas).reshape(orig_shape)
         else:
-            if type(weight) is dict:
+            # if type(weight) is dict:
+            if True:
                 return self.model(x.reshape(orig_shape), weight, alphas)
             else:
                 return self.model(x.reshape(orig_shape))
