@@ -147,7 +147,7 @@ def eval_features(x:Sequence, max_order:int=2, type:str='fourier', noise_var:flo
 
     return {"features":[feature+noise], "weights": weights}
 
-def data_generator(n_samples:int=1000, n_features:int=5, n_informative:int=None, max_order_x:int=None, 
+def data_generator(n_samples:int=25000, n_features:int=5, n_informative:int=None, max_order_x:int=None, 
     noise:float=1, x_range:float=None, featurize_type:str='fourier', plot:bool=False, shuffle_features=False, **kwargs):
     inputs = []
     labels = []

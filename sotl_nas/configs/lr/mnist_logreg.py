@@ -2,14 +2,14 @@ from yacs.config import CfgNode as CN
 
 C = CN()
 
-C.epochs = 75
+C.epochs = 30
 C.steps_per_epoch=None
 C.batch_size = 128
 C.n_features = 18
 C.n_samples = None
-C.w_optim='SGD'
+C.w_optim='HyperSGD'
 C.w_decay_order=2
-C.w_lr = 1e-1
+C.w_lr = 1e-3
 C.w_momentum=0.0
 C.w_weight_decay=1e-4
 C.a_optim="SGD"

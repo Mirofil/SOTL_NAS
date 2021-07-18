@@ -5,10 +5,10 @@ C = CN()
 
 C.model_type="max_deg"
 C.a_optim = "SGD"
-C.w_optim = "SGD" 
-C.epochs =20 
+C.w_optim = "HyperSGD" 
+C.epochs =30 
 C.batch_size=64
-C.n_samples = 5000
+C.n_samples = 50000
 C.steps_per_epoch=1 
 C.dataset="fourier" 
 C.dry_run=True 
@@ -27,9 +27,9 @@ C.T=25
 C.recurrent =True 
 C.w_lr=1e-2 
 C.a_lr=1e-2
-C.a_weight_decay=0.1
+C.a_weight_decay=0.01
 C.w_weight_decay=0.001
-C.adaptive_a_lr=True
+C.adaptive_a_lr=False
 C.grad_clip = None
 
 def get_cfg_defaults():
