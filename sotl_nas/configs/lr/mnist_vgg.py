@@ -63,7 +63,7 @@ C.alpha_lr=1e-3
 C.arch_update_frequency=1
 C.loss_threshold=None
 C.progress_bar=True
-C.val_split=0.
+C.val_split=0.1
 
 def get_cfg_defaults():
   """Get a yacs CfgNode object with default values for my_project."""
